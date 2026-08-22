@@ -144,7 +144,13 @@ probar "asiento: tipo inventado" \
 probar "asiento: estado inventado" \
  "INSERT INTO ledger_entries (uuid,creator_id,entry_type,amount,currency_code,status,description,occurred_at,created_at) VALUES (UUID(),$CR,'adjustment',10.0000,'PEN','cobrado','X',NOW(3),NOW(3));" RECHAZO
 
-PAGO="(SELECT id FROM ledger_entries WHERE entry_type='payment' ORDER BY id LIMIT 1)"
+# NOTA DE PORTABILIDAD: la subconsulta va envuelta en una tabla derivada
+# `(SELECT x FROM (SELECT ...) t)` a proposito. MySQL 8 rechaza con el error 1093
+# ("You can't specify target table ... in FROM clause") toda subconsulta que lea
+# la MISMA tabla que la sentencia esta modificando. MariaDB lo permite, asi que
+# la version directa pasaba en local y fallaba en CI. La tabla derivada se
+# materializa antes y funciona en los dos motores. No la "simplifique".
+PAGO="(SELECT id FROM (SELECT id FROM ledger_entries WHERE entry_type='payment' ORDER BY id LIMIT 1) t)"
 echo ""
 echo "--- Libro mayor: reversiones y conversion ---"
 probar "reversion: positiva y apuntando al asiento que corrige" \
@@ -239,7 +245,13 @@ probar "factura: anulada sin fecha de anulacion" \
 probar "factura: importes negativos" \
  "INSERT INTO invoices (uuid,legal_entity_id,client_organization_id,client_tax_profile_id,document_type,series,number,issue_date,due_date,currency_code,subtotal_amount,tax_amount,total_amount,status,issuer_legal_name_snapshot,issuer_tax_id_snapshot,issuer_address_snapshot,receiver_legal_name_snapshot,receiver_tax_id_snapshot,receiver_address_snapshot,receiver_country_snapshot,created_at) VALUES (UUID(),$LE,$CO,$TP,'invoice','F001',6,'2026-09-30','2026-10-30','PEN',-100.0000,0,-100.0000,'draft',$SNAP,NOW(3));" RECHAZO
 
-INV="(SELECT id FROM invoices WHERE document_type='invoice' AND number=1)"
+# NOTA DE PORTABILIDAD: la subconsulta va envuelta en una tabla derivada
+# `(SELECT x FROM (SELECT ...) t)` a proposito. MySQL 8 rechaza con el error 1093
+# ("You can't specify target table ... in FROM clause") toda subconsulta que lea
+# la MISMA tabla que la sentencia esta modificando. MariaDB lo permite, asi que
+# la version directa pasaba en local y fallaba en CI. La tabla derivada se
+# materializa antes y funciona en los dos motores. No la "simplifique".
+INV="(SELECT id FROM (SELECT id FROM invoices WHERE document_type='invoice' AND number=1) t)"
 echo ""
 echo "--- Regimen tributario: se factura todo desde Peru (DEC-047) ---"
 probar "regimen: cliente peruano, gravado con IGV 18%" \
@@ -272,7 +284,15 @@ probar "linea: borrar de una factura en borrador" \
 
 echo ""
 echo "--- Cobros del cliente ---"
-$CLIENTE $DB -e "UPDATE invoices SET status='issued', issued_at=NOW(3) WHERE id=$INV;" 2>/dev/null
+# Preparacion, no asercion: pero si esto falla en silencio, la prueba que viene
+# mide una factura que sigue en 'draft' y reporta lo contrario de la verdad.
+# Paso exactamente eso: el UPDATE moria con el error 1093 y nadie se enteraba.
+preparar=$($CLIENTE $DB -e "UPDATE invoices SET status='issued', issued_at=NOW(3) WHERE id=$INV;" 2>&1)
+if echo "$preparar" | grep -qi "error"; then
+  printf "  \033[31m!\033[0m %-64s FALLO LA PREPARACION\n" "emitir la factura para las pruebas de borrado"
+  echo "      $(echo "$preparar" | grep -i error | head -1)"
+  fail=$((fail+1))
+fi
 probar "linea: borrar de una factura ya emitida" \
  "DELETE FROM invoice_lines WHERE invoice_id=$INV AND line_number=1;" RECHAZO
 probar "factura emitida: borrado fisico" \
