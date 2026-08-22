@@ -48,20 +48,39 @@ deptrac:
     - name: Gamification
       collectors: [{ type: directory, value: app/Modules/Gamification/.* }]
 
+    # ------------------------------------------------------------------------
+    # El framework y las librerías de terceros.
+    #
+    # Sin esta capa, `--fail-on-uncovered` marca cada uso de `DB::`, `View` o una
+    # excepción de Symfony como «dependencia sin cubrir». No era una violación de
+    # arquitectura: es que nadie le había dicho a Deptrac que esas clases existen.
+    # Solo se declaraban nuestras capas, y todo lo demás quedaba fuera del mapa.
+    #
+    # Se declara EXPLÍCITA en vez de quitar la bandera: así la comprobación sigue
+    # viva y una librería nueva que nadie haya clasificado seguirá saltando, que
+    # es justo lo que esa bandera existe para detectar.
+    - name: Framework
+      collectors:
+        - type: classLike
+          value: '^(Illuminate|Symfony|Carbon|Psr|Ramsey|Doctrine|Laravel|Monolog)\\.*'
+
   ruleset:
-    Shared: ~
-    Core:          [Shared]
-    Identity:      [Shared, Core]
-    Creator:       [Shared, Core, Identity]
-    Crm:           [Shared, Core, Identity]
-    Client:        [Shared, Core, Identity]
-    Campaign:      [Shared, Core, Identity, Creator, Client]
-    Matching:      [Shared, Core, Creator, Campaign]
-    Content:       [Shared, Core, Identity, Creator, Campaign]
-    Measurement:   [Shared, Core, Campaign, Content]
-    Finance:       [Shared, Core, Identity, Creator, Client, Campaign, Content]
+    # Framework aparece en TODAS: cualquier capa puede usar Laravel. Lo que la
+    # regla sigue impidiendo es que un módulo importe a otro que no le toca.
+    Framework: ~
+    Shared:        [Framework]
+    Core:          [Framework, Shared]
+    Identity:      [Framework, Shared, Core]
+    Creator:       [Framework, Shared, Core, Identity]
+    Crm:           [Framework, Shared, Core, Identity]
+    Client:        [Framework, Shared, Core, Identity]
+    Campaign:      [Framework, Shared, Core, Identity, Creator, Client]
+    Matching:      [Framework, Shared, Core, Creator, Campaign]
+    Content:       [Framework, Shared, Core, Identity, Creator, Campaign]
+    Measurement:   [Framework, Shared, Core, Campaign, Content]
+    Finance:       [Framework, Shared, Core, Identity, Creator, Client, Campaign, Content]
     # Communication NO conoce el negocio: los datos llegan en el payload del evento.
-    Communication: [Shared, Core, Identity]
+    Communication: [Framework, Shared, Core, Identity]
     # Consumidores puros. Nadie los lista como dependencia permitida.
-    Intelligence:  [Shared, Core, Creator, Campaign, Content, Measurement]
-    Gamification:  [Shared, Core, Creator, Campaign, Content, Measurement]
+    Intelligence:  [Framework, Shared, Core, Creator, Campaign, Content, Measurement]
+    Gamification:  [Framework, Shared, Core, Creator, Campaign, Content, Measurement]
