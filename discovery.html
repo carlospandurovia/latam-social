@@ -267,7 +267,7 @@ Estado del proyecto: <strong>Fase 0 completada · Fase 2 (modelo de datos) en cu
 </tr>
 <tr>
 <td><strong>F2 — Modelo de datos</strong></td>
-<td>✅ <strong>Completa</strong> — iteraciones 2.1 a 2.13. <strong>62 tablas · 150 restricciones · 125 pruebas</strong>, verdes con <code>CHECK</code> nativo y con <code>TRIGGER</code> generado</td>
+<td>✅ <strong>Completa</strong> — iteraciones 2.1 a 2.13. <strong>62 tablas · 150 restricciones · 143 pruebas</strong>, verdes con <code>CHECK</code> nativo y con <code>TRIGGER</code> generado</td>
 </tr>
 <tr>
 <td>F3 — Design System y UX</td>
@@ -5777,6 +5777,50 @@ factura al exterior hay que confirmarlo. → <code>Q-44</code>.</p>
 <tr>
 <td><strong>Estado</strong></td>
 <td>ADOPTADA (2026-08-22). Recordatorio: <code>tools/github-workflow-ci.yml</code> sigue pendiente de mover a <code>.github/workflows/ci.yml</code> a mano — es ruta protegida</td>
+</tr>
+</tbody>
+</table></div>
+<hr />
+<h3 id="doc-05-dec-052-mysql-no-admite-subconsultas-sobre-la-tabla-que-se-está-modifican">DEC-052 — MySQL no admite subconsultas sobre la tabla que se está modificando</h3>
+<div class="scroll"><table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Cómo apareció</strong></td>
+<td>El CI, sobre MySQL 8. Dos aserciones fallaban en <code>2.13-finanzas.sh</code> que en local (MariaDB) pasaban desde el primer día.</td>
+</tr>
+<tr>
+<td><strong>La limitación</strong></td>
+<td>MySQL rechaza con el <strong>error 1093</strong> (<code>You can't specify target table '&lt;t&gt;' for update in FROM clause</code>) cualquier sentencia que lea la misma tabla que está modificando: <code>UPDATE t ... WHERE id = (SELECT id FROM t ...)</code>, y lo mismo en <code>DELETE</code> e <code>INSERT ... VALUES</code>. <strong>MariaDB lo permite.</strong></td>
+</tr>
+<tr>
+<td><strong>Por qué NO es solo un problema de las pruebas</strong></td>
+<td>Producción es <strong>Percona 5.7</strong>, que es MySQL, no MariaDB. La limitación aplica igual. Cualquier consulta del repositorio con esa forma —«marcar como pagadas las facturas cuyo saldo sea cero», «anular los costos del último lote»— <strong>funcionará en desarrollo y reventará en producción</strong>. Es el mismo patrón que <code>DEC-042</code>, en otra capa.</td>
+</tr>
+<tr>
+<td><strong>El rodeo, portable en los dos motores</strong></td>
+<td>Envolver la subconsulta en una tabla derivada, que se materializa antes: <code>WHERE id = (SELECT id FROM (SELECT id FROM t WHERE ...) x)</code>.</td>
+</tr>
+<tr>
+<td><strong>Regla para la Fase 3</strong></td>
+<td>Ninguna consulta de escritura lee la tabla que modifica sin pasar por una tabla derivada. En Eloquent aparece al usar <code>whereIn(..., fn ($q) =&gt; $q-&gt;from('misma_tabla'))</code>: hay que resolver los ids en una consulta aparte, o envolver.</td>
+</tr>
+<tr>
+<td><strong>Lo que lo hizo visible</strong></td>
+<td>Que el CI corra las suites <strong>en el motor de producción y no solo en el de desarrollo</strong>. Con MariaDB sola, esto se descubre el día del despliegue.</td>
+</tr>
+<tr>
+<td><strong>Efecto secundario que también salió</strong></td>
+<td>Una de las aserciones estaba <strong>pasando por el motivo equivocado</strong>: daba RECHAZO por el error 1093, no por el disparador que pretendía comprobar. Un arnés que no distingue el motivo del rechazo miente en verde.</td>
+</tr>
+<tr>
+<td><strong>Estado</strong></td>
+<td>ADOPTADA (2026-08-22)</td>
 </tr>
 </tbody>
 </table></div>

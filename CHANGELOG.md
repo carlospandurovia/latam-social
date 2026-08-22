@@ -2,6 +2,41 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 
+## [Fase 2 · CERRADA Y VERIFICADA] — 2026-08-22
+
+**El CI pasa en verde de punta a punta**, sobre una máquina limpia y un motor
+distinto al de desarrollo. Es la primera verificación independiente del proyecto.
+
+| Puerta | Estado |
+|---|---|
+| Pint · PHPStan (nivel 6) · Deptrac | ✅ |
+| Nombres sin colisiones · migraciones ↔ esquema · columnas del generador | ✅ |
+| **125 aserciones con `CHECK` nativo** (MySQL 8) | ✅ |
+| **125 aserciones sin `CHECK`, solo triggers generados** | ✅ |
+| Los dos motores imponen el mismo conjunto (150 restricciones) | ✅ |
+| **`php artisan migrate`** — 62 tablas, por primera vez ejecutado de verdad | ✅ |
+| `php artisan test` — 18 pruebas propias | ✅ |
+| Build del frontend | ✅ |
+
+### Añadido
+- `tests/Unit/RestriccionTest.php` — 14 pruebas del compilador de restricciones,
+  sin base de datos. Cubre los casos que ya rompieron algo: literal `'status'`,
+  `status_code` partido por `status`, comilla escapada, y `IF NOT (expr)`.
+- `tests/Feature/RutasTest.php` — enrutado y middleware. Sustituye a la prueba de
+  ejemplo de Laravel, que afirmaba que `/` devuelve 200: aquí no hay portada
+  pública, `/` redirige al panel y el panel exige sesión.
+- Puerta de CI para el frontend: nada verificaba que el CSS compilara.
+
+### Corregido
+- **`DEC-052`** — MySQL rechaza (error 1093) toda subconsulta sobre la tabla que
+  se está modificando; MariaDB la permite. Afecta al código de aplicación de la
+  Fase 3, no solo a las pruebas: producción es Percona 5.7.
+- Siete herramientas tenían rutas absolutas del entorno de desarrollo.
+- `pint.json` exigía `declare(strict_types=1)` en archivos del framework.
+- `deptrac.yaml` no declaraba ninguna capa para Laravel: todo uso del framework
+  contaba como dependencia sin cubrir.
+- `env()` fuera de `config/` ignoraba `ADMIN_PASSWORD` con la config cacheada.
+
 ## [Fase 2 · cierre — verificación de migraciones] — 2026-08-22
 
 ### Añadido

@@ -20,7 +20,7 @@ Arranca en Perú y está diseñado, desde la arquitectura, para operar después 
 |---|---|
 | **F0 — Discovery** | ✅ Entregada |
 | **F1 — Arquitectura y esqueleto** | 🔄 En curso — esqueleto y puertas de calidad listos |
-| **F2 — Modelo de datos** | ✅ **Completa** — iteraciones 2.1 a 2.13. **62 tablas · 150 restricciones · 125 pruebas**, verdes con `CHECK` nativo y con `TRIGGER` generado |
+| **F2 — Modelo de datos** | ✅ **Completa** — iteraciones 2.1 a 2.13. **62 tablas · 150 restricciones · 143 pruebas**, verdes con `CHECK` nativo y con `TRIGGER` generado |
 | F3 — Design System y UX | ⏸ |
 | F4 — Core técnico | ⏸ |
 | F5–F10 — MVP | ⏸ |

@@ -611,6 +611,21 @@ impecable. Simplemente **la mitad de las reglas que declara no existen en ese se
 
 ---
 
+### DEC-052 — MySQL no admite subconsultas sobre la tabla que se está modificando
+
+| | |
+|---|---|
+| **Cómo apareció** | El CI, sobre MySQL 8. Dos aserciones fallaban en `2.13-finanzas.sh` que en local (MariaDB) pasaban desde el primer día. |
+| **La limitación** | MySQL rechaza con el **error 1093** (`You can't specify target table '<t>' for update in FROM clause`) cualquier sentencia que lea la misma tabla que está modificando: `UPDATE t ... WHERE id = (SELECT id FROM t ...)`, y lo mismo en `DELETE` e `INSERT ... VALUES`. **MariaDB lo permite.** |
+| **Por qué NO es solo un problema de las pruebas** | Producción es **Percona 5.7**, que es MySQL, no MariaDB. La limitación aplica igual. Cualquier consulta del repositorio con esa forma —«marcar como pagadas las facturas cuyo saldo sea cero», «anular los costos del último lote»— **funcionará en desarrollo y reventará en producción**. Es el mismo patrón que `DEC-042`, en otra capa. |
+| **El rodeo, portable en los dos motores** | Envolver la subconsulta en una tabla derivada, que se materializa antes: `WHERE id = (SELECT id FROM (SELECT id FROM t WHERE ...) x)`. |
+| **Regla para la Fase 3** | Ninguna consulta de escritura lee la tabla que modifica sin pasar por una tabla derivada. En Eloquent aparece al usar `whereIn(..., fn ($q) => $q->from('misma_tabla'))`: hay que resolver los ids en una consulta aparte, o envolver. |
+| **Lo que lo hizo visible** | Que el CI corra las suites **en el motor de producción y no solo en el de desarrollo**. Con MariaDB sola, esto se descubre el día del despliegue. |
+| **Efecto secundario que también salió** | Una de las aserciones estaba **pasando por el motivo equivocado**: daba RECHAZO por el error 1093, no por el disparador que pretendía comprobar. Un arnés que no distingue el motivo del rechazo miente en verde. |
+| **Estado** | ADOPTADA (2026-08-22) |
+
+---
+
 ## Decisiones pendientes de información del negocio
 
 | # | Pregunta | Bloquea |
