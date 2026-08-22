@@ -1,0 +1,14 @@
+includes:
+    - vendor/larastan/larastan/extension.neon
+
+parameters:
+    level: 6          # sube a 7 y luego a 8 conforme el código madure; nunca baja
+    paths:
+        - app
+        - database
+        - routes
+    excludePaths:
+        - app/Modules/*/Database/Migrations/*
+    checkModelProperties: true
+    checkOctaneCompatibility: false
+    treatPhpDocTypesAsCertain: false

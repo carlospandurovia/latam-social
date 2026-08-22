@@ -1,0 +1,67 @@
+# =============================================================================
+# LATAM Social — fronteras entre módulos
+#
+# Esto convierte el "monolito modular" de docs/03 §1 en una regla verificable.
+# Si un módulo importa algo que no le corresponde, CI falla. Sin esto, la
+# arquitectura es una intención; con esto, es un hecho comprobable.
+#
+# El grafo es ACÍCLICO a propósito (docs/00 §D.1):
+#   - Shared y Core no dependen de nadie.
+#   - Communication solo conoce Shared/Core/Identity: recibe datos por evento,
+#     nunca importa entidades de negocio. Así un fallo de correo no arrastra nada.
+#   - Intelligence y Gamification leen mucho y NADIE depende de ellos: si se caen,
+#     la operación sigue.
+#
+#   composer deptrac
+# =============================================================================
+deptrac:
+  paths:
+    - ./app
+
+  layers:
+    - name: Shared
+      collectors: [{ type: directory, value: app/Shared/.* }]
+    - name: Identity
+      collectors: [{ type: directory, value: app/Modules/Identity/.* }]
+    - name: Core
+      collectors: [{ type: directory, value: app/Modules/Core/.* }]
+    - name: Creator
+      collectors: [{ type: directory, value: app/Modules/Creator/.* }]
+    - name: Crm
+      collectors: [{ type: directory, value: app/Modules/Crm/.* }]
+    - name: Client
+      collectors: [{ type: directory, value: app/Modules/Client/.* }]
+    - name: Campaign
+      collectors: [{ type: directory, value: app/Modules/Campaign/.* }]
+    - name: Matching
+      collectors: [{ type: directory, value: app/Modules/Matching/.* }]
+    - name: Content
+      collectors: [{ type: directory, value: app/Modules/Content/.* }]
+    - name: Measurement
+      collectors: [{ type: directory, value: app/Modules/Measurement/.* }]
+    - name: Finance
+      collectors: [{ type: directory, value: app/Modules/Finance/.* }]
+    - name: Communication
+      collectors: [{ type: directory, value: app/Modules/Communication/.* }]
+    - name: Intelligence
+      collectors: [{ type: directory, value: app/Modules/Intelligence/.* }]
+    - name: Gamification
+      collectors: [{ type: directory, value: app/Modules/Gamification/.* }]
+
+  ruleset:
+    Shared: ~
+    Core:          [Shared]
+    Identity:      [Shared, Core]
+    Creator:       [Shared, Core, Identity]
+    Crm:           [Shared, Core, Identity]
+    Client:        [Shared, Core, Identity]
+    Campaign:      [Shared, Core, Identity, Creator, Client]
+    Matching:      [Shared, Core, Creator, Campaign]
+    Content:       [Shared, Core, Identity, Creator, Campaign]
+    Measurement:   [Shared, Core, Campaign, Content]
+    Finance:       [Shared, Core, Identity, Creator, Client, Campaign, Content]
+    # Communication NO conoce el negocio: los datos llegan en el payload del evento.
+    Communication: [Shared, Core, Identity]
+    # Consumidores puros. Nadie los lista como dependencia permitida.
+    Intelligence:  [Shared, Core, Creator, Campaign, Content, Measurement]
+    Gamification:  [Shared, Core, Creator, Campaign, Content, Measurement]

@@ -1,0 +1,34 @@
+@import 'tailwindcss';
+
+@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
+@source '../../storage/framework/views/*.php';
+@source "../**/*.blade.php";
+
+/*
+ | Tokens de marca — docs/14 §3.
+ |
+ | Regla de color que fijó la auditoría de marca: el naranja y el magenta
+ | existen SOLO dentro del degradado. En interfaz, el único color de marca
+ | plano es el morado, para que los semánticos (aviso, error) no colisionen
+ | con la identidad.
+ */
+@theme {
+  --color-marca-50:  #F5F2FD;
+  --color-marca-100: #E5DDF8;
+  --color-marca-200: #CBBBF2;
+  --color-marca-300: #A487E8;
+  --color-marca-400: #8B63E4;
+  --color-marca-500: #6635D8;
+  --color-marca-600: #5D29D6;
+  --color-marca-700: #4E23B4;
+  --color-marca-800: #3F1C91;
+  --color-marca-900: #30156F;
+  --color-navy:      #070A2B;
+
+  --font-sans: 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif;
+}
+
+/* El degradado de marca, para cabeceras y acentos. */
+.degradado-marca {
+  background: linear-gradient(45deg, #FF7447 0%, #D73382 48%, #6635D8 100%);
+}

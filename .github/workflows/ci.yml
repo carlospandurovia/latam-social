@@ -1,0 +1,125 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+
+jobs:
+  quality:
+    name: Calidad y arquitectura
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: latam_social_test
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="mysqladmin ping" --health-interval=10s
+          --health-timeout=5s --health-retries=5
+      redis:
+        image: redis:7
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd="redis-cli ping" --health-interval=10s
+          --health-timeout=5s --health-retries=5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Preparar PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, intl, pdo_mysql, redis, gd, zip, bcmath, soap
+          coverage: none
+
+      - name: Cachear dependencias
+        uses: actions/cache@v4
+        with:
+          path: vendor
+          key: composer-${{ hashFiles('composer.lock') }}
+
+      - run: composer install --no-interaction --prefer-dist --no-progress
+      - run: cp .env.example .env && php artisan key:generate
+
+      # --- Las cuatro puertas de docs/03 §1 y docs/08 -----------------------
+      - name: Formato (Pint)
+        run: vendor/bin/pint --test
+
+      - name: Análisis estático (PHPStan)
+        run: vendor/bin/phpstan analyse --no-progress
+
+      - name: Fronteras entre módulos (Deptrac)
+        run: vendor/bin/deptrac analyse --fail-on-uncovered --report-uncovered
+
+      # --- Integridad del modelo de datos (DEC-042, DEC-050) ---------------
+      # El cliente de MySQL y sus credenciales no son los mismos que en local.
+      # La imagen del runner no garantiza traer cliente de MySQL: el servicio
+      # `mysql` es un contenedor aparte, y el cliente va en el runner. Sin esto
+      # el flujo puede fallar por "mysql: command not found", que no dice nada
+      # sobre el codigo.
+      - name: Cliente de base de datos
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq mysql-client
+
+      - name: Cliente de base de datos para las herramientas
+        run: echo "MYSQL_CMD=mysql -h127.0.0.1 -uroot -proot" >> $GITHUB_ENV
+
+      - name: Nombres de indices y restricciones sin colisiones
+        run: python3 tools/verificar-nombres-sql.py
+
+      - name: Generar el esquema sin CHECK y sus triggers equivalentes
+        run: python3 tools/generar-triggers.py
+
+      - name: Cargar el esquema de referencia
+        run: |
+          mysql -h127.0.0.1 -uroot -proot -e "CREATE DATABASE latam_ref CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
+          for f in cimientos creator creator-comercial creator-fiscal cliente \
+                   entidades-legales campana contenido finanzas; do
+            mysql -h127.0.0.1 -uroot -proot latam_ref < tools/sql/$f.sql
+          done
+          mysql -h127.0.0.1 -uroot -proot latam_ref < tools/pruebas/semilla.sql
+
+      - name: Las migraciones declaran lo mismo que el esquema de referencia
+        run: python3 tools/verificar-migraciones.py latam_ref
+
+      - name: El generador de triggers acerto con las columnas
+        run: python3 tools/verificar-triggers-generados.py latam_ref
+
+      - name: Restricciones (motor con CHECK nativo)
+        run: |
+          bash tools/pruebas/2.12-contenido.sh latam_ref
+          bash tools/pruebas/2.13-finanzas.sh  latam_ref
+
+      # La mitad que importa: produccion es Percona 5.7 y NO aplica los CHECK.
+      - name: Restricciones (motor sin CHECK, solo triggers generados)
+        run: |
+          mysql -h127.0.0.1 -uroot -proot -e "CREATE DATABASE latam_57 CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
+          for f in cimientos creator creator-comercial creator-fiscal cliente \
+                   entidades-legales campana contenido finanzas; do
+            mysql -h127.0.0.1 -uroot -proot latam_57 < tools/sql/generado/$f-sin-check.sql
+          done
+          mysql -h127.0.0.1 -uroot -proot latam_57 < tools/sql/generado/triggers.sql
+          mysql -h127.0.0.1 -uroot -proot latam_57 < tools/pruebas/semilla.sql
+          bash tools/pruebas/2.12-contenido.sh latam_57
+          bash tools/pruebas/2.13-finanzas.sh  latam_57
+
+      - name: Los dos motores imponen el mismo conjunto de reglas
+        run: python3 tools/verificar-equivalencia.py latam_ref latam_57
+
+      - name: Migraciones
+        run: php artisan migrate --force
+        env:
+          DB_DATABASE: latam_social_test
+          DB_USERNAME: root
+          DB_PASSWORD: root
+
+      - name: Pruebas
+        run: php artisan test
+        env:
+          DB_DATABASE: latam_social_test
+          DB_USERNAME: root
+          DB_PASSWORD: root

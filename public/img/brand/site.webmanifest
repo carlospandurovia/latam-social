@@ -1,0 +1,45 @@
+{
+  "name": "LATAM Social",
+  "short_name": "LATAM Social",
+  "description": "Plataforma de Creator Marketing",
+  "start_url": "/creators/",
+  "scope": "/creators/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#070A2B",
+  "theme_color": "#070A2B",
+  "lang": "es-PE",
+  "dir": "ltr",
+  "icons": [
+    {
+      "src": "/img/favicon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/img/favicon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/img/icon-maskable-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/img/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/img/icon-monochrome.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "monochrome"
+    }
+  ]
+}
