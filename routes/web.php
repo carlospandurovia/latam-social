@@ -31,11 +31,19 @@ Route::middleware('auth')->group(function (): void {
 
     Route::get('/panel', PanelController::class)->name('panel');
 
+    // Cada ruta de negocio declara el permiso que exige. `RutasProtegidasTest`
+    // comprueba que no se cuele ninguna sin declararlo: es fácil añadir una
+    // pantalla y olvidar el middleware, y el olvido no se nota hasta que alguien
+    // ve algo que no debía.
     Route::get('/catalogos/{catalogo}', [CatalogosController::class, 'show'])
+        ->middleware('permiso:catalog.view')
         ->name('catalogos.show');
 
-    Route::get('/creadores', [CreadoresController::class, 'index'])->name('creadores.index');
+    Route::get('/creadores', [CreadoresController::class, 'index'])
+        ->middleware('permiso:creator.view')
+        ->name('creadores.index');
     Route::get('/creadores/{uuid}', [CreadoresController::class, 'show'])
+        ->middleware('permiso:creator.view')
         ->whereUuid('uuid')
         ->name('creadores.show');
 });

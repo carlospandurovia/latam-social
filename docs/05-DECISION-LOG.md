@@ -626,6 +626,22 @@ impecable. Simplemente **la mitad de las reglas que declara no existen en ese se
 
 ---
 
+### DEC-053 — Autorización por permiso, sin atajo para el administrador
+
+| | |
+|---|---|
+| **El agujero** | Desde 2.4 existían `roles`, `permissions` y sus pivotes, y se sembraban 15 permisos y 6 roles. Pero **`permission_role` estaba vacía** y no había middleware: las rutas solo exigían `auth`. La infraestructura de autorización estaba construida y **desconectada**. Cualquiera con sesión llegaba a todo. |
+| **Por qué no se notaba** | Solo había un usuario, el administrador. Que es exactamente cómo estos agujeros llegan a producción. |
+| **Decisión** | Middleware `permiso:<codigo>` en cada ruta de negocio; el código pregunta por el **permiso**, nunca por el rol; `permission_role` sembrada con la matriz de `docs/fase-3/3.1-PERMISOS.md §3`. |
+| **Lo que se rechazó** | `Gate::before(fn ($u) => $u->esAdmin() ? true : null)`. Cómodo, pero abre un agujero que ninguna prueba detecta: el rol tendría en silencio permisos que nadie le concedió, incluidos los futuros. `admin` recibe todos los permisos **como filas**, y la comprobación no tiene casos especiales. Así «quién puede aprobar un lote» se responde con una consulta, no leyendo código. |
+| **403 y no 404** | Ocultar el recurso es defendible en una API pública; en un back-office de usuarios internos y conocidos, un 404 solo consigue que quien no tiene permiso crea que la pantalla está rota. La vista dice qué permiso falta. |
+| **Guarda estructural** | `RutasProtegidasTest` falla si alguna ruta tras `auth` no declara permiso. Olvidar el middleware al añadir una pantalla **no falla**: la pantalla funciona, y se nota cuando alguien ve lo que no debía. Las excepciones (`panel`, `salir`) están escritas con su motivo, y otra prueba vigila que no crezcan. |
+| **⚠️ Para tu revisión** | Dos concesiones son criterio de negocio: que `campaign_manager` vea el **margen interno** (`BR-FIN-007`) y que `finance` vea **datos fiscales y cuentas bancarias**. La segunda es inevitable para poder pagar; la primera es discutible y se quita con una línea. |
+| **Nota sobre `BR-FIN-005`** | El rol `finance` tiene `payout.create` y `payout.approve` a la vez. No es descuido: la regla habla de **usuarios**, y `ck_pbatch_segregation` impide en la base que la misma persona cree y apruebe el mismo lote. Consecuencia intencionada: **finanzas necesita al menos dos usuarios** para operar. |
+| **Estado** | ADOPTADA e implementada (2026-08-22, iteración 3.1) |
+
+---
+
 ## Decisiones pendientes de información del negocio
 
 | # | Pregunta | Bloquea |

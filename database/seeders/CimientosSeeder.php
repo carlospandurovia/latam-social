@@ -173,6 +173,7 @@ final class CimientosSeeder extends Seeder
             ['content.review',         'Content',  'Revisar y aprobar contenido'],
             ['integration.manage',     'Core',     'Configurar integraciones y credenciales'],
             ['audit.view',             'Core',     'Consultar la bitácora de auditoría'],
+            ['catalog.view',           'Core',     'Consultar los catálogos de referencia'],
         ];
         foreach ($permisos as [$codigo, $modulo, $descripcion]) {
             DB::table('permissions')->updateOrInsert(
@@ -194,6 +195,64 @@ final class CimientosSeeder extends Seeder
                 ['code' => $codigo],
                 ['name' => $nombre, 'scope' => $ambito, 'is_system' => $esSistema, 'updated_at' => $ahora, 'created_at' => $ahora],
             );
+        }
+
+        // ---- Qué puede hacer cada rol (iteración 3.1, DEC-053) ----
+        //
+        // Hasta ahora `permission_role` estaba VACÍA: había 16 permisos y 6
+        // roles, y ni una sola concesión. Nada comprobaba permisos, así que no
+        // se notaba; en cuanto el middleware existe, un rol sin concesiones no
+        // puede hacer nada.
+        //
+        // `admin` recibe todos los permisos como DATO, recorriendo la tabla. No
+        // hay atajo en el código: ver `App\Shared\Auth\Permisos`.
+        $matriz = [
+            'campaign_manager' => [
+                'campaign.view', 'campaign.manage', 'campaign.view_margin',
+                'creator.view', 'client.view', 'content.review', 'catalog.view',
+            ],
+            'finance' => [
+                'finance.view', 'finance.payout.create', 'finance.payout.approve',
+                'finance.invoice.issue', 'campaign.view', 'campaign.view_margin',
+                // Para pagar hace falta ver la cuenta bancaria. Es el único rol
+                // no administrador con acceso a datos fiscales del creador.
+                'creator.view', 'creator.view_sensitive',
+                'client.view', 'catalog.view',
+            ],
+            'content_reviewer' => [
+                'content.review', 'campaign.view', 'creator.view', 'catalog.view',
+            ],
+            // Portales externos: sus permisos llegan con su fase. Un rol externo
+            // con permisos internos por descuido es la peor fuga posible.
+            'client_user' => [],
+            'creator' => [],
+        ];
+
+        $idsPermiso = DB::table('permissions')->pluck('id', 'code')->all();
+
+        foreach ($matriz as $codigoRol => $codigosPermiso) {
+            $rolId = DB::table('roles')->where('code', $codigoRol)->value('id');
+            if ($rolId === null) {
+                continue;
+            }
+            foreach ($codigosPermiso as $codigoPermiso) {
+                $permisoId = $idsPermiso[$codigoPermiso] ?? null;
+                if ($permisoId !== null) {
+                    DB::table('permission_role')->updateOrInsert(
+                        ['role_id' => $rolId, 'permission_id' => $permisoId],
+                    );
+                }
+            }
+        }
+
+        // `admin`: todos los permisos, como filas reales y no como excepción.
+        $adminId = DB::table('roles')->where('code', 'admin')->value('id');
+        if ($adminId !== null) {
+            foreach ($idsPermiso as $permisoId) {
+                DB::table('permission_role')->updateOrInsert(
+                    ['role_id' => $adminId, 'permission_id' => $permisoId],
+                );
+            }
         }
 
         // ---- Marca de plataforma y sociedades (iteración 2.10) ----

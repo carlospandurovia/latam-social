@@ -21,9 +21,13 @@
 
     <nav class="flex-1 px-3 py-4 space-y-1 text-sm">
       @php
+        // El permiso que exige cada entrada. Un menú que muestra enlaces que
+        // devuelven 403 enseña al usuario a desconfiar de lo que ve; y ocultar
+        // sin comprobar en la ruta sería seguridad de decorado. Se hacen las dos
+        // cosas: la ruta manda, el menú acompaña.
         $secciones = [
-          ['Panel', 'panel', 'panel'],
-          ['Creadores', 'creadores.index', 'creadores'],
+          ['Panel', 'panel', 'panel', null],
+          ['Creadores', 'creadores.index', 'creadores', 'creator.view'],
         ];
         $catalogos = [
           ['Países', 'countries'], ['Monedas', 'currencies'], ['Categorías', 'categories'],
@@ -31,7 +35,8 @@
         ];
       @endphp
 
-      @foreach ($secciones as [$texto, $ruta, $activo])
+      @foreach ($secciones as [$texto, $ruta, $activo, $permiso])
+        @continue($permiso !== null && ! auth()->user()->can($permiso))
         <a href="{{ route($ruta) }}"
            class="block px-3 py-2 rounded-lg transition
                   {{ request()->routeIs($activo.'*') ? 'bg-marca-500 text-white font-medium' : 'hover:bg-white/5 hover:text-white' }}">
@@ -39,6 +44,7 @@
         </a>
       @endforeach
 
+      @can('catalog.view')
       <p class="px-3 pt-5 pb-1 text-[11px] uppercase tracking-wider text-slate-500">Catálogos</p>
       @foreach ($catalogos as [$texto, $tabla])
         <a href="{{ route('catalogos.show', $tabla) }}"
@@ -47,6 +53,7 @@
           {{ $texto }}
         </a>
       @endforeach
+      @endcan
     </nav>
 
     <div class="px-3 py-4 border-t border-white/10">

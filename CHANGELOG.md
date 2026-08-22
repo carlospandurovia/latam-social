@@ -2,6 +2,33 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 
+## [Fase 3 · 3.1 — Permisos] — 2026-08-22
+
+### Corregido
+- **`permission_role` estaba vacía y nada comprobaba permisos.** Había 15
+  permisos y 6 roles sembrados desde la iteración 2.4, sin una sola concesión y
+  sin middleware: **cualquier usuario con sesión llegaba a todas las pantallas**.
+  No se notaba porque solo existía el administrador.
+
+### Añadido
+- `App\Shared\Auth\Permisos` — resuelve permisos por usuario, con caché por
+  petición. Sin Eloquent y sin depender de `App\Models\User`, que no pertenece a
+  ninguna capa de Deptrac.
+- `App\Shared\Http\Middleware\ExigirPermiso` — `permiso:codigo` en las rutas.
+  Con varios códigos la semántica es O.
+- `App\Shared\Providers\AutorizacionServiceProvider` — conecta con `Gate` para
+  `@can` en las vistas. `Gate::before` devuelve `true` o `null`, **nunca `false`**:
+  un `false` ahí denegaría todas las autorizaciones del sistema.
+- Matriz rol→permiso sembrada (`DEC-053`) y permiso `catalog.view`, que faltaba.
+- Vista de 403 propia, que dice qué permiso falta.
+- Menú lateral filtrado por permiso — sin dejar de comprobar en la ruta.
+- **12 pruebas**, dos de ellas estructurales: que ninguna ruta autenticada quede
+  sin permiso, y que ningún permiso quede sin rol.
+
+### Pendiente
+- ⚠️ Dos concesiones para revisión de negocio: margen interno para
+  `campaign_manager`, y datos fiscales para `finance`. Ver `DEC-053`.
+
 ## [Fase 2 · CERRADA Y VERIFICADA] — 2026-08-22
 
 **El CI pasa en verde de punta a punta**, sobre una máquina limpia y un motor

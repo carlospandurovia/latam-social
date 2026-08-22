@@ -2,6 +2,7 @@
 
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
+use App\Shared\Http\Middleware\ExigirPermiso;
 use Illuminate\Foundation\Configuration\Middleware;
 
 return Application::configure(basePath: dirname(__DIR__))
@@ -15,6 +16,8 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->redirectGuestsTo('/entrar');
         // Y a dónde va quien ya la inició e intenta volver al formulario.
         $middleware->redirectUsersTo('/panel');
+        // `->middleware('permiso:creator.view')` en las rutas.
+        $middleware->alias(['permiso' => ExigirPermiso::class]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
         //

@@ -89,6 +89,9 @@
 | **BR-FIN-018** | El régimen tributario se decide **por factura** y se congela junto al país del receptor. Una operación no gravada no lleva importe de impuesto, y no se exporta un servicio a un cliente domiciliado en Perú. | 🔴 |
 | **BR-FIN-019** | Un perfil fiscal **no se aprueba** con la retención sin decidir. `pending_review` no es «no se retiene»: es «nadie lo ha mirado». Si se retiene, hacen falta tasa **y** la norma que la sustenta. | 🔴 |
 | **BR-FIN-020** | Un asiento de retención congela la tasa aplicada y su norma. Cambiar la tasa mañana no reescribe las retenciones de ayer. | 🔴 |
+| **BR-SEC-001** | Toda ruta de negocio declara el permiso que exige. El código pregunta por el permiso, nunca por el rol. | 🔴 |
+| **BR-SEC-002** | El rol `admin` no tiene atajo en el código: sus permisos son filas de `permission_role`, igual que los de cualquier otro rol. | 🔴 |
+| **BR-SEC-003** | Un rol de ámbito externo (`client_user`, `creator`) nunca recibe permisos internos. | 🔴 |
 
 ## Marca de plataforma y entidades legales (`BR-LE`)
 
