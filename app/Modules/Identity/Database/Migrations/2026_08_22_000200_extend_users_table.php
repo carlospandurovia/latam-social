@@ -61,7 +61,7 @@ return new class extends Migration
         DB::statement('ALTER TABLE users DROP INDEX users_email_unique');
         DB::statement(
             'ALTER TABLE users ADD COLUMN email_active_key VARCHAR(255) '
-            ."GENERATED ALWAYS AS (CASE WHEN status <> 'deactivated' THEN LOWER(email) ELSE NULL END) STORED"
+            ."GENERATED ALWAYS AS (CASE WHEN status <> 'deactivated' THEN LOWER(email) ELSE NULL END) STORED",
         );
         DB::statement('ALTER TABLE users ADD UNIQUE KEY uq_users_email_active (email_active_key)');
         DB::statement('ALTER TABLE users ADD UNIQUE KEY uq_users_uuid (uuid)');

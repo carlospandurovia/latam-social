@@ -54,7 +54,7 @@ return new class extends Migration
         // la fila deja de contar, y NULL no colisiona en un índice único.
         DB::statement(
             'ALTER TABLE creator_applications ADD COLUMN open_email_key VARCHAR(255) '
-            ."GENERATED ALWAYS AS (CASE WHEN status IN ('submitted','in_review') THEN LOWER(email) ELSE NULL END) STORED"
+            ."GENERATED ALWAYS AS (CASE WHEN status IN ('submitted','in_review') THEN LOWER(email) ELSE NULL END) STORED",
         );
         DB::statement('ALTER TABLE creator_applications ADD UNIQUE KEY uq_creator_applications_open (open_email_key)');
 
@@ -116,19 +116,19 @@ return new class extends Migration
         // el índice recae sobre columnas reales en vez de una cadena inventada.
         DB::statement(
             'ALTER TABLE creators ADD COLUMN identity_gate TINYINT UNSIGNED '
-            .'GENERATED ALWAYS AS (CASE WHEN anonymized_at IS NULL THEN 1 ELSE NULL END) STORED'
+            .'GENERATED ALWAYS AS (CASE WHEN anonymized_at IS NULL THEN 1 ELSE NULL END) STORED',
         );
         // La intercalación utf8mb4_unicode_ci ya es insensible a mayúsculas:
         // 'ANA@' y 'ana@' colisionan sin necesidad de LOWER().
         DB::statement(
             'ALTER TABLE creators ADD UNIQUE KEY uq_creators_identity '
-            .'(identity_gate, document_country_code, document_type, document_number)'
+            .'(identity_gate, document_country_code, document_type, document_number)',
         );
         DB::statement('ALTER TABLE creators ADD UNIQUE KEY uq_creators_email (identity_gate, email)');
 
         DB::statement(
             'ALTER TABLE creator_applications ADD CONSTRAINT fk_creator_applications_creator '
-            .'FOREIGN KEY (creator_id) REFERENCES creators(id) ON DELETE RESTRICT'
+            .'FOREIGN KEY (creator_id) REFERENCES creators(id) ON DELETE RESTRICT',
         );
 
         Restriccion::comprobacion(

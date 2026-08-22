@@ -82,19 +82,19 @@ return new class extends Migration
 
         DB::statement(
             'ALTER TABLE client_tax_profiles ADD COLUMN current_gate TINYINT UNSIGNED '
-            .'GENERATED ALWAYS AS (CASE WHEN valid_to IS NULL THEN 1 ELSE NULL END) STORED'
+            .'GENERATED ALWAYS AS (CASE WHEN valid_to IS NULL THEN 1 ELSE NULL END) STORED',
         );
         // Un solo perfil vigente por cliente y país.
         DB::statement(
             'ALTER TABLE client_tax_profiles ADD UNIQUE KEY uq_ctxp_current '
-            .'(current_gate, client_organization_id, country_id)'
+            .'(current_gate, client_organization_id, country_id)',
         );
         // Y el mismo identificador fiscal no puede estar vigente en dos clientes:
         // es lo que impide duplicar un cliente por descuido comercial, que es la
         // forma más común de partir en dos el histórico de un mismo grupo.
         DB::statement(
             'ALTER TABLE client_tax_profiles ADD UNIQUE KEY uq_ctxp_taxid '
-            .'(current_gate, country_id, tax_id_type, tax_id_number)'
+            .'(current_gate, country_id, tax_id_type, tax_id_number)',
         );
 
         Schema::create('client_brands', function (Blueprint $table): void {
@@ -179,11 +179,11 @@ return new class extends Migration
         // el puesto sin tener que acordarse de bajar la marca antes.
         DB::statement(
             'ALTER TABLE contacts ADD COLUMN primary_gate TINYINT UNSIGNED '
-            ."GENERATED ALWAYS AS (CASE WHEN is_primary = 1 AND status = 'active' THEN 1 ELSE NULL END) STORED"
+            ."GENERATED ALWAYS AS (CASE WHEN is_primary = 1 AND status = 'active' THEN 1 ELSE NULL END) STORED",
         );
         DB::statement(
             'ALTER TABLE contacts ADD UNIQUE KEY uq_contacts_primary '
-            .'(primary_gate, client_organization_id, contact_type)'
+            .'(primary_gate, client_organization_id, contact_type)',
         );
 
         foreach (self::restricciones() as [$tabla, $nombre, $expresion, $columnas, $mensaje]) {

@@ -110,13 +110,13 @@ return new class extends Migration
 
         DB::statement(
             'ALTER TABLE legal_entity_countries ADD COLUMN current_gate TINYINT UNSIGNED '
-            .'GENERATED ALWAYS AS (CASE WHEN valid_to IS NULL THEN 1 ELSE NULL END) STORED'
+            .'GENERATED ALWAYS AS (CASE WHEN valid_to IS NULL THEN 1 ELSE NULL END) STORED',
         );
         // UNA sola sociedad vigente por país. Sin esto el resolver de facturación
         // tendría un empate, y docs 2.2 ya decidió que los empates se rechazan al
         // guardar la configuración, no al intentar emitir la factura.
         DB::statement(
-            'ALTER TABLE legal_entity_countries ADD UNIQUE KEY uq_lec_country (current_gate, country_id)'
+            'ALTER TABLE legal_entity_countries ADD UNIQUE KEY uq_lec_country (current_gate, country_id)',
         );
 
         // SUNAT exige serie + correlativo sin huecos por tipo de documento. El

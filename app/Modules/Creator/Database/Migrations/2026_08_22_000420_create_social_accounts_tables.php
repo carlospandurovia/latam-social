@@ -50,19 +50,19 @@ return new class extends Migration
         // reclamar el mismo perfil, y resolverlo es precisamente la verificación.
         DB::statement(
             'ALTER TABLE social_accounts ADD COLUMN verified_gate TINYINT UNSIGNED '
-            ."GENERATED ALWAYS AS (CASE WHEN verification_status = 'verified' THEN 1 ELSE NULL END) STORED"
+            ."GENERATED ALWAYS AS (CASE WHEN verification_status = 'verified' THEN 1 ELSE NULL END) STORED",
         );
         DB::statement(
             'ALTER TABLE social_accounts ADD UNIQUE KEY uq_social_accounts_verified '
-            .'(verified_gate, platform_id, handle)'
+            .'(verified_gate, platform_id, handle)',
         );
         DB::statement(
             'ALTER TABLE social_accounts ADD COLUMN primary_gate TINYINT UNSIGNED '
-            .'GENERATED ALWAYS AS (CASE WHEN is_primary = 1 THEN 1 ELSE NULL END) STORED'
+            .'GENERATED ALWAYS AS (CASE WHEN is_primary = 1 THEN 1 ELSE NULL END) STORED',
         );
         DB::statement(
             'ALTER TABLE social_accounts ADD UNIQUE KEY uq_social_accounts_primary '
-            .'(primary_gate, creator_id, platform_id)'
+            .'(primary_gate, creator_id, platform_id)',
         );
 
         Schema::create('social_account_snapshots', function (Blueprint $table): void {

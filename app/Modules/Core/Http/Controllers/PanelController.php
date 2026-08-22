@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Core\Http\Controllers;
 
 use App\Shared\Database\Restriccion;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
@@ -41,7 +42,7 @@ final class PanelController
         return (int) DB::selectOne(
             'SELECT COUNT(*) AS n FROM information_schema.TABLES
              WHERE TABLE_SCHEMA = ? AND TABLE_TYPE = ?',
-            [DB::connection()->getDatabaseName(), 'BASE TABLE']
+            [DB::connection()->getDatabaseName(), 'BASE TABLE'],
         )->n;
     }
 
@@ -87,9 +88,9 @@ final class PanelController
         }
     }
 
-    private function cobertura(): \Illuminate\Support\Collection
+    private function cobertura(): Collection
     {
-        if (! DB::getSchemaBuilder()->hasTable('legal_entity_countries')) {
+        if (!DB::getSchemaBuilder()->hasTable('legal_entity_countries')) {
             return collect();
         }
 

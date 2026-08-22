@@ -28,11 +28,11 @@ return new class extends Migration
             // salió la tasa que se aplicó, y dos fuentes pueden discrepar el mismo día.
             $table->unique(
                 ['base_currency_code', 'quote_currency_code', 'rate_date', 'source'],
-                'uq_exchange_rates'
+                'uq_exchange_rates',
             );
             $table->index(
                 ['base_currency_code', 'quote_currency_code', 'rate_date'],
-                'ix_exchange_rates_lookup'
+                'ix_exchange_rates_lookup',
             );
 
             $table->foreign('base_currency_code', 'fk_exchange_rates_base')

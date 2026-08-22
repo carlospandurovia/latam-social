@@ -55,7 +55,7 @@ return new class extends Migration
         // el histórico de quién cobró en su nombre no se pierde.
         DB::statement(
             'ALTER TABLE creator_guardians ADD COLUMN active_creator_key BIGINT UNSIGNED '
-            ."GENERATED ALWAYS AS (CASE WHEN status = 'active' THEN creator_id ELSE NULL END) STORED"
+            ."GENERATED ALWAYS AS (CASE WHEN status = 'active' THEN creator_id ELSE NULL END) STORED",
         );
         DB::statement('ALTER TABLE creator_guardians ADD UNIQUE KEY uq_creator_guardians_active (active_creator_key)');
 
@@ -90,11 +90,11 @@ return new class extends Migration
         // la vez una de envío y una fiscal marcadas como predeterminadas.
         DB::statement(
             'ALTER TABLE creator_addresses ADD COLUMN default_gate TINYINT UNSIGNED '
-            .'GENERATED ALWAYS AS (CASE WHEN is_default = 1 THEN 1 ELSE NULL END) STORED'
+            .'GENERATED ALWAYS AS (CASE WHEN is_default = 1 THEN 1 ELSE NULL END) STORED',
         );
         DB::statement(
             'ALTER TABLE creator_addresses ADD UNIQUE KEY uq_creator_addresses_default '
-            .'(default_gate, creator_id, address_type)'
+            .'(default_gate, creator_id, address_type)',
         );
 
         Restriccion::comprobacion(

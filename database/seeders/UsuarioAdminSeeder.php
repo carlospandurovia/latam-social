@@ -69,7 +69,7 @@ final class UsuarioAdminSeeder extends Seeder
 
         DB::table('role_user')->updateOrInsert(
             ['user_id' => $usuarioId, 'role_id' => $rolId],
-            ['assigned_at' => now()]
+            ['assigned_at' => now()],
         );
     }
 }

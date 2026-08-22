@@ -429,7 +429,7 @@ return new class extends Migration
      * nunca se elimina físicamente", que aquí deja de ser una promesa de la
      * capa de aplicación y pasa a ser física.
      *
-     * @return array<string, string>  nombre => cuerpo
+     * @return array<string, string> nombre => cuerpo
      */
     private static function disparadoresInmutabilidad(): array
     {

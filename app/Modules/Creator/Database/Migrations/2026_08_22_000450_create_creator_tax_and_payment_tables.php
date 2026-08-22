@@ -77,7 +77,7 @@ return new class extends Migration
         // conviven: alguien puede estar tramitando el cambio de régimen.
         DB::statement(
             'ALTER TABLE creator_tax_profiles ADD COLUMN current_gate TINYINT UNSIGNED '
-            ."GENERATED ALWAYS AS (CASE WHEN valid_to IS NULL AND status = 'approved' THEN 1 ELSE NULL END) STORED"
+            ."GENERATED ALWAYS AS (CASE WHEN valid_to IS NULL AND status = 'approved' THEN 1 ELSE NULL END) STORED",
         );
         DB::statement('ALTER TABLE creator_tax_profiles ADD UNIQUE KEY uq_ctp_current (current_gate, creator_id, country_id)');
 
@@ -140,7 +140,7 @@ return new class extends Migration
 
         DB::statement(
             'ALTER TABLE creator_payment_methods ADD COLUMN default_gate TINYINT UNSIGNED '
-            .'GENERATED ALWAYS AS (CASE WHEN is_default = 1 THEN 1 ELSE NULL END) STORED'
+            .'GENERATED ALWAYS AS (CASE WHEN is_default = 1 THEN 1 ELSE NULL END) STORED',
         );
         DB::statement('ALTER TABLE creator_payment_methods ADD UNIQUE KEY uq_cpm_default (default_gate, creator_id)');
 

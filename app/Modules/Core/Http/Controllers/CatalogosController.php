@@ -52,7 +52,7 @@ final class CatalogosController
 
     public function show(string $catalogo): View
     {
-        if (! array_key_exists($catalogo, self::CATALOGOS)) {
+        if (!array_key_exists($catalogo, self::CATALOGOS)) {
             throw new NotFoundHttpException("Catálogo desconocido: {$catalogo}");
         }
 

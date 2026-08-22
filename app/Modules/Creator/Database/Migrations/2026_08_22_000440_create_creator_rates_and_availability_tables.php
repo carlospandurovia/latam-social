@@ -50,11 +50,11 @@ return new class extends Migration
         // como histórico: sirven para ver cómo fue subiendo el precio de alguien.
         DB::statement(
             'ALTER TABLE creator_rates ADD COLUMN current_gate TINYINT UNSIGNED '
-            .'GENERATED ALWAYS AS (CASE WHEN valid_to IS NULL THEN 1 ELSE NULL END) STORED'
+            .'GENERATED ALWAYS AS (CASE WHEN valid_to IS NULL THEN 1 ELSE NULL END) STORED',
         );
         DB::statement(
             'ALTER TABLE creator_rates ADD UNIQUE KEY uq_creator_rates_current '
-            .'(current_gate, creator_id, content_format_id, currency_code)'
+            .'(current_gate, creator_id, content_format_id, currency_code)',
         );
 
         Schema::create('creator_availability', function (Blueprint $table): void {
@@ -82,11 +82,11 @@ return new class extends Migration
 
         DB::statement(
             'ALTER TABLE creator_availability ADD COLUMN current_gate TINYINT UNSIGNED '
-            .'GENERATED ALWAYS AS (CASE WHEN valid_to IS NULL THEN 1 ELSE NULL END) STORED'
+            .'GENERATED ALWAYS AS (CASE WHEN valid_to IS NULL THEN 1 ELSE NULL END) STORED',
         );
         DB::statement(
             'ALTER TABLE creator_availability ADD UNIQUE KEY uq_creator_availability_current '
-            .'(current_gate, creator_id)'
+            .'(current_gate, creator_id)',
         );
 
         Schema::create('creator_blackouts', function (Blueprint $table): void {

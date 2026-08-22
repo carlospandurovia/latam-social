@@ -34,7 +34,7 @@ final class CimientosSeeder extends Seeder
         foreach ($monedas as $m) {
             DB::table('currencies')->updateOrInsert(
                 ['code' => $m['code']],
-                $m + ['is_active' => true, 'updated_at' => $ahora, 'created_at' => $ahora]
+                $m + ['is_active' => true, 'updated_at' => $ahora, 'created_at' => $ahora],
             );
         }
 
@@ -53,7 +53,7 @@ final class CimientosSeeder extends Seeder
         foreach ($paises as $p) {
             DB::table('countries')->updateOrInsert(
                 ['iso2' => $p['iso2']],
-                $p + ['updated_at' => $ahora, 'created_at' => $ahora]
+                $p + ['updated_at' => $ahora, 'created_at' => $ahora],
             );
         }
 
@@ -70,24 +70,24 @@ final class CimientosSeeder extends Seeder
         foreach ($redes as $r) {
             DB::table('platforms')->updateOrInsert(
                 ['code' => $r['code']],
-                $r + ['is_active' => true, 'updated_at' => $ahora, 'created_at' => $ahora]
+                $r + ['is_active' => true, 'updated_at' => $ahora, 'created_at' => $ahora],
             );
         }
 
         $formatos = [
             'instagram' => [['reel', 14], ['story', 1], ['post', 30], ['carousel', 30], ['live', 1]],
-            'tiktok'    => [['video', 30], ['photo_post', 30], ['live', 1]],
-            'youtube'   => [['video', 90], ['short', 30], ['community_post', 30]],
-            'facebook'  => [['reel', 14], ['post', 30], ['story', 1]],
-            'x'         => [['post', 30], ['thread', 30]],
-            'linkedin'  => [['post', 30], ['article', 90]],
+            'tiktok' => [['video', 30], ['photo_post', 30], ['live', 1]],
+            'youtube' => [['video', 90], ['short', 30], ['community_post', 30]],
+            'facebook' => [['reel', 14], ['post', 30], ['story', 1]],
+            'x' => [['post', 30], ['thread', 30]],
+            'linkedin' => [['post', 30], ['article', 90]],
         ];
         foreach ($formatos as $codigoRed => $lista) {
             $redId = DB::table('platforms')->where('code', $codigoRed)->value('id');
             foreach ($lista as [$codigo, $permanencia]) {
                 DB::table('content_formats')->updateOrInsert(
                     ['platform_id' => $redId, 'code' => $codigo],
-                    ['default_permanence_days' => $permanencia, 'is_active' => true, 'updated_at' => $ahora, 'created_at' => $ahora]
+                    ['default_permanence_days' => $permanencia, 'is_active' => true, 'updated_at' => $ahora, 'created_at' => $ahora],
                 );
             }
         }
@@ -102,21 +102,21 @@ final class CimientosSeeder extends Seeder
         ];
 
         $categorias = [
-            'alcohol'      => [],
-            'tabaco'       => [],
-            'apuestas'     => [],
+            'alcohol' => [],
+            'tabaco' => [],
+            'apuestas' => [],
             'criptoactivos' => [],
-            'creditos'     => [],
+            'creditos' => [],
             'perdida_de_peso' => [],
-            'belleza'      => ['skincare', 'maquillaje', 'cabello'],
-            'gaming'       => ['mobile', 'pc_consola', 'esports'],
-            'gastronomia'  => ['recetas', 'restaurantes'],
-            'moda'         => ['streetwear', 'formal'],
-            'fitness'      => ['entrenamiento', 'nutricion'],
-            'tecnologia'   => ['gadgets', 'software'],
-            'viajes'       => [],
-            'finanzas'     => [],
-            'hogar'        => [],
+            'belleza' => ['skincare', 'maquillaje', 'cabello'],
+            'gaming' => ['mobile', 'pc_consola', 'esports'],
+            'gastronomia' => ['recetas', 'restaurantes'],
+            'moda' => ['streetwear', 'formal'],
+            'fitness' => ['entrenamiento', 'nutricion'],
+            'tecnologia' => ['gadgets', 'software'],
+            'viajes' => [],
+            'finanzas' => [],
+            'hogar' => [],
             'entretenimiento' => [],
         ];
         foreach ($categorias as $padre => $hijos) {
@@ -126,7 +126,7 @@ final class CimientosSeeder extends Seeder
                     'parent_id' => null, 'depth' => 0,
                     'min_age' => $edadMinima[$padre] ?? 0,
                     'is_active' => true, 'updated_at' => $ahora, 'created_at' => $ahora,
-                ]
+                ],
             );
             $padreId = DB::table('categories')->where('code', $padre)->value('id');
             foreach ($hijos as $hijo) {
@@ -137,7 +137,7 @@ final class CimientosSeeder extends Seeder
                         // El subnicho hereda la edad mínima de su nicho padre.
                         'min_age' => $edadMinima[$padre] ?? 0,
                         'is_active' => true, 'updated_at' => $ahora, 'created_at' => $ahora,
-                    ]
+                    ],
                 );
             }
         }
@@ -152,7 +152,7 @@ final class CimientosSeeder extends Seeder
         foreach ($idiomas as $i) {
             DB::table('languages')->updateOrInsert(
                 ['code' => $i['code']],
-                $i + ['is_active' => true, 'updated_at' => $ahora, 'created_at' => $ahora]
+                $i + ['is_active' => true, 'updated_at' => $ahora, 'created_at' => $ahora],
             );
         }
 
@@ -177,7 +177,7 @@ final class CimientosSeeder extends Seeder
         foreach ($permisos as [$codigo, $modulo, $descripcion]) {
             DB::table('permissions')->updateOrInsert(
                 ['code' => $codigo],
-                ['module' => $modulo, 'description' => $descripcion, 'updated_at' => $ahora, 'created_at' => $ahora]
+                ['module' => $modulo, 'description' => $descripcion, 'updated_at' => $ahora, 'created_at' => $ahora],
             );
         }
 
@@ -192,7 +192,7 @@ final class CimientosSeeder extends Seeder
         foreach ($roles as [$codigo, $nombre, $ambito, $esSistema]) {
             DB::table('roles')->updateOrInsert(
                 ['code' => $codigo],
-                ['name' => $nombre, 'scope' => $ambito, 'is_system' => $esSistema, 'updated_at' => $ahora, 'created_at' => $ahora]
+                ['name' => $nombre, 'scope' => $ambito, 'is_system' => $esSistema, 'updated_at' => $ahora, 'created_at' => $ahora],
             );
         }
 
@@ -205,7 +205,7 @@ final class CimientosSeeder extends Seeder
                 'primary_color' => '#7C3AED',
                 'is_active' => true,
                 'updated_at' => $ahora, 'created_at' => $ahora,
-            ]
+            ],
         );
         $marcaId = DB::table('platform_brands')->where('code', 'latam_social')->value('id');
 
@@ -244,7 +244,7 @@ final class CimientosSeeder extends Seeder
                     'timezone' => $e['timezone'],
                     'status' => 'active',
                     'updated_at' => $ahora, 'created_at' => $ahora,
-                ]
+                ],
             );
             $entidadId = DB::table('legal_entities')->where('code', $e['code'])->value('id');
 
@@ -258,7 +258,7 @@ final class CimientosSeeder extends Seeder
                     ->where('country_id', $cubreId)
                     ->whereNull('valid_to')
                     ->exists();
-                if (! $existe) {
+                if (!$existe) {
                     DB::table('legal_entity_countries')->insert([
                         'legal_entity_id' => $entidadId,
                         'country_id' => $cubreId,
@@ -274,7 +274,7 @@ final class CimientosSeeder extends Seeder
         $adminId = DB::table('roles')->where('code', 'admin')->value('id');
         foreach (DB::table('permissions')->pluck('id') as $permisoId) {
             DB::table('permission_role')->updateOrInsert(
-                ['role_id' => $adminId, 'permission_id' => $permisoId], []
+                ['role_id' => $adminId, 'permission_id' => $permisoId], [],
             );
         }
     }

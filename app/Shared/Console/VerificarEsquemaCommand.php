@@ -76,7 +76,7 @@ final class VerificarEsquemaCommand extends Command
         if ($this->option('json')) {
             $this->line(json_encode(
                 ['ok' => $fallos === [], 'fallos' => $fallos, 'limitaciones' => $limitaciones],
-                JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE
+                JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE,
             ));
         }
 
@@ -92,7 +92,7 @@ final class VerificarEsquemaCommand extends Command
             $this->info('Esquema conforme.');
             $this->line(
                 '  <fg=yellow>'.count($limitaciones).' limitación(es) del motor, asumidas y compensadas'
-                .' (DEC-042). No son incumplimientos.</>'
+                .' (DEC-042). No son incumplimientos.</>',
             );
 
             return self::SUCCESS;
@@ -168,7 +168,7 @@ final class VerificarEsquemaCommand extends Command
     /**
      * Traduce el resultado de una sonda a una severidad.
      *
-     * @param  array{0: bool, 1: string}  $resultado
+     * @param array{0: bool, 1: string} $resultado
      * @return array{0: string, 1: string}
      */
     private function severidad(array $resultado, string $siFalla, ?string $detalleSiFalla = null): array
@@ -246,39 +246,39 @@ final class VerificarEsquemaCommand extends Command
             'Ningún importe en punto flotante (BR-FIN-004)' => fn (string $b) => $this->filas(
                 "SELECT CONCAT(TABLE_NAME,'.',COLUMN_NAME,' es ',DATA_TYPE) AS d
                  FROM information_schema.COLUMNS
-                 WHERE TABLE_SCHEMA = ? AND DATA_TYPE IN ('float','double','real')", [$b]
+                 WHERE TABLE_SCHEMA = ? AND DATA_TYPE IN ('float','double','real')", [$b],
             ),
 
             'Ninguna columna ENUM o SET (docs 2.3 §7)' => fn (string $b) => $this->filas(
                 "SELECT CONCAT(TABLE_NAME,'.',COLUMN_NAME,' es ',DATA_TYPE) AS d
                  FROM information_schema.COLUMNS
-                 WHERE TABLE_SCHEMA = ? AND DATA_TYPE IN ('enum','set')", [$b]
+                 WHERE TABLE_SCHEMA = ? AND DATA_TYPE IN ('enum','set')", [$b],
             ),
 
             'Todas las tablas en InnoDB' => fn (string $b) => $this->filas(
                 "SELECT CONCAT(TABLE_NAME,' usa ',ENGINE) AS d
                  FROM information_schema.TABLES
                  WHERE TABLE_SCHEMA = ? AND TABLE_TYPE='BASE TABLE'
-                   AND (ENGINE IS NULL OR ENGINE <> 'InnoDB')", [$b]
+                   AND (ENGINE IS NULL OR ENGINE <> 'InnoDB')", [$b],
             ),
 
             'Todas las tablas en utf8mb4' => fn (string $b) => $this->filas(
                 "SELECT CONCAT(TABLE_NAME,' usa ',TABLE_COLLATION) AS d
                  FROM information_schema.TABLES
                  WHERE TABLE_SCHEMA = ? AND TABLE_TYPE='BASE TABLE'
-                   AND TABLE_COLLATION NOT LIKE 'utf8mb4%'", [$b]
+                   AND TABLE_COLLATION NOT LIKE 'utf8mb4%'", [$b],
             ),
 
             'Ninguna clave foránea con SET NULL (docs 2.2 §5)' => fn (string $b) => $this->filas(
                 "SELECT CONCAT(CONSTRAINT_NAME,' en ',TABLE_NAME) AS d
                  FROM information_schema.REFERENTIAL_CONSTRAINTS
-                 WHERE CONSTRAINT_SCHEMA = ? AND DELETE_RULE = 'SET NULL'", [$b]
+                 WHERE CONSTRAINT_SCHEMA = ? AND DELETE_RULE = 'SET NULL'", [$b],
             ),
 
             'Ninguna clave foránea sin política explícita' => fn (string $b) => $this->filas(
                 "SELECT CONCAT(CONSTRAINT_NAME,' en ',TABLE_NAME,' -> ',DELETE_RULE) AS d
                  FROM information_schema.REFERENTIAL_CONSTRAINTS
-                 WHERE CONSTRAINT_SCHEMA = ? AND DELETE_RULE NOT IN ('RESTRICT','CASCADE','NO ACTION')", [$b]
+                 WHERE CONSTRAINT_SCHEMA = ? AND DELETE_RULE NOT IN ('RESTRICT','CASCADE','NO ACTION')", [$b],
             ),
 
             'Toda tabla tiene clave primaria' => fn (string $b) => $this->filas(
@@ -289,14 +289,14 @@ final class VerificarEsquemaCommand extends Command
                   AND c.CONSTRAINT_TYPE = 'PRIMARY KEY'
                  WHERE t.TABLE_SCHEMA = ? AND t.TABLE_TYPE='BASE TABLE'
                    AND t.TABLE_NAME NOT IN ({$ajenas})
-                   AND c.CONSTRAINT_NAME IS NULL", [$b]
+                   AND c.CONSTRAINT_NAME IS NULL", [$b],
             ),
 
             'Las tablas de solo-inserción no tienen updated_at' => fn (string $b) => $this->filas(
                 "SELECT CONCAT(TABLE_NAME,' tiene updated_at') AS d
                  FROM information_schema.COLUMNS
                  WHERE TABLE_SCHEMA = ? AND COLUMN_NAME = 'updated_at'
-                   AND TABLE_NAME IN ({$appendOnly})", [$b]
+                   AND TABLE_NAME IN ({$appendOnly})", [$b],
             ),
 
             // §57: nunca guardar secretos en claro cuando hay alternativa segura.
@@ -311,7 +311,7 @@ final class VerificarEsquemaCommand extends Command
                      COLUMN_NAME REGEXP '(account_number|card_number|cvv|iban|swift|routing_number)'
                      OR COLUMN_NAME REGEXP '(secret|api_key|private_key|access_token|refresh_token|password)'
                    )
-                   AND COLUMN_NAME NOT REGEXP '_(encrypted|hash|hashed|masked|fingerprint|last4|id)$'", [$b]
+                   AND COLUMN_NAME NOT REGEXP '_(encrypted|hash|hashed|masked|fingerprint|last4|id)$'", [$b],
             ),
 
             // La comprobación que da sentido a todo lo demás: que cada regla
@@ -327,7 +327,7 @@ final class VerificarEsquemaCommand extends Command
                      SELECT 1 FROM information_schema.STATISTICS s
                      WHERE s.TABLE_SCHEMA = k.TABLE_SCHEMA AND s.TABLE_NAME = k.TABLE_NAME
                        AND s.COLUMN_NAME = k.COLUMN_NAME AND s.SEQ_IN_INDEX = 1
-                   )", [$b]
+                   )", [$b],
             ),
         ];
     }
@@ -339,7 +339,7 @@ final class VerificarEsquemaCommand extends Command
      */
     private function restriccionesHuerfanas(string $base): array
     {
-        if (! DB::getSchemaBuilder()->hasTable('schema_constraints')) {
+        if (!DB::getSchemaBuilder()->hasTable('schema_constraints')) {
             return ['no existe schema_constraints: ejecuta php artisan migrate'];
         }
 
@@ -357,13 +357,13 @@ final class VerificarEsquemaCommand extends Command
             $nombre = (string) $r->constraint_name;
 
             if ($r->mechanism === Restriccion::MECANISMO_CHECK) {
-                if (! in_array($nombre, $checks, true)) {
+                if (!in_array($nombre, $checks, true)) {
                     $huecos[] = "{$nombre}: declarada como CHECK y el motor no la tiene";
                 }
             } else {
                 foreach (['ins', 'upd'] as $sufijo) {
                     $tg = 'tg_'.mb_substr($nombre, 0, 57)."_{$sufijo}";
-                    if (! in_array($tg, $triggers, true)) {
+                    if (!in_array($tg, $triggers, true)) {
                         $huecos[] = "{$nombre}: falta el trigger {$tg}";
                     }
                 }
@@ -386,7 +386,7 @@ final class VerificarEsquemaCommand extends Command
         try {
             return $this->filas(
                 'SELECT CONSTRAINT_NAME AS d FROM information_schema.CHECK_CONSTRAINTS
-                 WHERE CONSTRAINT_SCHEMA = ?', [$base]
+                 WHERE CONSTRAINT_SCHEMA = ?', [$base],
             );
         } catch (\Throwable) {
             return [];
@@ -397,19 +397,19 @@ final class VerificarEsquemaCommand extends Command
     private function triggersExistentes(string $base): array
     {
         return $this->filas(
-            'SELECT TRIGGER_NAME AS d FROM information_schema.TRIGGERS WHERE TRIGGER_SCHEMA = ?', [$base]
+            'SELECT TRIGGER_NAME AS d FROM information_schema.TRIGGERS WHERE TRIGGER_SCHEMA = ?', [$base],
         );
     }
 
     /**
-     * @param  list<mixed>  $enlaces
+     * @param list<mixed> $enlaces
      * @return list<string>
      */
     private function filas(string $sql, array $enlaces): array
     {
         return array_map(
             static fn (object $f): string => (string) $f->d,
-            DB::select($sql, $enlaces)
+            DB::select($sql, $enlaces),
         );
     }
 }

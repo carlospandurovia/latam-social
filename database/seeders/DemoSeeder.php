@@ -125,7 +125,7 @@ final class DemoSeeder extends Seeder
         }
 
         // Un cliente con su marca y una campaña.
-        if (! DB::table('client_organizations')->where('client_code', 'DEMO01')->exists()) {
+        if (!DB::table('client_organizations')->where('client_code', 'DEMO01')->exists()) {
             $clienteId = DB::table('client_organizations')->insertGetId([
                 'uuid' => (string) Str::uuid(),
                 'commercial_name' => 'Grupo Demostración',

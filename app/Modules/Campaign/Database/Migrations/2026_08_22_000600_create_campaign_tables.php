@@ -127,11 +127,11 @@ return new class extends Migration
         // de aquella excepción: invierte la puerta y cubre justo ese hueco.
         DB::statement(
             'ALTER TABLE campaign_requirements ADD COLUMN general_gate TINYINT UNSIGNED '
-            .'GENERATED ALWAYS AS (CASE WHEN campaign_market_id IS NULL THEN 1 ELSE NULL END) STORED'
+            .'GENERATED ALWAYS AS (CASE WHEN campaign_market_id IS NULL THEN 1 ELSE NULL END) STORED',
         );
         DB::statement(
             'ALTER TABLE campaign_requirements ADD UNIQUE KEY uq_creq_general '
-            .'(general_gate, campaign_id, content_format_id)'
+            .'(general_gate, campaign_id, content_format_id)',
         );
 
         Schema::create('campaign_creators', function (Blueprint $table): void {

@@ -37,7 +37,7 @@ return new class extends Migration
         // Un solo nicho principal por creador: es el que manda al ordenar resultados.
         DB::statement(
             'ALTER TABLE creator_categories ADD COLUMN primary_gate TINYINT UNSIGNED '
-            .'GENERATED ALWAYS AS (CASE WHEN is_primary = 1 THEN 1 ELSE NULL END) STORED'
+            .'GENERATED ALWAYS AS (CASE WHEN is_primary = 1 THEN 1 ELSE NULL END) STORED',
         );
         DB::statement('ALTER TABLE creator_categories ADD UNIQUE KEY uq_creator_categories_primary (primary_gate, creator_id)');
 

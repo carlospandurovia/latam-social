@@ -50,10 +50,10 @@ final class Restriccion
     /**
      * Declara una comprobacion y la impone con el mecanismo que soporte el motor.
      *
-     * @param  list<string>  $columnas  Las columnas que aparecen en la expresion.
-     *                                  Hacen falta para reescribirla como NEW.<col>
-     *                                  al generar el trigger. Explicitas a proposito:
-     *                                  adivinarlas del texto seria fragil.
+     * @param list<string> $columnas Las columnas que aparecen en la expresion.
+     *                               Hacen falta para reescribirla como NEW.<col>
+     *                               al generar el trigger. Explicitas a proposito:
+     *                               adivinarlas del texto seria fragil.
      */
     public static function comprobacion(
         string $tabla,
@@ -114,7 +114,7 @@ final class Restriccion
      *    real, que solo falla cuando la expresion es FALSE, nunca cuando es NULL.
      *  - El mensaje se trunca a 128 caracteres: es el limite de MYSQL_ERRNO/MESSAGE_TEXT.
      *
-     * @param  list<string>  $columnas
+     * @param list<string> $columnas
      */
     public static function sqlTrigger(
         string $tabla,
@@ -125,7 +125,7 @@ final class Restriccion
         string $evento,
     ): string {
         $evento = strtoupper($evento);
-        if (! in_array($evento, ['INSERT', 'UPDATE'], true)) {
+        if (!in_array($evento, ['INSERT', 'UPDATE'], true)) {
             throw new InvalidArgumentException("Evento no soportado: {$evento}");
         }
 
@@ -154,13 +154,13 @@ final class Restriccion
      * casualmente coincidan. Se ordenan de mas larga a mas corta para que
      * `status_code` no se rompa al sustituir antes `status`.
      *
-     * @param  list<string>  $columnas
+     * @param list<string> $columnas
      */
     public static function reescribirConNew(string $expresion, array $columnas): string
     {
         if ($columnas === []) {
             throw new InvalidArgumentException(
-                'Hay que declarar las columnas de la expresion: sin ellas no se puede generar el trigger.'
+                'Hay que declarar las columnas de la expresion: sin ellas no se puede generar el trigger.',
             );
         }
 
@@ -176,7 +176,7 @@ final class Restriccion
                 $texto = preg_replace(
                     '/(?<![`\w.])'.preg_quote($columna, '/').'(?![`\w])/',
                     'NEW.`'.$columna.'`',
-                    $texto
+                    $texto,
                 ) ?? $texto;
             }
             $partes[$i]['texto'] = $texto;
@@ -248,14 +248,14 @@ final class Restriccion
 
     private static function escaparTexto(string $texto): string
     {
-        return str_replace(["\\", "'"], ["\\\\", "''"], $texto);
+        return str_replace(['\\', "'"], ['\\\\', "''"], $texto);
     }
 
     private static function validarNombre(string $nombre): void
     {
         if (preg_match('/^[a-z][a-z0-9_]{0,50}$/', $nombre) !== 1) {
             throw new InvalidArgumentException(
-                "Nombre de restriccion invalido: '{$nombre}'. Minusculas, digitos y guion bajo, hasta 51 caracteres."
+                "Nombre de restriccion invalido: '{$nombre}'. Minusculas, digitos y guion bajo, hasta 51 caracteres.",
             );
         }
     }
@@ -319,7 +319,7 @@ final class Restriccion
         string $mensaje,
         string $mecanismo,
     ): void {
-        if (! self::hayRegistro()) {
+        if (!self::hayRegistro()) {
             return;
         }
 

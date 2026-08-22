@@ -27,7 +27,7 @@ final class AccesoController
         // El mensaje es el mismo tanto si el correo no existe como si la
         // contraseña falla: distinguirlos permite averiguar qué correos
         // están dados de alta.
-        if (! Auth::attempt($datos, $request->boolean('remember'))) {
+        if (!Auth::attempt($datos, $request->boolean('remember'))) {
             throw ValidationException::withMessages([
                 'email' => 'Las credenciales no son correctas.',
             ]);
