@@ -2,6 +2,23 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 
+## [Fase 3 · 3.3 — Consulta de bitácora] — 2026-08-22
+
+### Añadido
+- Pantalla `/bitacora` con filtros por entidad, actor, acción, y rango de fechas.
+  Permiso `audit.view`, que existía desde 2.4 sin pantalla donde usarse.
+- `ix_audit_logs_occurred` — el filtro por fechas escaneaba la tabla entera.
+- **Red de redacción en `Bitacora`** (`BR-SEC-007`): si el nombre del campo
+  contiene `password`, `token`, `secret`, `api_key`, `account_number`,
+  `encrypted`, `fingerprint`, `card` o `cvv`, el valor no se escribe. El nombre
+  del campo sí: saber que alguien tocó la cuenta es auditoría, saber cuál era no.
+- 12 pruebas, con `DataProvider` sobre los seis nombres sensibles del esquema.
+
+### Decidido
+- `DEC-056` — el listado ordena por `id` y no por `occurred_at`. No es solo
+  velocidad: `occurred_at` empata, y en una paginación eso hace que aparezcan
+  filas repetidas o que desaparezcan entre páginas.
+
 ## [Fase 3 · 3.2 — Bitácora y primera escritura] — 2026-08-22
 
 ### Corregido

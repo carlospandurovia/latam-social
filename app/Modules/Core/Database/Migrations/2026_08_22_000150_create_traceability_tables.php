@@ -71,6 +71,11 @@ return new class extends Migration
 
             $table->index(['entity_type', 'entity_id', 'occurred_at'], 'ix_audit_logs_entity');
             $table->index(['actor_user_id', 'occurred_at'], 'ix_audit_logs_actor');
+            // El listado por defecto ordena por `id`: la clave primaria ya es
+            // monótona con la inserción y recorrerla sale gratis. Este índice es
+            // para FILTRAR por rango de fechas, que sin él escanea la tabla
+            // entera — y esta tabla solo crece.
+            $table->index('occurred_at', 'ix_audit_logs_occurred');
         });
 
         Restriccion::comprobacion(

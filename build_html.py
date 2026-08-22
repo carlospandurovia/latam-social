@@ -42,6 +42,7 @@ DOCS = [
     ("it-2-15", "docs/fase-2/2.15-RETENCIONES.md", "Retenciones", "2.15"),
     ("it-3-1", "docs/fase-3/3.1-PERMISOS.md", "Permisos", "3.1"),
     ("it-3-2", "docs/fase-3/3.2-BITACORA-Y-EDICION.md", "Bitácora", "3.2"),
+    ("it-3-3", "docs/fase-3/3.3-PANTALLA-DE-BITACORA.md", "Consulta de bitácora", "3.3"),
 ]
 
 FILE_TO_ANCHOR = {f: a for a, f, _, _ in DOCS}

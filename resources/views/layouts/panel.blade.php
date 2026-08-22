@@ -28,6 +28,7 @@
         $secciones = [
           ['Panel', 'panel', 'panel', null],
           ['Creadores', 'creadores.index', 'creadores', 'creator.view'],
+          ['Bitácora', 'bitacora', 'bitacora', 'audit.view'],
         ];
         $catalogos = [
           ['Países', 'countries'], ['Monedas', 'currencies'], ['Categorías', 'categories'],

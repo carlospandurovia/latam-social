@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Modules\Core\Http\Controllers\BitacoraController;
 use App\Modules\Core\Http\Controllers\CatalogosController;
 use App\Modules\Core\Http\Controllers\PanelController;
 use App\Modules\Creator\Http\Controllers\CreadoresController;
@@ -35,6 +36,10 @@ Route::middleware('auth')->group(function (): void {
     // comprueba que no se cuele ninguna sin declararlo: es fácil añadir una
     // pantalla y olvidar el middleware, y el olvido no se nota hasta que alguien
     // ve algo que no debía.
+    Route::get('/bitacora', BitacoraController::class)
+        ->middleware('permiso:audit.view')
+        ->name('bitacora');
+
     Route::get('/catalogos/{catalogo}', [CatalogosController::class, 'show'])
         ->middleware('permiso:catalog.view')
         ->name('catalogos.show');

@@ -163,6 +163,10 @@ CREATE TABLE audit_logs (
   occurred_at   DATETIME(3)  NOT NULL,
   KEY ix_audit_logs_entity (entity_type, entity_id, occurred_at),
   KEY ix_audit_logs_actor (actor_user_id, occurred_at),
+  -- El listado por defecto ordena por `id` (la PK ya es monotona con la
+  -- insercion y sale gratis). Este indice es para FILTRAR por rango de
+  -- fechas, que sin el escanea la tabla entera.
+  KEY ix_audit_logs_occurred (occurred_at),
   CONSTRAINT ck_audit_logs_changes CHECK (changes IS NULL OR JSON_VALID(changes))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 

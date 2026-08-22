@@ -667,6 +667,20 @@ impecable. Simplemente **la mitad de las reglas que declara no existen en ese se
 
 ---
 
+### DEC-056 — La bitácora se ordena por `id`, no por fecha, y redacta lo sensible
+
+| | |
+|---|---|
+| **Orden** | El listado por defecto usa `ORDER BY id DESC`. La clave primaria ya es monótona con la inserción, así que recorrerla al revés sale gratis y sin `filesort`. **Y hay un motivo de corrección, no solo de velocidad:** `occurred_at` empata —dos entradas del mismo milisegundo saldrían en orden arbitrario, y en una paginación eso significa filas que se repiten o desaparecen entre páginas—. `id` no empata nunca. |
+| **Índice** | Se añade `ix_audit_logs_occurred` para lo que el orden no resuelve: **filtrar** por rango de fechas. Sin él, ese filtro escanea una tabla que solo crece. |
+| **Filtro de acción** | Por **prefijo** (`like 'creator.%'`), no por contención. Un `%x%` no usa índice; en auditoría eso se nota el día que hay millones de filas, no antes. |
+| **Redacción** | Regla del cliente: «no guardar información sensible innecesariamente en logs». Hasta ahora dependía de que quien llamara recordara no auditar la columna equivocada — eso no es una política, es una esperanza. Ahora, si el nombre del campo contiene `password`, `token`, `secret`, `api_key`, `account_number`, `encrypted`, `fingerprint`, `card` o `cvv`, **el valor no se escribe**: queda `[redactado]`. |
+| **Qué sí se conserva** | El **nombre del campo**. Saber que alguien tocó la cuenta bancaria es información de auditoría; saber cuál era, no. Un `account_number_encrypted` en claro en la bitácora anularía el cifrado de la tabla de origen. |
+| **Actor congelado en pantalla** | Se muestra `actor_label` (nombre y correo de entonces), no el nombre actual vía `JOIN`. Lo segundo habría reescrito el pasado cada vez que alguien corrige una errata en su nombre. |
+| **Estado** | ADOPTADA e implementada (2026-08-22, iteración 3.3) |
+
+---
+
 ## Decisiones pendientes de información del negocio
 
 | # | Pregunta | Bloquea |

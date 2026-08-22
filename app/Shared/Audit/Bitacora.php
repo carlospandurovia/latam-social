@@ -27,12 +27,33 @@ use Illuminate\Support\Facades\DB;
  *    `inet_pton()` da 4 bytes para IPv4 y 16 para IPv6, y así una IPv6 entra
  *    entera en lugar de quedarse truncada a 45 caracteres de texto.
  *
+ * 4. **Nada sensible entra, aunque se lo pasen.** Regla del cliente: «no guardar
+ *    información sensible innecesariamente en logs». Confiar en que cada quien
+ *    recuerde no auditar la columna equivocada no es una política; es una
+ *    esperanza. `REDACTAR` es la red: si el nombre del campo huele a secreto, se
+ *    registra QUE cambió pero no a qué. Un `account_number_encrypted` en claro
+ *    dentro de la bitácora anularía el cifrado de la tabla de origen.
+ *
  * Y lo que NO hace: no se puede editar ni borrar lo escrito. Eso lo impiden dos
  * disparadores en la propia base, no esta clase — ver la migración de
  * trazabilidad. Una bitácora que la aplicación puede reescribir no es evidencia.
  */
 final class Bitacora
 {
+    /**
+     * Fragmentos que, si aparecen en el nombre de un campo, hacen que su valor
+     * NO se escriba. Se comparan en minúsculas y por contención, para que
+     * `account_number_encrypted` y `holder_account_number` caigan los dos.
+     *
+     * @var list<string>
+     */
+    private const REDACTAR = [
+        'password', 'secret', 'token', 'api_key', 'private_key',
+        'account_number', 'card', 'cvv', 'encrypted', 'fingerprint',
+    ];
+
+    private const OCULTO = '[redactado]';
+
     /**
      * @param array<string, array{antes: mixed, despues: mixed}> $cambios
      */
@@ -55,7 +76,7 @@ final class Bitacora
             'entity_type' => $tipoEntidad,
             'entity_id' => $idEntidad,
             // La columna tiene un CHECK de JSON_VALID: null o JSON de verdad.
-            'changes' => $cambios === [] ? null : json_encode($cambios, JSON_UNESCAPED_UNICODE),
+            'changes' => $cambios === [] ? null : json_encode(self::redactar($cambios), JSON_UNESCAPED_UNICODE),
             'ip_address' => $empaquetada === false ? null : $empaquetada,
             'user_agent' => mb_substr((string) $peticion->userAgent(), 0, 255) ?: null,
             'occurred_at' => now(),
@@ -83,6 +104,30 @@ final class Bitacora
 
             if (self::comoTexto($viejo) !== self::comoTexto($nuevo)) {
                 $cambios[$campo] = ['antes' => $viejo, 'despues' => $nuevo];
+            }
+        }
+
+        return $cambios;
+    }
+
+    /**
+     * Sustituye el valor de los campos sensibles, conservando que cambiaron.
+     * Saber que alguien tocó la cuenta bancaria es información de auditoría;
+     * saber cuál era, no.
+     *
+     * @param array<string, array{antes: mixed, despues: mixed}> $cambios
+     * @return array<string, array{antes: mixed, despues: mixed}>
+     */
+    public static function redactar(array $cambios): array
+    {
+        foreach ($cambios as $campo => $valores) {
+            $nombre = mb_strtolower($campo);
+
+            foreach (self::REDACTAR as $fragmento) {
+                if (str_contains($nombre, $fragmento)) {
+                    $cambios[$campo] = ['antes' => self::OCULTO, 'despues' => self::OCULTO];
+                    break;
+                }
             }
         }
 
