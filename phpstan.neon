@@ -12,3 +12,20 @@ parameters:
     checkModelProperties: true
     checkOctaneCompatibility: false
     treatPhpDocTypesAsCertain: false
+
+    # Larastan sintetiza para `Factory::definition()` un tipo de retorno
+    # `array<model property of Model, mixed>` que NO se puede escribir en un
+    # PHPDoc: el parser de PHPStan lo rechaza con "Unexpected token 'property'".
+    # No existe ninguna anotacion valida que satisfaga a la vez al padre y al
+    # parser, asi que se silencia ESE mensaje en ESE archivo -- no la carpeta.
+    # Es la valvula que la propia documentacion de Larastan senala para las
+    # partes de Laravel que PHPStan no alcanza a modelar.
+    #
+    # Si algun dia deja de hacer falta, PHPStan avisara de que este ignore
+    # sobra: `reportUnmatchedIgnoredErrors` se deja en su valor por defecto
+    # (true) justamente para eso.
+    ignoreErrors:
+        -
+            message: '#should be compatible with return type \(array<model property of#'
+            path: database/factories/*.php
+

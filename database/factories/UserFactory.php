@@ -22,10 +22,12 @@ class UserFactory extends Factory
     /**
      * Define the model's default state.
      *
-     * Larastan exige la forma del padre: `array<model property of User, mixed>`,
-     * no `array<string, mixed>`. Es un archivo del esqueleto de Laravel.
+     * Larastan sintetiza para el padre un tipo `array<model property of User,
+     * mixed>` que NO se puede escribir en un PHPDoc: el parser lo rechaza. Se
+     * deja la anotación de Laravel, que sí parsea y es la que entiende un IDE,
+     * y la incompatibilidad se silencia en phpstan.neon con su motivo.
      *
-     * @return array<model property of \App\Models\User, mixed>
+     * @return array<string, mixed>
      */
     public function definition(): array
     {
