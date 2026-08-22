@@ -2,7 +2,9 @@
 """Construye un dossier HTML navegable a partir de los documentos markdown de Fase 0."""
 import re, html, pathlib, markdown
 
-BASE = pathlib.Path("/root/proyecto")
+# La raiz sale de la ubicacion de este script, no de una ruta fija: una ruta
+# absoluta del entorno de quien lo escribio solo funciona en ese entorno.
+BASE = pathlib.Path(__file__).resolve().parent.parent
 
 DOCS = [
     ("readme", "README.md",                              "Portada e índice",     "—"),

@@ -130,7 +130,21 @@ class Recolector {
     public static string $tablaActual = '';
 }
 
-$dir = $argv[1] ?? '/root/proyecto/stage/app/Modules';
+// Igual que en generar-triggers.php: aqui habia una ruta ABSOLUTA del entorno
+// de trabajo. Fuera de esa maquina no apuntaba a nada.
+$dir = $argv[1] ?? null;
+if ($dir === null) {
+    foreach ([__DIR__.'/../app/Modules', __DIR__.'/../stage/app/Modules'] as $candidato) {
+        if (is_dir($candidato)) {
+            $dir = $candidato;
+            break;
+        }
+    }
+}
+if ($dir === null || ! is_dir($dir)) {
+    fwrite(STDERR, "No encuentro el directorio de modulos. Pase la ruta como argumento.\n");
+    exit(1);
+}
 $archivos = [];
 foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator($dir)) as $f) {
     if ($f->isFile() && str_contains($f->getPathname(), 'Migrations') && $f->getExtension() === 'php') {
