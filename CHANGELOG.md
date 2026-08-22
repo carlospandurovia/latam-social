@@ -2,6 +2,27 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 
+## [Fase 3 · 3.2 — Bitácora y primera escritura] — 2026-08-22
+
+### Corregido
+- **`audit_logs` existía desde 2.4 y nadie escribía en ella.** Una bitácora vacía
+  da la impresión de que hay rastro.
+- **La bitácora admitía `UPDATE` y `DELETE`.** La regla «el registro de auditoría
+  no debe ser fácilmente modificable desde la aplicación» era un comentario, no
+  un hecho. Ahora lo impiden dos disparadores (`DEC-054`), probados en los dos
+  motores.
+
+### Añadido
+- `App\Shared\Audit\Bitacora` — registra solo lo que cambió, congela el actor
+  y empaqueta la IP con `inet_pton` para que una IPv6 entre entera.
+- Primera pantalla de **escritura**: edición de contacto y preferencias
+  comerciales del creador, con `FormRequest`, CSRF y permiso propio
+  (`creator.manage`, distinto de `creator.view`).
+- 10 pruebas. La que más importa: enviar documento, correo, nombre legal y
+  `status=blacklisted` en la petición y verificar que **ninguno se movió**
+  (`DEC-055`, `BR-SEC-005`).
+- `BR-SEC-004` a `BR-SEC-006`.
+
 ## [Fase 3 · 3.1 — Permisos] — 2026-08-22
 
 ### Corregido

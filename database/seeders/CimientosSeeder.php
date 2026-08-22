@@ -163,6 +163,7 @@ final class CimientosSeeder extends Seeder
             ['campaign.view_margin',   'Campaign', 'Ver el margen interno de la campaña (BR-FIN-007)'],
             ['creator.view',           'Creator',  'Ver creadores'],
             ['creator.approve',        'Creator',  'Aprobar o rechazar solicitudes de creador'],
+            ['creator.manage',         'Creator',  'Editar los datos de contacto y comerciales del creador'],
             ['creator.view_sensitive', 'Creator',  'Ver datos fiscales y medios de pago'],
             ['client.view',            'Client',   'Ver clientes y marcas'],
             ['client.manage',          'Client',   'Crear y editar clientes'],
@@ -209,7 +210,7 @@ final class CimientosSeeder extends Seeder
         $matriz = [
             'campaign_manager' => [
                 'campaign.view', 'campaign.manage', 'campaign.view_margin',
-                'creator.view', 'client.view', 'content.review', 'catalog.view',
+                'creator.view', 'creator.manage', 'client.view', 'content.review', 'catalog.view',
             ],
             'finance' => [
                 'finance.view', 'finance.payout.create', 'finance.payout.approve',

@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace App\Modules\Creator\Http\Controllers;
 
+use App\Modules\Creator\Http\Requests\ActualizarCreadorRequest;
+use App\Shared\Audit\Bitacora;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
@@ -85,5 +88,74 @@ final class CreadoresController
                 ->orderBy('pl.name')
                 ->get(['pl.name as red', 'f.code as formato', 'r.currency_code', 'r.amount', 'r.valid_from']),
         ]);
+    }
+
+    /** @var list<string> Lo único que esta pantalla puede tocar. */
+    private const EDITABLES = [
+        'display_name', 'phone', 'city',
+        'payment_term_days', 'preferred_currency_code', 'locale', 'timezone',
+    ];
+
+    public function edit(string $uuid): View
+    {
+        $creador = $this->porUuid($uuid);
+
+        return view('creadores.editar', [
+            'creador' => $creador,
+            'monedas' => DB::table('currencies')->where('is_active', 1)->orderBy('code')->get(['code', 'name']),
+            'idiomas' => DB::table('languages')->where('is_active', 1)->orderBy('name')->get(['code', 'name']),
+        ]);
+    }
+
+    public function update(ActualizarCreadorRequest $request, string $uuid): RedirectResponse
+    {
+        $creador = $this->porUuid($uuid);
+
+        /** @var array<string, mixed> $datos */
+        $datos = $request->validated();
+
+        $antes = [];
+        foreach (self::EDITABLES as $campo) {
+            $antes[$campo] = $creador->{$campo} ?? null;
+        }
+
+        $cambios = Bitacora::diferencias($antes, $datos);
+
+        // Sin cambios no se escribe ni en la tabla ni en la bitácora. Una
+        // entrada de auditoría que dice «no cambió nada» es ruido donde luego
+        // nadie encuentra lo que sí cambió.
+        if ($cambios === []) {
+            return redirect()
+                ->route('creadores.show', $uuid)
+                ->with('aviso', 'No había nada que cambiar.');
+        }
+
+        // `WHERE id = ?` con el id ya resuelto: nunca una subconsulta sobre
+        // `creators`, que es la tabla que se está modificando (DEC-052).
+        DB::table('creators')
+            ->where('id', $creador->id)
+            ->update($datos + ['updated_at' => now()]);
+
+        Bitacora::registrar(
+            accion: 'creator.updated',
+            tipoEntidad: 'creator',
+            idEntidad: (int) $creador->id,
+            cambios: $cambios,
+        );
+
+        return redirect()
+            ->route('creadores.show', $uuid)
+            ->with('exito', 'Creador actualizado. El cambio quedó en la bitácora.');
+    }
+
+    private function porUuid(string $uuid): object
+    {
+        $creador = DB::table('creators')->where('uuid', $uuid)->first();
+
+        if ($creador === null) {
+            throw new NotFoundHttpException('Creador no encontrado.');
+        }
+
+        return $creador;
     }
 }

@@ -136,6 +136,7 @@ composer arch                     # solo las fronteras (deptrac.yaml)
 | [`docs/fase-2/2.14-PAGO-A-TERCEROS.md`](docs/fase-2/2.14-PAGO-A-TERCEROS.md) | 🔴 **Análisis, no implementación.** Pagar a un familiar del creador: 3 problemas, 4 alternativas, 1 recomendación |
 | [`docs/fase-2/2.15-RETENCIONES.md`](docs/fase-2/2.15-RETENCIONES.md) | ✅ Retención con tres estados: la decisión deja de confundirse con el olvido |
 | [`docs/fase-3/3.1-PERMISOS.md`](docs/fase-3/3.1-PERMISOS.md) | ✅ **Fase 3 arranca.** Autorización por permiso; `permission_role` estaba vacía y nada la comprobaba |
+| [`docs/fase-3/3.2-BITACORA-Y-EDICION.md`](docs/fase-3/3.2-BITACORA-Y-EDICION.md) | ✅ Bitácora inmutable y primera pantalla de escritura |
 
 ### Verificar el modelo de datos
 

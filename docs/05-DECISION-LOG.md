@@ -642,6 +642,31 @@ impecable. Simplemente **la mitad de las reglas que declara no existen en ese se
 
 ---
 
+### DEC-054 — La bitácora es inmutable en la base, no por convención
+
+| | |
+|---|---|
+| **Contexto** | `audit_logs` existía desde 2.4 y **nadie escribía en ella**. Al ir a llenarla apareció el segundo problema: la tabla admitía `UPDATE` y `DELETE` como cualquier otra. |
+| **La regla del cliente** | «El registro de auditoría no debe ser fácilmente modificable desde la aplicación.» Hasta ahora era un comentario en la migración, no un hecho. |
+| **Decisión** | Dos disparadores `BEFORE UPDATE` / `BEFORE DELETE` sobre `audit_logs` que abortan siempre. Mismo criterio que `ledger_entries` (`DEC-045`): prohibir un **verbo** no lo puede expresar ningún `CHECK`, así que van iguales en los dos motores y sin pasar por el compilador de restricciones. |
+| **Comprobado** | Insertar sí, actualizar y borrar no — en MariaDB y en la copia sin `CHECK` con triggers generados. |
+| **Consecuencia operativa** | La retención de la bitácora se aplicará por proceso (exportar y truncar con un usuario distinto), nunca con un `DELETE` desde la aplicación. |
+| **Estado** | ADOPTADA e implementada (2026-08-22, iteración 3.2) |
+
+---
+
+### DEC-055 — La primera pantalla de escritura no toca la identidad
+
+| | |
+|---|---|
+| **Contexto** | Primera pantalla del proyecto que escribe: edición de creador. |
+| **Decisión** | Solo se editan contacto y preferencias comerciales (`display_name`, `phone`, `city`, `payment_term_days`, `preferred_currency_code`, `locale`, `timezone`). **No** se editan nombre legal, fecha de nacimiento, documento, correo ni estado. |
+| **Por qué** | Cambiar el documento o la fecha de nacimiento no es corregir un dato: es decir que se trata de otra persona, o corregir un error que necesita evidencia y aprobación — lo mismo que `BR-CREATOR-007` ya exige para lo fiscal. Además son clave de `uq_creators_identity`. El `status` tiene su propia tabla de transiciones y su flujo: un `<select>` con «blacklisted» dentro de un formulario de contacto es una mala idea. |
+| **Cómo se impone** | `validated()` devuelve **solo** lo declarado en las reglas del `FormRequest`. Omitir campos del formulario no protege nada —enviarlos a mano es trivial—; lo que protege es no usar nunca `$request->all()`. Hay una prueba que envía documento, correo, nombre legal y `status=blacklisted` a la vez y verifica que ninguno se movió. |
+| **Estado** | ADOPTADA e implementada (2026-08-22, iteración 3.2) |
+
+---
+
 ## Decisiones pendientes de información del negocio
 
 | # | Pregunta | Bloquea |

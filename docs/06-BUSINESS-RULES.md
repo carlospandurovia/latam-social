@@ -92,6 +92,9 @@
 | **BR-SEC-001** | Toda ruta de negocio declara el permiso que exige. El código pregunta por el permiso, nunca por el rol. | 🔴 |
 | **BR-SEC-002** | El rol `admin` no tiene atajo en el código: sus permisos son filas de `permission_role`, igual que los de cualquier otro rol. | 🔴 |
 | **BR-SEC-003** | Un rol de ámbito externo (`client_user`, `creator`) nunca recibe permisos internos. | 🔴 |
+| **BR-SEC-004** | `audit_logs` es de **solo inserción**. Ni la aplicación ni nadie con la contraseña de la base puede editar o borrar una entrada. | 🔴 |
+| **BR-SEC-005** | Ninguna acción de escritura usa `$request->all()`. Solo se persiste lo declarado en las reglas de validación. | 🔴 |
+| **BR-SEC-006** | Los campos de identidad de un creador (nombre legal, nacimiento, documento, correo) y su estado no se editan desde una pantalla de datos de contacto. | 🔴 |
 
 ## Marca de plataforma y entidades legales (`BR-LE`)
 

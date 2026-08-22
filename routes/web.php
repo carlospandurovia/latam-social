@@ -46,4 +46,15 @@ Route::middleware('auth')->group(function (): void {
         ->middleware('permiso:creator.view')
         ->whereUuid('uuid')
         ->name('creadores.show');
+
+    // Escritura: permiso propio, distinto del de lectura. Poder mirar y poder
+    // corregir no son la misma autorización.
+    Route::get('/creadores/{uuid}/editar', [CreadoresController::class, 'edit'])
+        ->middleware('permiso:creator.manage')
+        ->whereUuid('uuid')
+        ->name('creadores.edit');
+    Route::put('/creadores/{uuid}', [CreadoresController::class, 'update'])
+        ->middleware('permiso:creator.manage')
+        ->whereUuid('uuid')
+        ->name('creadores.update');
 });

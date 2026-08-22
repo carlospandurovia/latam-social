@@ -254,3 +254,35 @@ ALTER TABLE countries
 ALTER TABLE exchange_rates
   ADD CONSTRAINT fk_exchange_rates_base  FOREIGN KEY (base_currency_code)  REFERENCES currencies(code) ON DELETE RESTRICT,
   ADD CONSTRAINT fk_exchange_rates_quote FOREIGN KEY (quote_currency_code) REFERENCES currencies(code) ON DELETE RESTRICT;
+
+
+-- ===========================================================================
+-- La bitacora no se edita ni se borra desde la aplicacion.
+--
+-- Regla del cliente: "el registro de auditoria no debe ser facilmente
+-- modificable desde la aplicacion". Hasta ahora eso era una intencion: la tabla
+-- admitia UPDATE y DELETE como cualquier otra. Una bitacora que la aplicacion
+-- puede reescribir no es evidencia de nada.
+--
+-- Mismo criterio que ledger_entries (BR-FIN-001/002): prohibir un VERBO no lo
+-- puede expresar ningun CHECK, asi que van disparadores, iguales en los dos
+-- motores.
+-- ===========================================================================
+
+DELIMITER //
+
+CREATE TRIGGER tg_audit_no_update BEFORE UPDATE ON audit_logs
+FOR EACH ROW
+BEGIN
+  SIGNAL SQLSTATE '45000'
+    SET MESSAGE_TEXT = 'audit_logs es solo-insercion: una bitacora que se puede reescribir no es evidencia.';
+END//
+
+CREATE TRIGGER tg_audit_no_delete BEFORE DELETE ON audit_logs
+FOR EACH ROW
+BEGIN
+  SIGNAL SQLSTATE '45000'
+    SET MESSAGE_TEXT = 'audit_logs no admite borrado. La retencion se aplica por proceso, no con un DELETE.';
+END//
+
+DELIMITER ;

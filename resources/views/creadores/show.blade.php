@@ -3,6 +3,28 @@
 @section('subtitulo', $creador->email)
 
 @section('contenido')
+{{-- Confirmación tras guardar. Sin esto el operador no sabe si el cambio entró. --}}
+@if (session('exito'))
+  <div class="mb-5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 px-4 py-3 text-sm">
+    {{ session('exito') }}
+  </div>
+@endif
+@if (session('aviso'))
+  <div class="mb-5 rounded-xl bg-slate-100 border border-slate-200 text-slate-700 px-4 py-3 text-sm">
+    {{ session('aviso') }}
+  </div>
+@endif
+
+{{-- El botón solo aparece si además se puede: el menú acompaña, la ruta manda. --}}
+@can('creator.manage')
+  <div class="mb-5">
+    <a href="{{ route('creadores.edit', $creador->uuid) }}"
+       class="inline-block px-4 py-2 rounded-xl bg-marca-500 text-white text-sm font-medium hover:opacity-90">
+      Editar datos de contacto
+    </a>
+  </div>
+@endcan
+
   <a href="{{ route('creadores.index') }}" class="text-sm text-marca-600 hover:underline">&larr; Volver al listado</a>
 
   <div class="mt-5 grid grid-cols-1 lg:grid-cols-3 gap-6">

@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Shared\Database\Restriccion;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 /**
@@ -93,10 +94,54 @@ return new class extends Migration
             columnas: ['changes'],
             mensaje: 'El detalle de cambios debe ser JSON valido.',
         );
+
+        foreach (self::inmutabilidadDeLaBitacora() as $nombre => $cuerpo) {
+            DB::unprepared("CREATE TRIGGER `{$nombre}` {$cuerpo}");
+        }
+    }
+
+    /**
+     * La bitácora no se edita ni se borra desde la aplicación.
+     *
+     * Regla del cliente: «el registro de auditoría no debe ser fácilmente
+     * modificable desde la aplicación». Hasta la iteración 3.2 eso era una
+     * intención: la tabla admitía `UPDATE` y `DELETE` como cualquier otra. Una
+     * bitácora que la aplicación puede reescribir no es evidencia de nada.
+     *
+     * Mismo criterio que `ledger_entries`: prohibir un *verbo* no lo puede
+     * expresar ningún `CHECK`, así que van disparadores — iguales en los dos
+     * motores, sin pasar por el compilador de restricciones.
+     *
+     * @return array<string, string>
+     */
+    private static function inmutabilidadDeLaBitacora(): array
+    {
+        return [
+            'tg_audit_no_update' => <<<'SQL'
+                BEFORE UPDATE ON `audit_logs`
+                FOR EACH ROW
+                BEGIN
+                  SIGNAL SQLSTATE '45000'
+                    SET MESSAGE_TEXT = 'audit_logs es solo-insercion: una bitacora que se puede reescribir no es evidencia.';
+                END
+                SQL,
+            'tg_audit_no_delete' => <<<'SQL'
+                BEFORE DELETE ON `audit_logs`
+                FOR EACH ROW
+                BEGIN
+                  SIGNAL SQLSTATE '45000'
+                    SET MESSAGE_TEXT = 'audit_logs no admite borrado. La retencion se aplica por proceso, no con un DELETE.';
+                END
+                SQL,
+        ];
     }
 
     public function down(): void
     {
+        foreach (array_keys(self::inmutabilidadDeLaBitacora()) as $nombre) {
+            DB::statement("DROP TRIGGER IF EXISTS `{$nombre}`");
+        }
+
         Schema::dropIfExists('audit_logs');
         Schema::dropIfExists('status_transitions');
         Schema::dropIfExists('domain_events');
