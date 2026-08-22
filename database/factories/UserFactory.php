@@ -22,7 +22,10 @@ class UserFactory extends Factory
     /**
      * Define the model's default state.
      *
-     * @return array<string, mixed>
+     * Larastan exige la forma del padre: `array<model property of User, mixed>`,
+     * no `array<string, mixed>`. Es un archivo del esqueleto de Laravel.
+     *
+     * @return array<model property of \App\Models\User, mixed>
      */
     public function definition(): array
     {

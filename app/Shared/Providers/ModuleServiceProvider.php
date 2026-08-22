@@ -39,6 +39,7 @@ final class ModuleServiceProvider extends ServiceProvider
         $patron = app_path('Modules/*/Database/Migrations');
         $rutas = glob($patron, GLOB_ONLYDIR);
 
-        return $rutas === false ? [] : array_values($rutas);
+        // glob() ya devuelve una lista; array_values() no hacía nada.
+        return $rutas === false ? [] : $rutas;
     }
 }

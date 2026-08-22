@@ -15,12 +15,17 @@ use Illuminate\Support\Str;
  * La contraseña NO va escrita en el repositorio: se toma de ADMIN_PASSWORD del
  * .env, y si no está, se genera una al azar y se imprime UNA sola vez. Una
  * contraseña por defecto en un seeder termina siempre en producción.
+ *
+ * Se lee por `config('latam.admin.*')` y NO por `env()` directamente: fuera de
+ * `config/`, `env()` devuelve null en cuanto se ejecuta `php artisan
+ * config:cache`. Con la configuración cacheada, este seeder ignoraba la
+ * contraseña del operador y generaba una al azar sin decir nada.
  */
 final class UsuarioAdminSeeder extends Seeder
 {
     public function run(): void
     {
-        $correo = env('ADMIN_EMAIL', 'admin@portalcts.com');
+        $correo = (string) config('latam.admin.correo');
         $existe = DB::table('users')->where('email', $correo)->first();
 
         if ($existe !== null) {
@@ -30,13 +35,14 @@ final class UsuarioAdminSeeder extends Seeder
             return;
         }
 
-        $clave = env('ADMIN_PASSWORD');
+        $clave = config('latam.admin.clave');
+        $clave = is_string($clave) && $clave !== '' ? $clave : null;
         $generada = $clave === null;
         $clave ??= Str::password(16);
 
         $id = DB::table('users')->insertGetId([
             'uuid' => (string) Str::uuid(),
-            'name' => env('ADMIN_NAME', 'Administrador'),
+            'name' => (string) config('latam.admin.nombre'),
             'email' => $correo,
             'password' => Hash::make($clave),
             'user_type' => 'internal',

@@ -111,7 +111,12 @@ final class VerificarEsquemaCommand extends Command
      * esquema lleno de CHECK puede no estar aplicando ninguno sin que nadie lo note
      * hasta que aparece un importe negativo en el ledger (DEC-042).
      *
-     * @return array<string, array{0: bool, 1: string}>
+     * Devuelve [severidad, detalle] por comprobación, donde severidad es
+     * 'ok' | 'limitacion' | 'fallo'. Decía `bool` de cuando esto era binario:
+     * la anotación se quedó atrás al pasar a tres severidades, y PHPStan la
+     * creyó — por eso daba cinco errores de "comparación siempre falsa".
+     *
+     * @return array<string, array{0: string, 1: string}>
      */
     private function comprobacionesDeMotor(): array
     {

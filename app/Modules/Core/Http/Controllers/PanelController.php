@@ -88,6 +88,7 @@ final class PanelController
         }
     }
 
+    /** @return Collection<int, \stdClass> */
     private function cobertura(): Collection
     {
         if (!DB::getSchemaBuilder()->hasTable('legal_entity_countries')) {
