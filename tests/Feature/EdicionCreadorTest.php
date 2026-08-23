@@ -37,7 +37,13 @@ final class EdicionCreadorTest extends TestCase
             'birth_date' => '1998-05-12', 'email' => 'ana@ejemplo.test',
             'country_id' => DB::table('countries')->where('iso2', 'PE')->value('id'),
             'document_country_code' => 'PE', 'document_type' => 'DNI', 'document_number' => '40000001',
-            'preferred_currency_code' => 'PEN', 'status' => 'active',
+            // 'pending' y no 'active' a proposito. Desde 3.5, un creador
+            // activo exige `activated_at` e identidad verificada
+            // (`ck_creators_activation`, `ck_creators_active_identity`): la base
+            // lo impone. Esta prueba no va de activacion, asi que monta el
+            // minimo que necesita. Un fixture que declara mas de lo que la
+            // prueba usa es un fixture que se rompe por motivos ajenos.
+            'preferred_currency_code' => 'PEN', 'status' => 'pending',
             'payment_term_days' => 30, 'locale' => 'es', 'timezone' => 'America/Lima',
             'created_at' => now(), 'updated_at' => now(),
         ]);
@@ -157,7 +163,10 @@ final class EdicionCreadorTest extends TestCase
         $this->assertSame('ana@ejemplo.test', $creador->email);
         $this->assertSame('40000001', $creador->document_number);
         $this->assertSame('Ana', $creador->first_name);
-        $this->assertSame('active', $creador->status);
+        // Lo que se prueba es que el estado NO se movio, no cual es. El estado
+        // solo cambia por la puerta de activacion (3.5), nunca por el formulario
+        // de contacto.
+        $this->assertSame('pending', $creador->status, 'El formulario de contacto movio el estado.');
     }
 
     public function test_rechaza_un_plazo_de_pago_imposible(): void

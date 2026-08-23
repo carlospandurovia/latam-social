@@ -117,7 +117,11 @@ final class SolicitudesTest extends TestCase
             'birth_date' => '1990-01-01', 'email' => 'otra@ejemplo.test',
             'country_id' => DB::table('countries')->where('iso2', 'PE')->value('id'),
             'document_country_code' => 'PE', 'document_type' => 'DNI', 'document_number' => '40000001',
-            'preferred_currency_code' => 'PEN', 'status' => 'active',
+            // 'pending' basta: la comprobacion de duplicados de
+            // `SolicitudesController` mira `pending`, `active` y `suspended` por
+            // igual. Poner 'active' obligaria a inventar fecha de activacion e
+            // identidad verificada para algo que esta prueba no comprueba.
+            'preferred_currency_code' => 'PEN', 'status' => 'pending',
             'created_at' => now(), 'updated_at' => now(),
         ]);
 

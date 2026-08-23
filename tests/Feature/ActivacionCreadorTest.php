@@ -90,6 +90,22 @@ final class ActivacionCreadorTest extends TestCase
         return $usuario;
     }
 
+    /**
+     * Un PDF de mentira pero con BYTES DE VERDAD.
+     *
+     * `UploadedFile::fake()->create()` dimensiona el temporal con `ftruncate`,
+     * y en Windows ese archivo se copiaba vacio: `Almacen` acababa guardando
+     * `size_bytes = 0` y `ck_files_size` devolvia un 500. Con contenido escrito
+     * de verdad, la prueba comprueba lo mismo en los dos sistemas.
+     */
+    private static function pdfDePrueba(string $nombre): UploadedFile
+    {
+        return UploadedFile::fake()->createWithContent(
+            $nombre,
+            "%PDF-1.4\n% contenido de prueba\n%%EOF\n",
+        );
+    }
+
     /** Deja al creador cumpliendo las seis condiciones. */
     private function equiparTodo(): void
     {
@@ -439,7 +455,7 @@ final class ActivacionCreadorTest extends TestCase
             ->post("/creadores/{$this->uuid}/terminos", [
                 'channel' => 'email',
                 'accepted_at' => now()->subHour()->format('Y-m-d\TH:i'),
-                'evidencia' => UploadedFile::fake()->create('correo.pdf', 20, 'application/pdf'),
+                'evidencia' => self::pdfDePrueba('correo.pdf'),
                 'confirma_revision' => '1',
             ])->assertRedirect(route('creadores.activacion', $this->uuid));
 
@@ -473,7 +489,7 @@ final class ActivacionCreadorTest extends TestCase
             ->post("/creadores/{$this->uuid}/terminos", [
                 'channel' => 'email',
                 'accepted_at' => '2025-06-01T10:00',
-                'evidencia' => UploadedFile::fake()->create('correo.pdf', 20, 'application/pdf'),
+                'evidencia' => self::pdfDePrueba('correo.pdf'),
                 'confirma_revision' => '1',
             ])->assertSessionHas('aviso');
 
@@ -486,7 +502,7 @@ final class ActivacionCreadorTest extends TestCase
     {
         $this->actingAs($this->usuarioCon('admin'))
             ->post("/creadores/{$this->uuid}/identidad", [
-                'documento' => UploadedFile::fake()->create('dni.pdf', 30, 'application/pdf'),
+                'documento' => self::pdfDePrueba('dni.pdf'),
                 'confirma_cotejo' => '1',
                 'nota' => 'DNI cotejado contra la ficha',
             ])->assertRedirect(route('creadores.activacion', $this->uuid));
@@ -499,6 +515,9 @@ final class ActivacionCreadorTest extends TestCase
         $archivo = DB::table('files')->where('id', $creador->identity_document_file_id)->first();
         $this->assertSame('identity_document', $archivo->purpose);
         $this->assertSame('private', $archivo->visibility);
+        // Un archivo de 0 bytes es una evidencia que no prueba nada. Antes esto
+        // no se comprobaba y solo saltaba `ck_files_size` con un 500 opaco.
+        $this->assertGreaterThan(0, (int) $archivo->size_bytes);
         // La huella se calcula del archivo guardado, no del temporal.
         $this->assertSame(64, strlen((string) $archivo->checksum_sha256));
         Storage::disk('local')->assertExists($archivo->path);
@@ -508,7 +527,7 @@ final class ActivacionCreadorTest extends TestCase
     {
         $this->actingAs($this->usuarioCon('admin'))
             ->post("/creadores/{$this->uuid}/identidad", [
-                'documento' => UploadedFile::fake()->create('dni.pdf', 30, 'application/pdf'),
+                'documento' => self::pdfDePrueba('dni.pdf'),
             ])->assertSessionHasErrors('confirma_cotejo');
 
         $this->assertNull(DB::table('creators')->where('id', $this->creadorId)->value('identity_verified_at'));

@@ -26,3 +26,12 @@ yarn-error.log
 # Salida derivada: la regenera `python3 tools/generar-triggers.py`. Versionarla
 # invita a que alguien edite el trigger generado en vez del esquema de origen.
 /tools/sql/generado
+
+# Cache de Deptrac. Es un artefacto de la ultima ejecucion local: versionarlo
+# hace que el analisis de un desarrollador dependa de lo que analizo otro.
+/.deptrac.cache
+
+# Salida local de `php tools/diagnostico.php`. Es el resultado de la ultima
+# ejecucion en UNA maquina: versionarla solo produce conflictos en cada diff.
+/tools/diagnostico.txt
+/ci.txt

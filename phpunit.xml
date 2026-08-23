@@ -22,8 +22,38 @@
         <env name="APP_MAINTENANCE_DRIVER" value="file"/>
         <env name="BCRYPT_ROUNDS" value="4"/>
         <env name="CACHE_STORE" value="array"/>
-        <!-- <env name="DB_CONNECTION" value="sqlite"/> -->
-        <!-- <env name="DB_DATABASE" value=":memory:"/> -->
+
+        <!--
+          BASE DE DATOS DE PRUEBAS.
+
+          Sin este bloque, `php artisan test` usaba el `DB_DATABASE` del `.env`,
+          que apunta al servidor remoto de desarrollo. Y `RefreshDatabase`
+          empieza haciendo `migrate:fresh`: BORRA TODAS LAS TABLAS de la base a
+          la que apunte. Es decir, cada `php artisan test` destruia la base de
+          desarrollo, y ademas tardaba una eternidad, porque son 64 tablas y
+          161 restricciones creandose por Internet contra un hosting compartido.
+
+          Ahora las pruebas usan una base LOCAL y desechable. Es rapida (todo en
+          localhost) y no hay nada que perder si se borra: es lo unico que
+          `RefreshDatabase` sabe hacer.
+
+          Estos valores NO afectan a CI: PHPUnit solo aplica un `<env>` cuando
+          la variable no existe ya en el entorno, y el flujo de CI las define a
+          nivel de paso. Alli siguen mandando las suyas.
+
+          Y no, no vale sqlite en memoria (por eso estaba comentado y nunca se
+          activo): el esquema usa columnas generadas STORED, disparadores,
+          VARBINARY y CHECK con la sonda de `Restriccion`. En sqlite no existe
+          la mitad de eso, asi que las pruebas pasarian contra un motor que no
+          se parece al de produccion, que es peor que no tenerlas.
+        -->
+        <env name="DB_CONNECTION" value="mysql"/>
+        <env name="DB_HOST" value="127.0.0.1"/>
+        <env name="DB_PORT" value="3306"/>
+        <env name="DB_DATABASE" value="latam_social_test"/>
+        <env name="DB_USERNAME" value="root"/>
+        <env name="DB_PASSWORD" value=""/>
+
         <env name="MAIL_MAILER" value="array"/>
         <env name="PULSE_ENABLED" value="false"/>
         <env name="QUEUE_CONNECTION" value="sync"/>

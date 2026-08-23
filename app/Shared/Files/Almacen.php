@@ -76,16 +76,28 @@ final class Almacen
         // Ruta compuesta solo con valores que controlamos nosotros.
         $ruta = $proposito.'/'.now()->format('Y/m').'/'.$uuid.'.'.$extension;
 
-        $guardado = Storage::disk($disco)->putFileAs(dirname($ruta), $archivo, basename($ruta));
+        // Se leen los bytes UNA vez y de ahi salen el contenido guardado, el
+        // tamano y la huella. La version anterior usaba `putFileAs()` y luego
+        // preguntaba `size()` al disco, que son tres operaciones que pueden
+        // discrepar entre si: en Windows devolvia 0 y se intentaba escribir una
+        // fila con `size_bytes = 0`, que `ck_files_size` rechazaba con un 500
+        // sin explicar nada. Una sola fuente de verdad y se acabo la discrepancia.
+        $origen = $archivo->getRealPath();
+        $contenido = $origen === false ? false : @file_get_contents($origen);
+
+        if ($contenido === false || $contenido === '') {
+            throw new \RuntimeException(
+                'El archivo subido llego vacio o no se pudo leer del temporal. '
+                .'No se guarda una evidencia que no tiene contenido.',
+            );
+        }
 
         // Si el disco falla y no se mira, queda una fila en `files` apuntando a
         // un archivo que no existe: una evidencia fantasma que nadie descubre
         // hasta que alguien la va a abrir, meses despues.
-        if ($guardado === false) {
+        if (Storage::disk($disco)->put($ruta, $contenido) === false) {
             throw new \RuntimeException('No se pudo guardar el archivo en el disco «'.$disco.'».');
         }
-
-        $contenido = Storage::disk($disco)->get($ruta);
 
         return (int) DB::table('files')->insertGetId([
             'uuid' => $uuid,
@@ -94,8 +106,9 @@ final class Almacen
             // Se recorta y se limpia: es un dato para mostrar, no una ruta.
             'original_name' => mb_substr(basename($archivo->getClientOriginalName()), 0, 255),
             'mime_type' => $tipoReal,
-            'size_bytes' => Storage::disk($disco)->size($ruta),
-            'checksum_sha256' => hash('sha256', (string) $contenido),
+            // Ambos salen de los MISMOS bytes que se acaban de escribir.
+            'size_bytes' => strlen($contenido),
+            'checksum_sha256' => hash('sha256', $contenido),
             // Nada de lo que se sube aquí es público: son documentos de
             // identidad y evidencias legales.
             'visibility' => 'private',
