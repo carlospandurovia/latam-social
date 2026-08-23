@@ -98,6 +98,7 @@ jobs:
           bash tools/pruebas/3.5-activacion.sh latam_ref
           bash tools/pruebas/3.6-fiscal.sh     latam_ref
           bash tools/pruebas/3.7-redes.sh      latam_ref
+          bash tools/pruebas/3.8-pagos.sh      latam_ref
 
       # La mitad que importa: produccion es Percona 5.7 y NO aplica los CHECK.
       - name: Restricciones (motor sin CHECK, solo triggers generados)
@@ -107,6 +108,7 @@ jobs:
           bash tools/pruebas/3.5-activacion.sh latam_57
           bash tools/pruebas/3.6-fiscal.sh     latam_57
           bash tools/pruebas/3.7-redes.sh      latam_57
+          bash tools/pruebas/3.8-pagos.sh      latam_57
 
       - name: Los dos motores imponen el mismo conjunto de reglas
         run: python3 tools/verificar-equivalencia.py latam_ref latam_57

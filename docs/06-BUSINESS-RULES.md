@@ -75,12 +75,12 @@
 |---|---|---|
 | **BR-FIN-001** | El saldo de un creador **no es una columna almacenada**: es la suma de los asientos del ledger filtrados por estado. Cualquier caché de saldo es derivada y reconstruible. | 🔴 |
 | **BR-FIN-002** | Los asientos del ledger son inmutables. Una corrección se realiza mediante un asiento de reversión que referencia al original. Nunca `UPDATE`, nunca `DELETE`. | 🔴 |
-| **BR-FIN-003** | Un `earning` solo pasa a `payable` cuando: la participación está completada, el contenido está aprobado, la publicación está verificada (si aplica), el documento tributario requerido está presente y válido, y el medio de pago está verificado. | 🔴 |
+| **BR-FIN-003** | Un `earning` solo pasa a `payable` cuando: la participación está completada, el contenido está aprobado, la publicación está verificada (si aplica), el documento tributario requerido está presente y válido, y el medio de pago está verificado. *(La parte del medio de pago se impone desde 3.8 en el camino del dinero, no solo al activar: `H-09`.)* | 🔴 |
 | **BR-FIN-004** | Todo importe se almacena junto a su moneda. Toda conversión registra monto origen, moneda origen, monto destino, moneda destino, tasa, fecha de la tasa y fuente. Está prohibido almacenar importes en punto flotante. | 🔴 |
 | **BR-FIN-005** | Un lote de pago por encima del umbral configurado requiere doble aprobación por usuarios distintos. Quien crea el lote no puede aprobarlo. | 🔴 |
-| **BR-FIN-006** | Un medio de pago modificado o añadido no es elegible para pagos hasta transcurrido el período de enfriamiento y completada la reverificación. La modificación notifica al canal de contacto anterior. | 🔴 |
+| **BR-FIN-006** | Un medio de pago modificado o añadido no es elegible para pagos hasta transcurrido el período de enfriamiento y completada la reverificación. La modificación notifica al canal de contacto anterior. *(Implementada en 3.8: el enfriamiento son 24 h configurables (`DEC-064`), «modificado» no existe porque la cuenta es inmutable (`DEC-066`), y el aviso al canal anterior sigue siendo manual (`T-10`).)* | 🔴 |
 | **BR-FIN-007** | El margen de campaña (`Revenue − Creator Cost − Direct Cost − Descuentos − Otros gastos`) solo es visible para roles con el permiso `campaign.view_margin`. Nunca se serializa hacia portales externos. | 🔴 |
-| **BR-FIN-008** | Ningún registro financiero se elimina físicamente. La anulación se representa mediante estado y asientos compensatorios. | 🔴 |
+| **BR-FIN-008** | Ningún registro financiero se elimina físicamente. La anulación se representa mediante estado y asientos compensatorios. *(Extendida en 3.8 a `creator_payment_methods`, que admitía `DELETE`: `H-13`.)* | 🔴 |
 | **BR-FIN-009** | El tipo de cambio aplicado a una operación es el vigente en la fecha de la operación, no el actual. Los históricos no se recalculan. | 🔴 |
 | **BR-FIN-010** | Una factura emitida no se modifica. La corrección se hace con nota de crédito o débito. Además conserva snapshot de su emisor (`BR-LE-005`). | 🔴 |
 | **BR-FIN-011** | El costo de productos enviados y la logística se registran como `Direct Cost` de la campaña e impactan el margen. | 🟠 |

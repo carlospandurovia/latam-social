@@ -2,6 +2,81 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 
+## [Fase 3 · 3.8 — Medios de pago] — 2026-08-23
+
+Cierra la última condición de la puerta de activación (`BR-CREATOR-006`) y, de
+paso, siete defectos en **la fila que dice a dónde va el dinero**. Todos
+reproducidos contra una base real antes de tocar nada.
+
+### Corregido
+- **`H-09`: se podía pagar a una cuenta que nadie había verificado.** El más
+  grave de la tanda. `fk_payout_method` solo comprobaba que la fila existiera:
+  entró un pago de 1500 PEN contra un medio en estado `pending`, sin verificar y
+  sin fecha de elegibilidad. `BR-FIN-003` estaba **escrita**, no impuesta —vivía
+  en `CompletitudOperativa`, que decide activaciones, no pagos—. Tampoco se
+  comprobaba que la cuenta fuera del creador al que se le paga. Ahora lo
+  impiden `tg_payout_medio_valido` y `tg_payout_medio_inmutable`; el segundo
+  porque sin él la comprobación se saltaba con un `UPDATE` detrás.
+- **`H-10`: una restricción con forma de control que no controlaba nada.** El
+  comentario decía «la máscara nunca puede contener más de 4 dígitos» y debajo
+  había un `CHAR_LENGTH(...) <= 30`. Se comprobó: el número de cuenta entero, en
+  claro, era una máscara válida. Lo peor no es el hueco, es que el comentario
+  aseguraba lo contrario.
+- **`H-11`: quien capturaba una cuenta bancaria podía verificarla él mismo.**
+  Faltaba `created_by_user_id`. Es `H-03` una tabla más allá; la columna nace
+  `NOT NULL`, que es lo que aquella enseñó.
+- **`H-12`: se podía cambiar la cuenta de un medio ya verificado.** Seguía
+  diciendo `verified` y apuntaba a otro sitio. Eso vacía `BR-FIN-006`, que
+  existe justamente para las modificaciones. La cuenta pasa a ser inmutable
+  (`DEC-066`).
+- **`H-02`: `verified` sin decir desde cuándo se le puede pagar.**
+- **`H-13`: se podía borrar un medio de pago**, contra `BR-FIN-008`.
+- **`H-14`: el predeterminado podía estar rechazado.** `default_gate`
+  garantizaba que hubiera uno solo, no que sirviera.
+- **La misma cuenta se podía registrar tres veces en el mismo creador.**
+
+### Añadido
+- Pantalla `/creadores/{uuid}/pagos`: alta, verificación, retirada y
+  predeterminado. **Sin botón de editar**, porque no existe la operación.
+- `App\Shared\Crypto\CuentaBancaria` — cifrado reversible del número, huella
+  **HMAC-SHA256** para comparar sin descifrar, y máscara de cuatro dígitos. HMAC
+  y no SHA-256 pelado: el espacio de números de cuenta es pequeño y
+  estructurado, y la huella está en un índice sin cifrar.
+- `DEC-064` enfriamiento de 24 h configurable · `DEC-065` la cuenta compartida
+  se marca y no se rechaza · `DEC-066` la cuenta es inmutable · `DEC-067` los
+  dos permisos van al rol `finance`.
+- `T-11` — rotar `APP_KEY` invalida las huellas; hará falta un comando que las
+  recalcule.
+- Permisos `creator.payment.manage` y `creator.payment.verify`.
+- `tools/pruebas/3.8-pagos.sh` — 41 aserciones en las dos direcciones.
+- `tests/Feature/MediosPagoTest.php` — 18 pruebas, cuatro de ellas contra el
+  esquema que construyen **las migraciones** y no contra el SQL de referencia.
+  Esa distinción es la que dejó pasar `H-08`.
+
+### Notas de portabilidad
+- **MariaDB rechaza con `ERROR 1901` una columna generada `STORED` cuyo `CASE`
+  devuelve una cadena; MySQL 8 la acepta.** Misma familia que `H-08`, cazada
+  esta vez en el entorno de trabajo y no en la máquina de desarrollo — que era
+  exactamente para lo que se instaló MySQL 8 aquí. Se resolvió volviendo al
+  patrón de puerta que ya usa el resto del esquema.
+- `REGEXP` y no `REGEXP_REPLACE`: la segunda no existe en Percona 5.7.
+
+### Verificación
+- 452 aserciones de restricción (26·99·29·16·15·41 × 2 variantes) en verde en
+  MariaDB 10.11 **y** en MySQL 8.0.46.
+- `verificar-ddl-crudo.py`: 58 sentencias ejecutadas de verdad en los dos motores.
+- `verificar-migraciones.py`: 64 tablas y 771 columnas sin discrepancias.
+- `verificar-equivalencia.py`: 174 restricciones, mismo conjunto de reglas en
+  los dos motores.
+- Pint, PHPStan, Deptrac y PHPUnit siguen dependiendo de la máquina de
+  desarrollo y de CI: aquí no hay `vendor/`.
+
+### Migración
+`000490` **se niega a correr** si los datos no admiten las reglas nuevas, y lo
+dice todo de una vez en vez de fallar de uno en uno. `created_by_user_id` pasa a
+obligatoria y no hay ningún valor verdadero que inventar: se pide
+explícitamente en `config('latam.pagos.capturador_migracion')`.
+
 ## [Fase 3 · 3.6/3.7 — corrección `H-08` y ejecución real de las migraciones] — 2026-08-23
 
 ### Corregido

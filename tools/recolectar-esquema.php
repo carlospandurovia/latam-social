@@ -40,10 +40,16 @@ namespace Illuminate\Support\Facades {
             private const ESCALARES = [
                 'count' => 0, 'sum' => 0, 'exists' => false, 'doesntExist' => true,
                 'value' => null, 'first' => null, 'max' => null, 'min' => null,
-                'get' => [], 'pluck' => [], 'insertGetId' => 0,
+                'insertGetId' => 0,
                 'insert' => true, 'update' => 0, 'delete' => 0,
             ];
             public function __call($n, $a) {
+                // `get()` y `pluck()` devuelven una Coleccion, y sobre ella se
+                // encadena `->count()`. Devolver un array pelado hacia reventar
+                // la migracion 000490, que agrupa y luego cuenta.
+                if ($n === 'get' || $n === 'pluck') {
+                    return new \ColeccionVacia();
+                }
                 return array_key_exists($n, self::ESCALARES) ? self::ESCALARES[$n] : $this;
             } }; }
         public static function selectOne(string $s) { return null; }
@@ -140,6 +146,28 @@ class Blueprint {
 }
 
 namespace {
+
+/** Doble de una Coleccion vacia: lo justo para que se pueda encadenar. */
+class ColeccionVacia implements Countable, IteratorAggregate {
+    public function count(): int { return 0; }
+    public function isEmpty(): bool { return true; }
+    public function isNotEmpty(): bool { return false; }
+    public function all(): array { return []; }
+    public function toArray(): array { return []; }
+    public function getIterator(): Traversable { return new ArrayIterator([]); }
+    public function __call($n, $a) { return $this; }
+}
+
+// Las migraciones leen configuracion (`config('latam.pagos...')`). Aqui no hay
+// contenedor de Laravel, asi que devuelven el valor por defecto: el grabador
+// solo necesita saber QUE DDL se emite, no con que datos.
+if (! function_exists('config')) {
+    function config($clave = null, $porDefecto = null) { return $porDefecto; }
+}
+if (! function_exists('env')) {
+    function env($clave, $porDefecto = null) { return $porDefecto; }
+}
+
 class Recolector {
     public static array $tablas = [];
     public static array $raw = [];

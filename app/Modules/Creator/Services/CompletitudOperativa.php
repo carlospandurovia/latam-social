@@ -267,6 +267,11 @@ final class CompletitudOperativa
             );
         }
 
+        // El `whereNotNull` se queda aunque desde 3.8 `ck_cpm_eligible` lo
+        // garantice en la base. No es redundancia por miedo: esta consulta era
+        // la ÚNICA defensa contra H-02 y por eso el hueco tardó en verse — la
+        // de pagos no la tenía (H-09). Quitarla ahora sería volver a dejar la
+        // regla en un solo sitio.
         $consulta = DB::table('creator_payment_methods')
             ->where('creator_id', $creadorId)
             ->where('status', 'verified')
@@ -283,16 +288,27 @@ final class CompletitudOperativa
                 ->where('owner_guardian_id', $tutor->id);
         }
 
-        $medio = $consulta->orderByDesc('is_default')->first(['account_number_masked', 'bank_name', 'owner_type']);
+        $medio = $consulta->orderByDesc('is_default')
+            ->first(['account_number_masked', 'bank_name', 'owner_type', 'shared_account_status']);
 
         if ($medio !== null) {
+            // Se enseña la MÁSCARA. El número real no sale de la base ni aquí
+            // ni en ningún otro sitio.
+            $detalle = trim(($medio->bank_name ?? '').' '.$medio->account_number_masked);
+
+            // Una cuenta que aparece en otro creador y que nadie ha mirado NO
+            // bloquea la activación: `DEC-065` dice marcar, no rechazar, y un
+            // tutor con dos pupilos es un caso legítimo. Pero se dice, porque
+            // un aviso que no se ve es un aviso que no existe.
+            if (($medio->shared_account_status ?? null) === 'pending_review') {
+                $detalle .= ' — atención: esa cuenta está también en otro creador y nadie la ha revisado (DEC-065).';
+            }
+
             return new Requisito(
                 codigo: self::MEDIO_PAGO,
                 titulo: $titulo,
                 cumple: true,
-                // Se enseña la MÁSCARA. El número real no sale de la base ni
-                // aquí ni en ningún otro sitio.
-                detalle: trim(($medio->bank_name ?? '').' '.$medio->account_number_masked),
+                detalle: $detalle,
                 regla: 'BR-FIN-003',
             );
         }

@@ -7,6 +7,7 @@ use App\Modules\Core\Http\Controllers\CatalogosController;
 use App\Modules\Core\Http\Controllers\PanelController;
 use App\Modules\Creator\Http\Controllers\ActivacionController;
 use App\Modules\Creator\Http\Controllers\CreadoresController;
+use App\Modules\Creator\Http\Controllers\MediosPagoController;
 use App\Modules\Creator\Http\Controllers\PerfilFiscalController;
 use App\Modules\Creator\Http\Controllers\RedesSocialesController;
 use App\Modules\Creator\Http\Controllers\SolicitudesController;
@@ -156,4 +157,43 @@ Route::middleware('auth')->group(function (): void {
         ->middleware('permiso:creator.manage')
         ->whereUuid('uuid')->whereNumber('id')
         ->name('creadores.redes.metrica');
+
+    // ---- Medios de pago (iteración 3.8, BR-FIN-003/006/008) --------------
+    //
+    // Ver exige `creator.view_sensitive`, igual que el perfil fiscal
+    // (`DEC-053`). Capturar y verificar son permisos distintos y además
+    // `ck_cpm_segregation` exige dos PERSONAS distintas (`H-11`): aquí se
+    // decide a dónde va el dinero.
+    //
+    // No hay ruta de edición. La cuenta es inmutable (`DEC-066`): cambiar de
+    // cuenta es dar de alta otra y retirar la anterior.
+    Route::get('/creadores/{uuid}/pagos', [MediosPagoController::class, 'index'])
+        ->middleware('permiso:creator.view_sensitive')
+        ->whereUuid('uuid')
+        ->name('creadores.pagos');
+
+    Route::post('/creadores/{uuid}/pagos', [MediosPagoController::class, 'store'])
+        ->middleware('permiso:creator.payment.manage')
+        ->whereUuid('uuid')
+        ->name('creadores.pagos.store');
+
+    Route::post('/creadores/{uuid}/pagos/{id}/verificar', [MediosPagoController::class, 'verificar'])
+        ->middleware('permiso:creator.payment.verify')
+        ->whereUuid('uuid')->whereNumber('id')
+        ->name('creadores.pagos.verificar');
+
+    Route::post('/creadores/{uuid}/pagos/{id}/retirar', [MediosPagoController::class, 'retirar'])
+        ->middleware('permiso:creator.payment.verify')
+        ->whereUuid('uuid')->whereNumber('id')
+        ->name('creadores.pagos.retirar');
+
+    Route::post('/creadores/{uuid}/pagos/{id}/predeterminado', [MediosPagoController::class, 'predeterminado'])
+        ->middleware('permiso:creator.payment.manage')
+        ->whereUuid('uuid')->whereNumber('id')
+        ->name('creadores.pagos.predeterminado');
+
+    Route::post('/creadores/{uuid}/pagos/{id}/compartida', [MediosPagoController::class, 'revisarCompartida'])
+        ->middleware('permiso:creator.payment.verify')
+        ->whereUuid('uuid')->whereNumber('id')
+        ->name('creadores.pagos.compartida');
 });

@@ -780,6 +780,56 @@ impecable. Simplemente **la mitad de las reglas que declara no existen en ese se
 
 ---
 
+### DEC-064 — El enfriamiento de un medio de pago son 24 horas, y es configuración
+
+| | |
+|---|---|
+| **Decisión** | `BR-FIN-006` exige un «período de enfriamiento» para un medio de pago nuevo o modificado y **no da número**. Son **24 horas**, en `config('latam.pagos.enfriamiento_horas')`. Verificar una cuenta no la habilita: le fija `eligible_from` en el futuro. |
+| **Por qué 24 h** | Es el margen para que el aviso al canal de contacto anterior llegue y el creador reaccione si **no fue él** quien pidió el cambio. Menos no da tiempo a leer un correo; mucho más convierte cada alta legítima en una queja. |
+| **Por qué no cero** | Cero cumpliría la letra de la regla —`eligible_from` existiría y sería `NOT NULL`— y no su intención: si alguien consigue que le verifiquen una cuenta, cobra en el acto. La regla existe para que exista una ventana. |
+| **Por qué configuración** | Mismo motivo que `DEC-063`: es un juicio que se va a ajustar con datos reales, y ajustarlo no debe requerir un despliegue. |
+| **Y no se puede acortar después** | `tg_cpm_inmutable` rechaza cualquier `UPDATE` que cambie `eligible_from` una vez fijada. Sin eso, la regla estaría a un `UPDATE` de distancia. |
+| **Estado** | ADOPTADA e implementada (2026-08-23, iteración 3.8) |
+
+---
+
+### DEC-065 — La misma cuenta en dos creadores se marca, no se rechaza
+
+| | |
+|---|---|
+| **Decisión** | Si una cuenta bancaria ya está registrada en **otro** creador, el alta **se admite** y queda en `shared_account_status = 'pending_review'`. Un humano la da por buena (`cleared`) o retira el medio. Nunca se rechaza automáticamente. |
+| **Por qué no rechazar** | Hay un caso legítimo y frecuente: dos hermanos menores cuyos pagos van, los dos, a la cuenta del mismo tutor (`BR-CREATOR-010`). Rechazarlo obligaría a abrir una excepción a mano cada vez, y las excepciones a mano acaban siendo la norma. |
+| **Por qué no callarlo** | Es también la señal clásica de una misma persona con varios perfiles de creador. La huella ya se calculaba y se guardaba: no mirarla era renunciar gratis a una señal de fraude. |
+| **La marca la pone la BASE** | `tg_cpm_compartida`, un disparador `BEFORE INSERT`. Si lo escribiera la aplicación, una inserción podría afirmar `unique` sin haber mirado nada — que es exactamente el fallo de `H-06` y de `DEC-048`. Y el valor por defecto de la columna es `pending_review`, nunca `unique`. |
+| **No bloquea la activación** | `CompletitudOperativa` lo dice en el detalle del requisito pero no lo tumba: marcar no es rechazar. |
+| **Estado** | ADOPTADA e implementada (2026-08-23, iteración 3.8) |
+
+---
+
+### DEC-066 — La cuenta de un medio de pago es inmutable: se sustituye, no se edita
+
+| | |
+|---|---|
+| **Decisión** | El número, la huella, la máscara, el titular y su documento **no se pueden cambiar nunca**. «Cambiar de cuenta» es dar de alta una nueva y retirar la anterior. No hay pantalla de edición porque no hay operación de edición: `tg_cpm_inmutable` rechaza el `UPDATE`. |
+| **Qué lo motivó (`H-12`)** | Se comprobó contra una base real: un `UPDATE` cambiaba el número de cuenta de un medio **ya verificado**, la fila seguía diciendo `verified` y el dinero pasaba a ir a otro sitio. Eso vacía `BR-FIN-006` entero, porque el enfriamiento existe precisamente para las modificaciones. |
+| **Por qué no «editar y volver a pending»** | Era la alternativa cómoda y pierde el rastro: la cuenta anterior desaparece y ya no se puede reconstruir a dónde apuntaba el medio cuando se emitió un pago viejo. Con filas separadas, cada pago histórico sigue apuntando a la cuenta que era. |
+| **Precedente** | Es cómo funciona la banca real, y es la misma familia que `BR-FIN-002` con los asientos del ledger: lo que documenta dinero no se reescribe. |
+| **Coste** | Un creador que se equivoca tecleando genera dos filas en vez de una corrección. Es barato y deja el error a la vista, que es lo correcto. |
+| **Estado** | ADOPTADA e implementada (2026-08-23, iteración 3.8) |
+
+---
+
+### DEC-067 — Los dos permisos de medios de pago van al rol `finance`
+
+| | |
+|---|---|
+| **Decisión** | `creator.payment.manage` y `creator.payment.verify` van los dos al rol `finance`. La separación de personas la impone la base (`ck_cpm_segregation`), no el reparto de roles. |
+| **Por qué no repartirlos entre roles** | Es literalmente `DEC-062`, una tabla más allá. Dar la captura a `campaign_manager` obligaría a darle acceso a cuentas bancarias, que es justo lo que `DEC-053` decidió no hacer. |
+| **Por qué la base y no el código** | Un permiso dice **qué puede hacer** un usuario; no dice que dos actos los hayan hecho dos personas. Eso solo lo sabe la fila, y por eso vive en una restricción. |
+| **Estado** | ADOPTADA e implementada (2026-08-23, iteración 3.8) |
+
+---
+
 ## Decisiones pendientes de información del negocio
 
 | # | Pregunta | Bloquea |
@@ -825,6 +875,7 @@ impecable. Simplemente **la mitad de las reglas que declara no existen en ese se
 | ~~Q-45~~ | ✅ **RESUELTA (2026-08-22):** opción **B** — sin datos fiscales no hay alta, pero se acompaña al creador a formalizarse. Ver `DEC-049`. El pago a un tercero **no se implementa**; el análisis queda en `docs/fase-2/2.14-PAGO-A-TERCEROS.md` | — |
 | **Q-46** | ⚠️ **§56 — nuevo, abierto por `DEC-059`.** Cuando se publique una **versión nueva de los términos**, ¿qué pasa con los creadores **ya activos**? Hoy el sistema **no los desactiva**: siguen activos con la aceptación de la versión anterior. Las opciones son (a) dejarlo así y pedir la nueva aceptación solo la próxima vez que hagan algo relevante, (b) bloquear invitaciones hasta que re-acepten, (c) suspenderlos. Tiene consecuencias legales y operativas, y **no lo decido yo** | Antes de publicar la segunda versión de los términos |
 | **Q-47** | ⚠️ **Abierto por la iteración 3.6.** `BR-CREATOR-014` fija un **periodo de gracia de 30 días** antes de rechazar a un creador por falta de datos fiscales, y dice «configurable». ¿Configurable **globalmente** (una constante de despliegue) o **por creador**, como `payment_term_days`? No lo invento: son dos modelos de datos distintos. Hasta que se responda, el periodo de gracia no está implementado | Iteración de rechazo de creadores |
+| **T-11** | 📋 **Rotar `APP_KEY` invalida las huellas de las cuentas bancarias.** Los números siguen siendo recuperables (`Crypt` conserva `APP_PREVIOUS_KEYS`), pero la huella es un HMAC con esa clave: tras una rotación, la detección de cuentas repetidas (`DEC-065`) deja de funcionar sobre las filas viejas. Hace falta un comando que las recalcule. No es un problema hoy y sí lo será el día de la primera rotación | Antes de la primera rotación de clave |
 | **T-10** | 📋 **Aviso al creador cuando cambian sus datos fiscales.** `BR-CREATOR-007` lo exige y el módulo Communication no existe. Hoy la pantalla se lo recuerda al operador para que lo haga a mano; queda pendiente automatizarlo | Fase de Communication |
 | **T-09** | 📋 **Publicar la primera versión real de los términos del creador**, revisada legalmente, con `php artisan terminos:publicar`. **Ningún creador puede activarse hasta entonces** — la pantalla lo dice explícitamente | Bloquea toda activación |
 | Q-29 | ¿Se aprueba la propuesta tipográfica (Sora + Plus Jakarta Sans + IBM Plex Mono), o hay una tipografía corporativa ya comprada? | Iteración 3.2 |

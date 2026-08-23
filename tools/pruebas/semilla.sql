@@ -89,14 +89,21 @@ INSERT INTO terms_acceptances (uuid,terms_version_id,subject_type,subject_id,cha
    AND cr.display_name IN ('anatorres','luisvega')
    AND u.email='aprob@ejemplo.test' AND f.purpose='terms_evidence';
 
+-- Capturado por el operador 1 y verificado por el 2: la segregacion de
+-- funciones de `ck_cpm_segregation` (H-11) tambien vale para la semilla. Y
+-- verificado anteayer, elegible desde ayer: un medio "verificado hace un
+-- instante y ya elegible" no existe con el enfriamiento de BR-FIN-006, y una
+-- semilla que describe un estado imposible ensena a los tests a esperar lo
+-- imposible.
 INSERT INTO creator_payment_methods (uuid,creator_id,owner_type,method_type,country_id,currency_code,
    bank_name,account_type,account_number_encrypted,account_number_masked,account_number_fingerprint,
-   holder_name,holder_document_type,holder_document_number,status,verified_at,verified_by_user_id,
-   eligible_from,is_default,created_at)
+   holder_name,holder_document_type,holder_document_number,created_by_user_id,status,
+   verified_at,verified_by_user_id,eligible_from,is_default,created_at)
  SELECT UUID(),cr.id,'creator','bank_account',cr.country_id,'PEN',
    'BCP','savings','enc:xxxx','****4321',REPEAT('b',64),
-   'Ana Torres','DNI','40000001','verified',NOW(3),(SELECT id FROM users LIMIT 1),
-   NOW(3),1,NOW(3)
+   'Ana Torres','DNI','40000001',(SELECT id FROM users ORDER BY id LIMIT 1),'verified',
+   NOW(3) - INTERVAL 2 DAY,(SELECT id FROM users ORDER BY id LIMIT 1 OFFSET 1),
+   NOW(3) - INTERVAL 1 DAY,1,NOW(3) - INTERVAL 2 DAY
  FROM creators cr WHERE cr.display_name='anatorres';
 
 INSERT INTO campaigns (uuid,code,name,client_organization_id,client_brand_id,currency_code,starts_on,ends_on,status,confirmed_at,created_at)

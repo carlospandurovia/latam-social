@@ -134,9 +134,28 @@ CREATE TABLE creator_payment_methods (
   holder_name           VARCHAR(160)  NOT NULL,
   holder_document_type  VARCHAR(20)   NOT NULL,
   holder_document_number VARCHAR(40)  NOT NULL,
+  -- H-11: quien captura la cuenta no puede ser quien la verifica. Faltaba la
+  -- mitad del par: solo existia `verified_by_user_id`, asi que el mismo
+  -- operador podia dar de alta una cuenta bancaria y validarla el mismo. Es el
+  -- mismo hueco que H-03 en el perfil fiscal, y aqui es donde va el dinero.
+  -- NOT NULL desde el primer dia, no NULL "de momento": esa es la leccion.
+  created_by_user_id    BIGINT UNSIGNED NOT NULL,
   status                VARCHAR(15)   NOT NULL DEFAULT 'pending',
   verified_at           DATETIME(3)   NULL,
   verified_by_user_id   BIGINT UNSIGNED NULL,
+  -- Rechazar y desactivar tambien son actos de alguien. Como `H-13` prohibe el
+  -- DELETE, desactivar es la unica forma de retirar una cuenta: sin fecha y
+  -- autor, retirar una cuenta seria la unica operacion sin rastro de la tabla.
+  closed_at             DATETIME(3)   NULL,
+  closed_by_user_id     BIGINT UNSIGNED NULL,
+  -- La misma cuenta en dos creadores distintos. Hay casos legitimos --dos
+  -- hermanos menores con la cuenta del mismo tutor-- y hay un caso de fraude
+  -- clasico. No se rechaza: se marca y lo mira un humano (DEC-065), igual que
+  -- DEC-063 con las metricas. El valor por defecto es "nadie lo ha mirado",
+  -- NUNCA "unique": la leccion de H-06 es que un defecto no puede parecer una
+  -- respuesta. Lo pone un disparador, no la aplicacion, para que no pueda
+  -- mentir.
+  shared_account_status VARCHAR(15)   NOT NULL DEFAULT 'pending_review',
   -- BR-FIN-006: periodo de enfriamiento. Un medio nuevo o modificado no es
   -- elegible para pagos hasta esta fecha, aunque ya este verificado.
   eligible_from         DATETIME(3)   NULL,
@@ -145,8 +164,31 @@ CREATE TABLE creator_payment_methods (
   updated_at            DATETIME(3)   NULL,
   default_gate TINYINT UNSIGNED
     GENERATED ALWAYS AS (CASE WHEN is_default = 1 THEN 1 ELSE NULL END) STORED,
+  -- La misma cuenta registrada dos veces en el MISMO creador no es una senal de
+  -- nada: es ruido, y multiplica las filas que hay que verificar. Solo cuenta
+  -- entre las que siguen abiertas, para que "cambio de cuenta y volvio a la
+  -- anterior" siga siendo posible.
+  --
+  -- La primera version devolvia la huella (`... THEN account_number_fingerprint
+  -- ELSE NULL`) y **MariaDB la rechaza**: ERROR 1901 en cuanto una columna
+  -- generada STORED produce una CADENA a partir de un CASE. MySQL 8 la acepta
+  -- sin decir nada. Aislado en una tabla de prueba: con resultado entero pasa,
+  -- con resultado CHAR no; VIRTUAL pasa, STORED no. Otra divergencia de la
+  -- familia de H-08, cazada esta vez aqui y no en su maquina, porque el entorno
+  -- de trabajo ya tiene los dos motores.
+  --
+  -- La salida es volver al patron de puerta que ya usa todo el esquema: la
+  -- columna generada vale 1 o NULL, y la huella entra en el indice como una
+  -- columna normal. Igual que `uq_ctp_current`.
+  open_gate TINYINT UNSIGNED
+    GENERATED ALWAYS AS (CASE WHEN status = 'pending' OR status = 'verified'
+                              THEN 1 ELSE NULL END) STORED,
   UNIQUE KEY uq_cpm_uuid (uuid),
   UNIQUE KEY uq_cpm_default (default_gate, creator_id),
+  UNIQUE KEY uq_cpm_open_account (open_gate, creator_id, account_number_fingerprint),
+  KEY ix_cpm_capturer (created_by_user_id),
+  KEY ix_cpm_closer (closed_by_user_id),
+  KEY ix_cpm_shared (shared_account_status),
   KEY ix_cpm_creator (creator_id, status),
   KEY ix_cpm_fingerprint (account_number_fingerprint),
   KEY ix_cpm_guardian (owner_guardian_id),
@@ -158,6 +200,8 @@ CREATE TABLE creator_payment_methods (
   CONSTRAINT fk_cpm_country FOREIGN KEY (country_id) REFERENCES countries(id) ON DELETE RESTRICT,
   CONSTRAINT fk_cpm_currency FOREIGN KEY (currency_code) REFERENCES currencies(code) ON DELETE RESTRICT,
   CONSTRAINT fk_cpm_verifier FOREIGN KEY (verified_by_user_id) REFERENCES users(id) ON DELETE RESTRICT,
+  CONSTRAINT fk_cpm_capturer FOREIGN KEY (created_by_user_id) REFERENCES users(id) ON DELETE RESTRICT,
+  CONSTRAINT fk_cpm_closer FOREIGN KEY (closed_by_user_id) REFERENCES users(id) ON DELETE RESTRICT,
   CONSTRAINT ck_cpm_status CHECK (status IN ('pending','verified','rejected','disabled')),
   CONSTRAINT ck_cpm_method CHECK (method_type IN ('bank_account','wallet','paypal','other')),
   CONSTRAINT ck_cpm_owner CHECK (
@@ -167,9 +211,50 @@ CREATE TABLE creator_payment_methods (
   CONSTRAINT ck_cpm_verified CHECK (
     status <> 'verified' OR (verified_at IS NOT NULL AND verified_by_user_id IS NOT NULL)
   ),
-  -- Un medio en claro no pasa: la mascara nunca puede contener mas de 4 digitos.
+  -- H-10. Este comentario decia "la mascara nunca puede contener mas de 4
+  -- digitos" y debajo habia un `CHAR_LENGTH(...) <= 30`, que es el largo de la
+  -- columna. Se comprobo: `00212345678901234567` --el numero de cuenta entero,
+  -- en claro-- entraba sin protestar. Una restriccion con forma de control que
+  -- no controlaba nada, y encima con un comentario que aseguraba lo contrario;
+  -- quien lo leyera se quedaba tranquilo. El largo se queda (no esta mal, solo
+  -- era insuficiente) y los digitos los cuenta la restriccion de al lado.
   CONSTRAINT ck_cpm_masked CHECK (CHAR_LENGTH(account_number_masked) <= 30),
-  CONSTRAINT ck_cpm_fingerprint CHECK (CHAR_LENGTH(account_number_fingerprint) = 64)
+  -- "No mas de cuatro digitos" dicho de la unica forma que entienden los tres
+  -- motores: que NO exista en el texto una quinta cifra. `REGEXP_REPLACE`
+  -- habria sido mas legible y no existe en Percona 5.7, que es produccion.
+  CONSTRAINT ck_cpm_masked_digits CHECK (
+    account_number_masked NOT REGEXP '[0-9].*[0-9].*[0-9].*[0-9].*[0-9]'
+  ),
+  CONSTRAINT ck_cpm_fingerprint CHECK (CHAR_LENGTH(account_number_fingerprint) = 64),
+  -- H-02. `status='verified'` con `eligible_from` NULL: verificado, y nadie
+  -- dijo desde cuando se le puede pagar. `CompletitudOperativa` ya se defendia
+  -- con un `whereNotNull`, pero eso es una defensa en UNA consulta: la de
+  -- payouts no la tenia (H-09). La regla vive aqui o no vive.
+  CONSTRAINT ck_cpm_eligible CHECK (status <> 'verified' OR eligible_from IS NOT NULL),
+  -- El enfriamiento de BR-FIN-006 empieza al verificar. Una fecha de
+  -- elegibilidad anterior a la verificacion es un enfriamiento negativo.
+  CONSTRAINT ck_cpm_eligible_after CHECK (
+    eligible_from IS NULL OR verified_at IS NULL OR eligible_from >= verified_at
+  ),
+  -- H-11, calcada de `ck_ctp_segregation`. Sin la rama del NULL: aqui la
+  -- columna nace NOT NULL, que es lo que H-03 enseno a hacer desde el principio.
+  CONSTRAINT ck_cpm_segregation CHECK (
+    verified_by_user_id IS NULL OR verified_by_user_id <> created_by_user_id
+  ),
+  -- H-04, una tabla mas alla: rechazar no es verificar. Un medio rechazado que
+  -- llevara verificador escrito diria que alguien lo dio por bueno.
+  CONSTRAINT ck_cpm_rejected_clean CHECK (
+    status <> 'rejected' OR (verified_at IS NULL AND verified_by_user_id IS NULL)
+  ),
+  CONSTRAINT ck_cpm_closed CHECK (
+    status NOT IN ('rejected','disabled') OR (closed_at IS NOT NULL AND closed_by_user_id IS NOT NULL)
+  ),
+  -- H-14. `default_gate` garantizaba que hubiera UN predeterminado, no que
+  -- sirviera: se comprobo que un medio `rejected` podia ser el predeterminado.
+  CONSTRAINT ck_cpm_default_usable CHECK (is_default = 0 OR status = 'verified'),
+  CONSTRAINT ck_cpm_shared_status CHECK (
+    shared_account_status IN ('unique','pending_review','cleared')
+  )
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ================================ D6: comprobante que entrega el creador
@@ -219,3 +304,96 @@ CREATE TABLE creator_tax_documents (
     status <> 'validated' OR (validated_by_user_id IS NOT NULL AND validated_at IS NOT NULL)
   )
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ===========================================================================
+-- Disparadores de `creator_payment_methods` (iteracion 3.8)
+--
+-- Tres cosas que ningun CHECK puede expresar, porque no hablan de los valores
+-- de UNA fila sino de VERBOS y de OTRAS filas:
+--
+--   1. `tg_cpm_no_delete`  -- BR-FIN-008: ningun registro financiero se borra.
+--   2. `tg_cpm_inmutable`  -- H-12: la cuenta no se edita, se sustituye.
+--   3. `tg_cpm_compartida` -- DEC-065: marcar la cuenta repetida entre creadores.
+--
+-- Van iguales en los dos motores, fuera del compilador de restricciones, como
+-- `tg_sas_no_update` y los de `ledger_entries`.
+-- ===========================================================================
+
+DELIMITER //
+
+CREATE TRIGGER tg_cpm_no_delete BEFORE DELETE ON creator_payment_methods
+FOR EACH ROW
+BEGIN
+  SIGNAL SQLSTATE '45000'
+    SET MESSAGE_TEXT = 'creator_payment_methods no admite borrado (BR-FIN-008): una cuenta se desactiva, y queda quien y cuando.';
+END//
+
+-- H-12. Se comprobo primero: un UPDATE cambiaba el numero de cuenta de un medio
+-- YA verificado y la fila seguia diciendo `verified`, apuntando a otro sitio.
+-- Eso vacia BR-FIN-006 entero, porque el enfriamiento existe justamente para
+-- las modificaciones. Ahora la cuenta es inmutable: cambiar de cuenta es dar de
+-- alta otra y desactivar esta (DEC-066). Asi queda ademas el rastro de todas
+-- las cuentas que existieron, que es lo que hace falta para reconstruir a donde
+-- se envio el dinero.
+--
+-- Lo que SI puede cambiar: el estado y sus fechas, la elegibilidad mientras no
+-- este puesta, el predeterminado, y el veredicto humano sobre la cuenta
+-- compartida.
+CREATE TRIGGER tg_cpm_inmutable BEFORE UPDATE ON creator_payment_methods
+FOR EACH ROW
+BEGIN
+  IF NEW.creator_id <> OLD.creator_id
+     OR NEW.uuid <> OLD.uuid
+     OR NEW.method_type <> OLD.method_type
+     OR NEW.country_id <> OLD.country_id
+     OR NEW.currency_code <> OLD.currency_code
+     OR NEW.owner_type <> OLD.owner_type
+     OR NOT (NEW.owner_guardian_id <=> OLD.owner_guardian_id)
+     OR NEW.account_number_encrypted <> OLD.account_number_encrypted
+     OR NEW.account_number_masked <> OLD.account_number_masked
+     OR NEW.account_number_fingerprint <> OLD.account_number_fingerprint
+     OR NEW.holder_name <> OLD.holder_name
+     OR NEW.holder_document_type <> OLD.holder_document_type
+     OR NEW.holder_document_number <> OLD.holder_document_number
+     OR NEW.created_by_user_id <> OLD.created_by_user_id
+  THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'La cuenta de un medio de pago es inmutable (H-12): de alta una nueva y desactive esta.';
+  END IF;
+
+  -- Una verificacion no se reescribe. Si se pudiera, "verificado por Ana el
+  -- martes" seria un dato editable, y es la prueba de que alguien miro.
+  IF OLD.verified_at IS NOT NULL
+     AND (NOT (NEW.verified_at <=> OLD.verified_at)
+          OR NOT (NEW.verified_by_user_id <=> OLD.verified_by_user_id))
+  THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'La verificacion de un medio de pago no se reescribe.';
+  END IF;
+
+  -- Y el enfriamiento no se acorta a posteriori. Sin esto, BR-FIN-006 seria un
+  -- UPDATE de distancia.
+  IF OLD.eligible_from IS NOT NULL AND NOT (NEW.eligible_from <=> OLD.eligible_from) THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'La fecha de elegibilidad no se cambia una vez fijada (BR-FIN-006).';
+  END IF;
+END//
+
+-- DEC-065. Lo pone la BASE, no la aplicacion: si lo escribiera la aplicacion,
+-- una insercion podria afirmar `unique` sin haber mirado nada, que es
+-- exactamente el fallo de H-06 y de DEC-048.
+CREATE TRIGGER tg_cpm_compartida BEFORE INSERT ON creator_payment_methods
+FOR EACH ROW
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM creator_payment_methods
+     WHERE account_number_fingerprint = NEW.account_number_fingerprint
+       AND creator_id <> NEW.creator_id
+  ) THEN
+    SET NEW.shared_account_status = 'pending_review';
+  ELSE
+    SET NEW.shared_account_status = 'unique';
+  END IF;
+END//
+
+DELIMITER ;

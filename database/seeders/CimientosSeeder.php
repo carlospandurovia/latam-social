@@ -176,6 +176,11 @@ final class CimientosSeeder extends Seeder
             // decide con que tasa se retiene, y eso toca dinero.
             ['creator.tax.manage',     'Creator',  'Capturar y corregir el perfil tributario del creador'],
             ['creator.tax.approve',    'Creator',  'Aprobar o rechazar el perfil tributario (BR-CREATOR-007)'],
+            // 3.8: mismo reparto que los fiscales, y por el mismo motivo. Aqui
+            // se decide A DONDE VA EL DINERO, asi que `ck_cpm_segregation`
+            // exige ademas dos personas distintas, no solo dos permisos.
+            ['creator.payment.manage', 'Creator',  'Capturar medios de pago del creador'],
+            ['creator.payment.verify', 'Creator',  'Verificar o retirar un medio de pago (BR-FIN-006)'],
             ['client.view',            'Client',   'Ver clientes y marcas'],
             ['client.manage',          'Client',   'Crear y editar clientes'],
             ['finance.view',           'Finance',  'Ver el ledger y los saldos'],
@@ -242,6 +247,7 @@ final class CimientosSeeder extends Seeder
                 // datos fiscales a `campaign_manager`, que es justo lo que
                 // DEC-053 decidio no hacer.
                 'creator.tax.manage', 'creator.tax.approve',
+                'creator.payment.manage', 'creator.payment.verify',
                 'client.view', 'catalog.view',
             ],
             'content_reviewer' => [

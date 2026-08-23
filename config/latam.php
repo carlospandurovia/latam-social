@@ -66,4 +66,32 @@ return [
     'terminos' => [
         'creador' => env('LATAM_TERMS_CREATOR_CODE', 'creator_terms'),
     ],
+
+    /*
+     * Medios de pago (iteración 3.8).
+     *
+     * `BR-FIN-006` exige un «período de enfriamiento» para un medio nuevo o
+     * modificado y **no da número**. Lo pongo aquí, no en el código, por el
+     * mismo motivo que los umbrales de coherencia (`DEC-063`): es un juicio que
+     * se va a ajustar, y ajustarlo no debe requerir un despliegue.
+     *
+     * Veinticuatro horas entre verificar una cuenta y poder pagarle. Es el
+     * margen para que el aviso al canal de contacto anterior llegue y el
+     * creador reaccione si no fue él quien la cambió. Cero no es una opción:
+     * cumpliría la letra de la regla y no su intención.
+     */
+    'pagos' => [
+        'enfriamiento_horas' => (int) env('LATAM_PAGOS_ENFRIAMIENTO_HORAS', 24),
+
+        /*
+         * Solo para la migración `000490`, y normalmente null.
+         *
+         * `created_by_user_id` pasa a ser obligatoria (`H-11`) y para las filas
+         * que ya existen no hay ningún valor verdadero que inventar. Si la
+         * tabla tiene datos reales, aquí va el id del usuario que los capturó
+         * — una declaración de un humano, no una evidencia, y por eso se pide
+         * explícitamente en vez de rellenarla sola.
+         */
+        'capturador_migracion' => env('LATAM_PAGOS_CAPTURADOR_MIGRACION'),
+    ],
 ];

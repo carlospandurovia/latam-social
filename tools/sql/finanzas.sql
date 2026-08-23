@@ -432,4 +432,57 @@ BEGIN
     SET MESSAGE_TEXT = 'Un costo de campana no se borra: se anula (voided_at), para poder reconstruir el margen historico.';
 END//
 
+-- ---------------------------------------------------------------------------
+-- H-09 (iteracion 3.8): un pago contra un medio que no esta verificado
+--
+-- `fk_payout_method` solo comprobaba que la FILA EXISTIERA. Se reprodujo: un
+-- pago de 1500.0000 PEN contra un medio en estado `pending`, sin verificar y
+-- sin fecha de elegibilidad, entraba sin protestar. La regla BR-FIN-003 dice
+-- que un earning solo es `payable` si el medio esta verificado; esa regla no
+-- estaba impuesta en ningun sitio, solo escrita.
+--
+-- Tampoco se comprobaba que la cuenta fuera DEL CREADOR al que se le paga.
+--
+-- Va en un disparador y no en un CHECK porque mira OTRA tabla, y eso ningun
+-- CHECK lo puede hacer en MySQL ni en MariaDB.
+-- ---------------------------------------------------------------------------
+CREATE TRIGGER tg_payout_medio_valido BEFORE INSERT ON payouts
+FOR EACH ROW
+BEGIN
+  DECLARE v_creador BIGINT UNSIGNED;
+  DECLARE v_estado  VARCHAR(15);
+  DECLARE v_desde   DATETIME(3);
+
+  SELECT creator_id, status, eligible_from
+    INTO v_creador, v_estado, v_desde
+    FROM creator_payment_methods
+   WHERE id = NEW.payment_method_id;
+
+  IF v_creador <> NEW.creator_id THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'El medio de pago no es del creador al que se le paga.';
+  END IF;
+
+  IF v_estado <> 'verified' THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'No se paga a un medio sin verificar (BR-FIN-003).';
+  END IF;
+
+  IF v_desde IS NULL OR v_desde > NOW(3) THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'El medio de pago sigue en el periodo de enfriamiento (BR-FIN-006).';
+  END IF;
+END//
+
+-- Sin esto, la comprobacion de arriba se saltaria con un UPDATE detras: se
+-- inserta el pago apuntando a una cuenta buena y luego se cambia el destino.
+CREATE TRIGGER tg_payout_medio_inmutable BEFORE UPDATE ON payouts
+FOR EACH ROW
+BEGIN
+  IF NEW.payment_method_id <> OLD.payment_method_id OR NEW.creator_id <> OLD.creator_id THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'El destino de un pago no se cambia: anule el pago y cree otro.';
+  END IF;
+END//
+
 DELIMITER ;
