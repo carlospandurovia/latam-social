@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Modules\Creator\Services\CompletitudOperativa;
 use App\Shared\Auth\Permisos;
 use Database\Seeders\CimientosSeeder;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -113,12 +114,12 @@ final class ActivacionCreadorTest extends TestCase
     }
 
     /** Deja al creador cumpliendo las seis condiciones. */
-    private function equiparTodo(): void
+    private function equiparTodo(?string $elegibleDesde = null): void
     {
         $this->ponerIdentidad();
         $this->ponerRedSocial();
         $this->ponerFiscal();
-        $this->ponerMedioDePago();
+        $this->ponerMedioDePago(elegibleDesde: $elegibleDesde);
         $this->ponerTerminos();
     }
 
@@ -171,7 +172,12 @@ final class ActivacionCreadorTest extends TestCase
         ]);
     }
 
-    private function ponerMedioDePago(string $dueno = 'creator', ?int $tutorId = null): void
+    /**
+     * Desde 3.8 la cuenta es INMUTABLE (`DEC-066`): no se puede crear una y
+     * luego moverle la fecha de elegibilidad con un `update`. Por eso
+     * `$elegibleDesde` es un parametro y no algo que se retoque despues.
+     */
+    private function ponerMedioDePago(string $dueno = 'creator', ?int $tutorId = null, ?string $elegibleDesde = null): void
     {
         DB::table('creator_payment_methods')->insert([
             'uuid' => (string) Str::uuid(), 'creator_id' => $this->creadorId,
@@ -182,10 +188,12 @@ final class ActivacionCreadorTest extends TestCase
             'account_number_encrypted' => 'enc:xxxx', 'account_number_masked' => '****4321',
             'account_number_fingerprint' => str_repeat('b', 64),
             'holder_name' => 'Ana Torres', 'holder_document_type' => 'DNI', 'holder_document_number' => '40000001',
-            'status' => 'verified', 'verified_at' => now(), 'verified_by_user_id' => $this->revisorId,
-            // BR-FIN-006: ya fuera del enfriamiento.
-            'eligible_from' => now()->subDay(), 'is_default' => 1,
-            'created_at' => now(), 'updated_at' => now(),
+            // H-11: capturador y verificador, y distintos. La base lo exige.
+            'created_by_user_id' => $this->capturadorId,
+            'status' => 'verified', 'verified_at' => now()->subDay(), 'verified_by_user_id' => $this->revisorId,
+            // BR-FIN-006: por defecto, ya fuera del enfriamiento.
+            'eligible_from' => $elegibleDesde ?? now()->subHour(), 'is_default' => 1,
+            'created_at' => now()->subDay(), 'updated_at' => now(),
         ]);
     }
 
@@ -331,8 +339,15 @@ final class ActivacionCreadorTest extends TestCase
                 ->where('creator_id', $this->creadorId)->update(['verification_status' => 'pending', 'verified_at' => null]),
             CompletitudOperativa::FISCAL => DB::table('creator_tax_profiles')
                 ->where('creator_id', $this->creadorId)->update(['status' => 'rejected']),
+            // Desde 3.8 una verificacion no se reescribe (`tg_cpm_inmutable`) y el
+            // predeterminado tiene que estar verificado (`ck_cpm_default_usable`),
+            // asi que "quitarle el medio de pago" ya no es desverificarlo: es
+            // retirarlo, que es lo que se haria de verdad.
             CompletitudOperativa::MEDIO_PAGO => DB::table('creator_payment_methods')
-                ->where('creator_id', $this->creadorId)->update(['status' => 'pending', 'verified_at' => null, 'verified_by_user_id' => null]),
+                ->where('creator_id', $this->creadorId)->update([
+                    'is_default' => 0, 'status' => 'disabled',
+                    'closed_at' => now(), 'closed_by_user_id' => $this->revisorId,
+                ]),
             CompletitudOperativa::TERMINOS => DB::table('terms_acceptances')
                 ->where('subject_id', $this->creadorId)->delete(),
             default => $this->fail("Requisito desconocido: {$codigo}"),
@@ -353,28 +368,43 @@ final class ActivacionCreadorTest extends TestCase
     }
 
     /**
-     * BR-FIN-006. `eligible_from IS NULL` cuenta como NO elegible: nadie ha
-     * fijado desde cuándo se le puede pagar, y el silencio no da permiso.
-     * Es la misma lección que DEC-048 con la retención.
+     * `H-02`, cerrado en 3.8: este test comprobaba que un medio `verified` con
+     * `eligible_from` NULL no contara para la activacion. Ya no puede
+     * construirse ese estado — `ck_cpm_eligible` lo rechaza en la base — asi
+     * que lo que se comprueba ahora es justamente eso: que **no existe**.
+     *
+     * Una defensa en la aplicacion se puede olvidar en la siguiente consulta,
+     * y de hecho se olvido: la de pagos no la tenia (`H-09`).
      */
-    public function test_medio_de_pago_verificado_sin_fecha_de_elegibilidad_no_cuenta(): void
+    public function test_un_medio_verificado_sin_fecha_de_elegibilidad_ya_no_puede_existir(): void
     {
         $this->equiparTodo();
-        DB::table('creator_payment_methods')->where('creator_id', $this->creadorId)
-            ->update(['eligible_from' => null]);
 
-        $this->actingAs($this->usuarioCon('admin'))
-            ->post("/creadores/{$this->uuid}/activar")->assertSessionHas('aviso');
+        $this->expectException(QueryException::class);
 
-        $this->assertSame('pending', DB::table('creators')->where('id', $this->creadorId)->value('status'));
+        DB::table('creator_payment_methods')->insert([
+            'uuid' => (string) Str::uuid(), 'creator_id' => $this->creadorId,
+            'owner_type' => 'creator', 'method_type' => 'bank_account',
+            'country_id' => DB::table('countries')->where('iso2', 'PE')->value('id'),
+            'currency_code' => 'PEN',
+            'account_number_encrypted' => 'enc:yyyy', 'account_number_masked' => '****9999',
+            'account_number_fingerprint' => str_repeat('c', 64),
+            'holder_name' => 'Ana Torres', 'holder_document_type' => 'DNI',
+            'holder_document_number' => '40000001',
+            'created_by_user_id' => $this->capturadorId,
+            'status' => 'verified', 'verified_at' => now(), 'verified_by_user_id' => $this->revisorId,
+            'eligible_from' => null,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
     }
 
-    /** Y todavía dentro del enfriamiento, tampoco. */
+    /** Y todavía dentro del enfriamiento, no cuenta. */
     public function test_medio_de_pago_en_enfriamiento_no_cuenta(): void
     {
-        $this->equiparTodo();
-        DB::table('creator_payment_methods')->where('creator_id', $this->creadorId)
-            ->update(['eligible_from' => now()->addDays(3)]);
+        // Nace ya en enfriamiento: `tg_cpm_inmutable` no deja moverle la fecha
+        // despues, que es exactamente lo que hacia la version anterior de este
+        // test y lo que BR-FIN-006 vino a impedir.
+        $this->equiparTodo(elegibleDesde: now()->addDays(3)->toDateTimeString());
 
         $this->actingAs($this->usuarioCon('admin'))
             ->post("/creadores/{$this->uuid}/activar")->assertSessionHas('aviso');
