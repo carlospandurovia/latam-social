@@ -10,4 +10,5 @@ return [
     // rechazaria con razon. Las migraciones si las carga Shared porque se
     // localizan por RUTA, no importando clases.
     App\Modules\Core\Providers\CoreServiceProvider::class,
+    App\Modules\Identity\Providers\IdentityServiceProvider::class,
 ];
