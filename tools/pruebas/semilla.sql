@@ -22,7 +22,18 @@ INSERT INTO users (uuid,name,user_type,email,password,status,created_at) VALUES
  (UUID(),'Aprobador',   'internal','aprob@ejemplo.test','$2y$12$0000000000000000000000u3SinValorRealNoEsUnaClave00','active',NOW(3));
 
 INSERT INTO files (uuid,disk,path,original_name,mime_type,size_bytes,checksum_sha256,visibility,purpose,created_at) VALUES
- (UUID(),'local','pruebas/comprobante.pdf','comprobante.pdf','application/pdf',1024,REPEAT('a',64),'private','invoice',NOW(3));
+ (UUID(),'local','pruebas/comprobante.pdf','comprobante.pdf','application/pdf',1024,REPEAT('a',64),'private','invoice',NOW(3)),
+ -- 3.5: el documento de identidad y la evidencia de la aceptacion de terminos.
+ -- Sin ellos un creador no puede estar activo, y la semilla trae creadores
+ -- activos: si estos archivos faltan, la semilla no carga. Es a proposito.
+ (UUID(),'local','pruebas/dni.pdf','dni.pdf','application/pdf',2048,REPEAT('b',64),'private','identity_document',NOW(3)),
+ (UUID(),'local','pruebas/aceptacion.pdf','aceptacion.pdf','application/pdf',512,REPEAT('c',64),'private','terms_evidence',NOW(3));
+
+-- 3.5 / DEC-059: los terminos vigentes. `effective_to IS NULL` es lo que los
+-- hace los vigentes; publicar los siguientes cierra estos.
+INSERT INTO terms_versions (uuid,audience,code,version,title,body,content_sha256,effective_from,created_at)
+ VALUES (UUID(),'creator','creator_terms','2026.1','Terminos del creador',
+   'Texto de prueba de los terminos del creador.',REPEAT('d',64),'2026-01-01',NOW(3));
 
 INSERT INTO platform_brands (uuid,code,name,is_active,created_at) VALUES
  (UUID(),'LATAM','LATAM Social',1,NOW(3));
@@ -47,14 +58,36 @@ INSERT INTO client_tax_profiles (client_organization_id,country_id,legal_name,ta
 INSERT INTO client_brands (uuid,client_organization_id,name,slug,status,created_at)
  SELECT UUID(),id,'Demo Brand','demo-brand','active',NOW(3) FROM client_organizations WHERE client_code='CLI-0001';
 
+-- 3.5: un creador activo YA NO se declara activo y punto. `ck_creators_activation`
+-- exige fecha y `ck_creators_active_identity` exige identidad verificada, que a
+-- su vez exige revisor y documento adjunto (`ck_creators_identity_evidence`).
+-- Antes de 3.5 estas dos filas decian 'active' sin nada detras y la base las
+-- aceptaba; ahora, si se le quita cualquiera de estos datos, la semilla no carga.
 INSERT INTO creators (uuid,first_name,last_name,display_name,birth_date,email,country_id,
-   document_country_code,document_type,document_number,preferred_currency_code,status,created_at)
- SELECT UUID(),'Ana','Torres','anatorres','1998-05-12','ana@ejemplo.test',id,'PE','DNI','40000001','PEN','active',NOW(3)
- FROM countries WHERE iso2='PE';
+   document_country_code,document_type,document_number,preferred_currency_code,status,activated_at,
+   identity_verified_at,identity_verified_by_user_id,identity_document_file_id,created_at)
+ SELECT UUID(),'Ana','Torres','anatorres','1998-05-12','ana@ejemplo.test',c.id,'PE','DNI','40000001','PEN','active',NOW(3),
+   NOW(3),u.id,f.id,NOW(3)
+ FROM countries c, users u, files f
+ WHERE c.iso2='PE' AND u.email='aprob@ejemplo.test' AND f.purpose='identity_document';
 INSERT INTO creators (uuid,first_name,last_name,display_name,birth_date,email,country_id,
-   document_country_code,document_type,document_number,preferred_currency_code,status,created_at)
- SELECT UUID(),'Luis','Vega','luisvega','1995-02-03','luis@ejemplo.test',id,'PE','DNI','40000002','PEN','active',NOW(3)
- FROM countries WHERE iso2='PE';
+   document_country_code,document_type,document_number,preferred_currency_code,status,activated_at,
+   identity_verified_at,identity_verified_by_user_id,identity_document_file_id,created_at)
+ SELECT UUID(),'Luis','Vega','luisvega','1995-02-03','luis@ejemplo.test',c.id,'PE','DNI','40000002','PEN','active',NOW(3),
+   NOW(3),u.id,f.id,NOW(3)
+ FROM countries c, users u, files f
+ WHERE c.iso2='PE' AND u.email='aprob@ejemplo.test' AND f.purpose='identity_document';
+
+-- Y la aceptacion de terminos de los dos, registrada por un revisor con la
+-- evidencia adjunta: el canal no es 'portal', asi que `ck_terms_acceptances_backing`
+-- obliga a que haya quien lo registro y archivo que lo respalde.
+INSERT INTO terms_acceptances (uuid,terms_version_id,subject_type,subject_id,channel,
+   recorded_by_user_id,evidence_file_id,evidence_note,accepted_at,created_at)
+ SELECT UUID(),tv.id,'creator',cr.id,'email',u.id,f.id,'Correo de conformidad archivado',NOW(3),NOW(3)
+ FROM terms_versions tv, creators cr, users u, files f
+ WHERE tv.code='creator_terms' AND tv.effective_to IS NULL
+   AND cr.display_name IN ('anatorres','luisvega')
+   AND u.email='aprob@ejemplo.test' AND f.purpose='terms_evidence';
 
 INSERT INTO creator_payment_methods (uuid,creator_id,owner_type,method_type,country_id,currency_code,
    bank_name,account_type,account_number_encrypted,account_number_masked,account_number_fingerprint,

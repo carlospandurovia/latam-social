@@ -25,4 +25,28 @@ return [
         // repositorio termina siempre en producción.
         'clave' => env('ADMIN_PASSWORD'),
     ],
+
+    /*
+     * Archivos subidos (iteración 3.5).
+     *
+     * Documentos de identidad y evidencias legales. El disco por defecto es el
+     * privado del propio servidor; en producción esto pasa a S3 sin tocar
+     * código, que es justo el motivo de que sea configuración.
+     */
+    'archivos' => [
+        'disco' => env('LATAM_FILES_DISK', 'local'),
+        'max_kb' => (int) env('LATAM_FILES_MAX_KB', 8192),
+    ],
+
+    /*
+     * Términos y condiciones (iteración 3.5, DEC-059).
+     *
+     * El CÓDIGO del documento, no su versión: la versión vigente la decide la
+     * tabla `terms_versions` (`effective_to IS NULL`). Poner aquí la versión
+     * sería tener la misma verdad en dos sitios, y uno de los dos se quedaría
+     * viejo.
+     */
+    'terminos' => [
+        'creador' => env('LATAM_TERMS_CREATOR_CODE', 'creator_terms'),
+    ],
 ];

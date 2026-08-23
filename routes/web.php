@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Modules\Core\Http\Controllers\BitacoraController;
 use App\Modules\Core\Http\Controllers\CatalogosController;
 use App\Modules\Core\Http\Controllers\PanelController;
+use App\Modules\Creator\Http\Controllers\ActivacionController;
 use App\Modules\Creator\Http\Controllers\CreadoresController;
 use App\Modules\Creator\Http\Controllers\SolicitudesController;
 use App\Modules\Identity\Http\Controllers\AccesoController;
@@ -74,4 +75,32 @@ Route::middleware('auth')->group(function (): void {
         ->middleware('permiso:creator.manage')
         ->whereUuid('uuid')
         ->name('creadores.update');
+
+    // ---- La puerta de activación (iteración 3.5, BR-CREATOR-006) ----------
+    //
+    // Dos permisos distintos y no uno. Registrar evidencia (cotejar un DNI,
+    // archivar el correo donde el creador aceptó los términos) es trabajo de
+    // reclutamiento; activar es la decisión que le abre las campañas y los
+    // pagos. Que hoy los tengan los mismos roles (DEC-060) no es motivo para
+    // fundirlos: separarlos después obliga a repasar cada ruta, y separarlos
+    // ahora no cuesta nada.
+    Route::get('/creadores/{uuid}/activacion', [ActivacionController::class, 'show'])
+        ->middleware('permiso:creator.activate,creator.verify')
+        ->whereUuid('uuid')
+        ->name('creadores.activacion');
+
+    Route::post('/creadores/{uuid}/identidad', [ActivacionController::class, 'verificarIdentidad'])
+        ->middleware('permiso:creator.verify')
+        ->whereUuid('uuid')
+        ->name('creadores.identidad');
+
+    Route::post('/creadores/{uuid}/terminos', [ActivacionController::class, 'registrarTerminos'])
+        ->middleware('permiso:creator.verify')
+        ->whereUuid('uuid')
+        ->name('creadores.terminos');
+
+    Route::post('/creadores/{uuid}/activar', [ActivacionController::class, 'activar'])
+        ->middleware('permiso:creator.activate')
+        ->whereUuid('uuid')
+        ->name('creadores.activar');
 });

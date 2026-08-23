@@ -25,6 +25,10 @@ final class VerificarEsquemaCommand extends Command
         'domain_events', 'status_transitions', 'audit_logs',
         'ledger_entries', 'xp_entries', 'metric_snapshots',
         'social_account_snapshots', 'deliverable_versions', 'agreement_amendments',
+        // 3.5: aceptar unos terminos es un hecho fechado. Si algun dia alguien
+        // le anade `updated_at`, esta puerta lo para: una aceptacion editable
+        // no prueba nada.
+        'terms_acceptances',
     ];
 
     /** Tablas del framework que no seguimos nosotros. */

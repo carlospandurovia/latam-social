@@ -16,14 +16,25 @@
 @endif
 
 {{-- El botón solo aparece si además se puede: el menú acompaña, la ruta manda. --}}
-@can('creator.manage')
-  <div class="mb-5">
+<div class="mb-5 flex flex-wrap gap-3">
+  @can('creator.manage')
     <a href="{{ route('creadores.edit', $creador->uuid) }}"
        class="inline-block px-4 py-2 rounded-xl bg-marca-500 text-white text-sm font-medium hover:opacity-90">
       Editar datos de contacto
     </a>
-  </div>
-@endcan
+  @endcan
+
+  {{-- 3.5: la puerta hacia `active`. Se enseña siempre que el creador esté
+       pendiente, porque no verla es la razón de que nadie saliera de ahí. --}}
+  @if ($creador->status === 'pending')
+    @canany(['creator.activate', 'creator.verify'])
+      <a href="{{ route('creadores.activacion', $creador->uuid) }}"
+         class="inline-block px-4 py-2 rounded-xl border border-emerald-300 bg-emerald-50 text-emerald-800 text-sm font-medium hover:bg-emerald-100">
+        Revisar activación
+      </a>
+    @endcanany
+  @endif
+</div>
 
   <a href="{{ route('creadores.index') }}" class="text-sm text-marca-600 hover:underline">&larr; Volver al listado</a>
 
@@ -39,6 +50,10 @@
           'Edad' => $creador->edad.' años',
           'País' => $creador->pais,
           'Estado' => $creador->status,
+          'Identidad' => $creador->identity_verified_at
+              ? 'verificada '.$creador->identity_verified_at
+              : 'sin verificar',
+          'Activo desde' => $creador->activated_at ?: '—',
           'Plazo de pago' => $creador->payment_term_days.' días',
           'Moneda' => $creador->preferred_currency_code,
         ] as $k => $v)

@@ -695,6 +695,48 @@ impecable. Simplemente **la mitad de las reglas que declara no existen en ese se
 
 ---
 
+### DEC-058 — La identidad verificada es evidencia, no una casilla
+
+| | |
+|---|---|
+| **Decisión** | Verificar la identidad de un creador escribe **tres** columnas en `creators`: cuándo, **quién** y **con qué documento archivado**. Un `CHECK` obliga a que vayan las tres o ninguna. |
+| **El hueco que cierra** | `BR-CREATOR-006` exige «identidad verificada» desde la iteración 2.1 y **no había dónde anotarlo**. Lo único parecido era `identity_gate`, que es una columna generada para que dos creadores no compartan documento — nada que ver. Una condición que no se puede registrar no se comprueba, así que la regla decía otra cosa de la que estaba escrita. |
+| **Alternativa descartada** | Una sola columna booleana `identity_verified`. Dice *«alguien lo miró»* y no dice quién ni con qué. Dentro de dos años eso no se puede defender ante nadie. |
+| **Decisión del negocio** | Consultada expresamente (`§107`, `§56`): el negocio eligió **«marca del revisor + documento adjunto»** frente a un simple indicador. |
+| **Lo que además blinda** | `ck_creators_active_identity`: un creador `active` sin identidad verificada **lo rechaza la base**, no la aplicación. De las cinco condiciones de `BR-CREATOR-006` es la única que vive en la propia fila y por tanto la única que un `CHECK` puede imponer. Que solo se pueda blindar una no es razón para no blindarla: un `UPDATE` a mano en una consola queda fuera. |
+| **De paso** | `ck_creators_activation` obliga a que un creador activo tenga `activated_at`. La columna existía desde 2.3 y era decorativa: las dos filas «activas» de la semilla de pruebas no tenían fecha y la base las aceptaba. |
+| **Estado** | ADOPTADA e implementada (2026-08-23, iteración 3.5) |
+
+---
+
+### DEC-059 — Se acepta una versión de los términos, no una página
+
+| | |
+|---|---|
+| **Decisión** | Dos tablas: `terms_versions` (documento, versión, vigencia y **huella `sha256`** del contenido) y `terms_acceptances` (**solo INSERT**: quién aceptó qué versión, cuándo, por qué canal, con qué evidencia y quién lo registró). |
+| **El hueco que cierra** | Dos reglas escritas desde la fase 1 sin ninguna tabla detrás: `BR-CREATOR-006` («aceptación vigente de los términos») y `BR-PRIV-001` («cada consentimiento se registra con su texto versionado, fecha, canal y evidencia»). Busqué `terms`, `consent` y `accept` en las 62 tablas del modelo: nada. |
+| **Por qué versionar** | Un texto que se edita en su sitio deja todas las aceptaciones anteriores apuntando a algo que ya no existe. Quien aceptó en enero aceptó otra cosa, y no hay forma de demostrar cuál. |
+| **NO hay revocación, y es deliberado** | `terms_acceptances` no tiene `revoked_at`. Lo vigente es *la aceptación de la versión vigente*: publicar unos términos nuevos cierra los anteriores y, en ese instante, todas las aceptaciones viejas dejan de contar **solas**. Es exactamente lo que se compra al versionar; un `revoked_at` sería pagarlo dos veces y confiar en que alguien se acuerde de la segunda. |
+| **«Aceptó» no es la palabra de quien teclea** | `ck_terms_acceptances_backing`: si el canal no es `portal`, hacen falta **revisor y archivo adjunto**. Y `ck_terms_acceptances_portal` cierra el atajo evidente —marcar `portal` para librarse de adjuntar nada— exigiendo que en el portal no haya nadie registrando en nombre de otro. |
+| **Decisión del negocio** | Consultada expresamente: el negocio eligió **«tabla versionada; el revisor registra la aceptación»**. Cuando exista el portal del creador, la misma tabla se llena sola con `channel='portal'` y sin operador. No habrá que tocar nada. |
+| **Los términos NO se siembran** | Sería cómodo dejar un texto de relleno en `CimientosSeeder` para desbloquear la puerta. Sería también un texto inventado por el equipo técnico convertido en «lo que el creador aceptó», que es lo que `§56` prohíbe. En su lugar hay `php artisan terminos:publicar`, que lo hace quien tiene el documento legal delante. Ver **T-09**. |
+| **Estado** | ADOPTADA e implementada (2026-08-23, iteración 3.5) |
+
+---
+
+### DEC-060 — Verificar y activar son permisos distintos, pero hoy el mismo rol
+
+| | |
+|---|---|
+| **Decisión** | Dos permisos: `creator.verify` (registrar evidencia de identidad y de términos) y `creator.activate` (activar al creador). Ambos se conceden hoy a `admin` y a `campaign_manager`. **No** se exige que sean personas distintas. |
+| **Por qué separados** | Registrar evidencia es trabajo de reclutamiento; activar abre las campañas y los pagos. Fundirlos ahora no ahorra nada y separarlos después obligaría a repasar cada ruta. |
+| **Por qué sin segregación de personas** | El equipo de reclutamiento es pequeño. Exigir dos personas por cada alta pararía el embudo, y el daño de un error aquí es reversible: se suspende al creador. La segregación estricta se reserva para el dinero (`DEC-044`, `BR-FIN-005`), donde el daño no se deshace. |
+| **A revisar si** | El volumen de altas crece o aparece un incidente de identidad falsa. La restricción sería idéntica a la de los lotes de pago y el modelo ya la sabe expresar. |
+| **Lo que sí queda separado** | `finance` **no** puede activar, aunque vea datos fiscales y bancarios (`DEC-053`). Hay una prueba que lo fija. |
+| **Estado** | ADOPTADA (2026-08-23, iteración 3.5) — decisión de negocio revisable |
+
+---
+
 ## Decisiones pendientes de información del negocio
 
 | # | Pregunta | Bloquea |
@@ -738,6 +780,8 @@ impecable. Simplemente **la mitad de las reglas que declara no existen en ese se
 | ~~Q-42~~ | ✅ **RESUELTA (2026-08-22):** se factura a todos los países **desde Perú**. Ver `DEC-047`. Los países se resuelven uno a uno más adelante; las tablas específicas por país se crearán en su momento | — |
 | **Q-44** | ⚠️ **§56 — nuevo, abierto por `DEC-047`.** ¿Los servicios de marketing de influencers prestados a un cliente **no domiciliado** califican como **exportación de servicios** (sin IGV), o van gravados al 18 %? Depende de las condiciones concurrentes del art. 33-A de la Ley del IGV y de la lista de servicios aplicable, **cuya vigencia he encontrado contradicha entre fuentes**. El modelo admite las cuatro opciones y no fuerza ninguna. **Requiere contador** | Antes de la primera factura al exterior |
 | ~~Q-45~~ | ✅ **RESUELTA (2026-08-22):** opción **B** — sin datos fiscales no hay alta, pero se acompaña al creador a formalizarse. Ver `DEC-049`. El pago a un tercero **no se implementa**; el análisis queda en `docs/fase-2/2.14-PAGO-A-TERCEROS.md` | — |
+| **Q-46** | ⚠️ **§56 — nuevo, abierto por `DEC-059`.** Cuando se publique una **versión nueva de los términos**, ¿qué pasa con los creadores **ya activos**? Hoy el sistema **no los desactiva**: siguen activos con la aceptación de la versión anterior. Las opciones son (a) dejarlo así y pedir la nueva aceptación solo la próxima vez que hagan algo relevante, (b) bloquear invitaciones hasta que re-acepten, (c) suspenderlos. Tiene consecuencias legales y operativas, y **no lo decido yo** | Antes de publicar la segunda versión de los términos |
+| **T-09** | 📋 **Publicar la primera versión real de los términos del creador**, revisada legalmente, con `php artisan terminos:publicar`. **Ningún creador puede activarse hasta entonces** — la pantalla lo dice explícitamente | Bloquea toda activación |
 | Q-29 | ¿Se aprueba la propuesta tipográfica (Sora + Plus Jakarta Sans + IBM Plex Mono), o hay una tipografía corporativa ya comprada? | Iteración 3.2 |
 | Q-30 | ¿Existe versión editable del wordmark (AI/Figma) con la tipografía real que usó el diseñador? Si la hay, sustituye a mis contornos. | Calidad del logotipo |
 | Q-31 | ¿Se sustituye el kit original por las versiones corregidas, o conviven? Recomiendo sustituir: dos favicon distintos garantizan que alguien use el roto. | Gobernanza de marca |

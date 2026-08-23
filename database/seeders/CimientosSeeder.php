@@ -165,6 +165,11 @@ final class CimientosSeeder extends Seeder
             ['creator.approve',        'Creator',  'Aprobar o rechazar solicitudes de creador'],
             ['creator.manage',         'Creator',  'Editar los datos de contacto y comerciales del creador'],
             ['creator.view_sensitive', 'Creator',  'Ver datos fiscales y medios de pago'],
+            // 3.5: registrar evidencia y activar son cosas distintas. La
+            // primera es trabajo de reclutamiento; la segunda le abre al creador
+            // las campañas y los pagos.
+            ['creator.verify',         'Creator',  'Registrar identidad verificada y aceptacion de terminos'],
+            ['creator.activate',       'Creator',  'Activar un creador que cumple BR-CREATOR-006'],
             ['client.view',            'Client',   'Ver clientes y marcas'],
             ['client.manage',          'Client',   'Crear y editar clientes'],
             ['finance.view',           'Finance',  'Ver el ledger y los saldos'],
@@ -211,6 +216,12 @@ final class CimientosSeeder extends Seeder
             'campaign_manager' => [
                 'campaign.view', 'campaign.manage', 'campaign.view_margin',
                 'creator.view', 'creator.manage', 'creator.approve',
+                // DEC-060: el mismo rol verifica y activa. El equipo de
+                // reclutamiento es pequeno y exigir dos personas por creador
+                // pararia el alta. La segregacion se reserva para el dinero
+                // (DEC-044, BR-FIN-005), donde el dano de un error no se
+                // deshace.
+                'creator.verify', 'creator.activate',
                 'client.view', 'content.review', 'catalog.view',
             ],
             'finance' => [

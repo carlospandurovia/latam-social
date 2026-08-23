@@ -44,6 +44,7 @@ DOCS = [
     ("it-3-2", "docs/fase-3/3.2-BITACORA-Y-EDICION.md", "Bitácora", "3.2"),
     ("it-3-3", "docs/fase-3/3.3-PANTALLA-DE-BITACORA.md", "Consulta de bitácora", "3.3"),
     ("it-3-4", "docs/fase-3/3.4-BANDEJA-DE-SOLICITUDES.md", "Solicitudes", "3.4"),
+    ("it-3-5", "docs/fase-3/3.5-ACTIVACION.md", "Activación del creador", "3.5"),
 ]
 
 FILE_TO_ANCHOR = {f: a for a, f, _, _ in DOCS}

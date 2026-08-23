@@ -28,7 +28,7 @@
 | **BR-CREATOR-003** | No pueden coexistir dos creadores activos con el mismo email, el mismo documento de identidad (dentro del mismo país) o la misma cuenta social verificada. El sistema advierte antes de crear y exige resolución explícita. | 🟠 |
 | **BR-CREATOR-004** | Toda métrica social declarada por el creador se marca como `self_declared` y se somete a chequeos de coherencia (engagement fuera de rango plausible, saltos de seguidores anómalos). Los resultados anómalos se marcan para revisión humana, nunca se rechazan automáticamente. | 🟠 |
 | **BR-CREATOR-005** | Los datos de audiencia y métricas se almacenan como snapshots con fecha y fuente. Un valor nuevo nunca sobrescribe al anterior. | 🟠 |
-| **BR-CREATOR-006** | Un creador solo pasa a `active` cuando cumple la **completitud operativa mínima**: identidad verificada, al menos una red social validada, datos fiscales según su régimen, al menos un medio de pago verificado y aceptación vigente de los términos. | 🔴 |
+| **BR-CREATOR-006** | Un creador solo pasa a `active` cuando cumple la **completitud operativa mínima**: identidad verificada, al menos una red social validada, datos fiscales según su régimen, al menos un medio de pago verificado y **elegible**, y aceptación vigente de los términos. Si es menor, además tutela activa acreditada (`BR-CREATOR-010`). La evalúa `CompletitudOperativa` y se vuelve a comprobar en el servidor al activar; el botón deshabilitado no es la puerta. *(Implementada en 3.5.)* | 🔴 |
 | **BR-CREATOR-007** | Los cambios en datos fiscales, medios de pago o documento de identidad requieren aprobación interna antes de surtir efecto, y notifican al canal de contacto anterior. | 🔴 |
 | **BR-CREATOR-008** | La tarifa declarada por el creador es una referencia, no un compromiso. El precio vinculante es el **monto acordado congelado** en la participación de campaña. | 🟠 |
 | **BR-CREATOR-009** | Un creador puede solicitar la eliminación de sus datos personales. Se eliminan o anonimizan los datos personales; **se conservan los registros financieros y contractuales** por el plazo legal de retención, disociados en lo posible. | 🔴 |
@@ -37,6 +37,8 @@
 | **BR-CREATOR-013** | **Todo creador debe tener datos fiscales legales y vigentes en su país.** No existe el pago informal. Sin un perfil tributario aprobado no se activa, no recibe invitaciones y no se le liquida. Si el creador no puede o no quiere regularizarse, la solicitud se rechaza. Para menores, el perfil tributario exigido es el **del tutor**, que es quien emite el documento (`BR-CREATOR-010`). | 🔴 |
 | **BR-CREATOR-014** | Antes de rechazar por falta de datos fiscales, el creador permanece en `pending` durante el **periodo de gracia de 30 días** (confirmado por el negocio, configurable) con acompañamiento para regularizarse. El rechazo es la salida del embudo, no la puerta. | 🟠 |
 | **BR-CREATOR-011** | Un creador incluido en la blacklist mantiene sus registros históricos y financieros intactos; la blacklist afecta elegibilidad futura, no el pasado. | 🟠 |
+| **BR-CREATOR-015** | La verificación de identidad se registra con **tres datos inseparables**: cuándo, qué revisor la hizo y qué documento quedó archivado. No existe la marca sin revisor ni sin documento. Un creador `active` sin identidad verificada lo rechaza la propia base de datos, no la aplicación (`DEC-058`). | 🔴 |
+| **BR-CREATOR-016** | La aceptación de términos es de una **versión concreta** del documento y no se borra ni se revoca: se registra con canal, fecha, evidencia y quién la registró. Publicar una versión nueva cierra la anterior y, con ella, deja de estar vigente su aceptación (`DEC-059`). **Los creadores ya activos NO se desactivan al publicar una versión nueva**; la re-aceptación de los activos está abierta en `Q-46`. | 🔴 |
 
 ## Campañas (`BR-CAMPAIGN`)
 
@@ -185,7 +187,7 @@
 
 | ID | Regla | Crit. |
 |---|---|---|
-| **BR-PRIV-001** | Cada consentimiento se registra con su texto versionado, fecha, canal y evidencia. Cambiar los términos requiere una nueva aceptación; nunca se reinterpreta un consentimiento antiguo. | 🔴 |
+| **BR-PRIV-001** | Cada consentimiento se registra con su texto versionado, fecha, canal y evidencia. Cambiar los términos requiere una nueva aceptación; nunca se reinterpreta un consentimiento antiguo. *(Implementada en 3.5: `terms_versions` + `terms_acceptances`. Hasta entonces la regla existía sin ninguna tabla detrás.)* | 🔴 |
 | **BR-PRIV-002** | Se aplica minimización: no se solicita un dato personal sin un uso definido y documentado. | 🟠 |
 | **BR-PRIV-003** | Cada categoría de dato personal tiene un plazo de retención definido y un mecanismo de purga automatizado. | 🟠 |
 | **BR-PRIV-004** | Los datos sensibles (documento de identidad, cuentas bancarias) se cifran en reposo a nivel de aplicación y toda lectura queda auditada. | 🔴 |

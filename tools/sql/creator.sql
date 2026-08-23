@@ -28,6 +28,56 @@ CREATE TABLE files (
   CONSTRAINT ck_files_size CHECK (size_bytes > 0)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- ======================================= D1 Core: terminos y condiciones (3.5)
+-- DEC-059. "El creador acepto los terminos" no significa nada si no consta
+-- CUALES. Un texto que se edita en su sitio deja todas las aceptaciones
+-- anteriores apuntando a algo que ya no existe: se acepta una VERSION, no una
+-- pagina. Por eso la version es una fila con fecha de vigencia y huella, y el
+-- texto no se toca nunca: se publica el siguiente y se cierra el anterior.
+--
+-- Se adelanta aqui, junto a `files`, porque `terms_acceptances` (al final de
+-- este archivo) necesita las dos tablas y ademas los creadores.
+CREATE TABLE terms_versions (
+  id                 BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  uuid               CHAR(36)      NOT NULL,
+  -- A quien obliga el documento. Hoy solo 'creator'; el portal de clientes
+  -- traera el suyo y no se mezclan.
+  audience           VARCHAR(20)   NOT NULL,
+  code               VARCHAR(40)   NOT NULL,
+  version            VARCHAR(20)   NOT NULL,
+  title              VARCHAR(160)  NOT NULL,
+  -- El texto integro, el PDF firmado, o los dos. Uno hace falta: un termino
+  -- sin contenido no se le puede oponer a nadie.
+  body               LONGTEXT      NULL,
+  document_file_id   BIGINT UNSIGNED NULL,
+  -- Huella del contenido publicado. Si alguien edita el texto despues de que
+  -- lo aceptaran, la huella deja de cuadrar y se nota.
+  content_sha256     CHAR(64)      NOT NULL,
+  effective_from     DATE          NOT NULL,
+  -- NULL = es la vigente. Publicar la siguiente cierra esta.
+  effective_to       DATE          NULL,
+  published_by_user_id BIGINT UNSIGNED NULL,
+  created_at         DATETIME(3)   NULL,
+  updated_at         DATETIME(3)   NULL,
+  -- Una sola version vigente por documento. Misma tecnica que el resto del
+  -- modelo: la puerta vale NULL cuando la fila deja de contar, y una fila con
+  -- NULL no colisiona en un indice unico.
+  current_gate TINYINT UNSIGNED
+    GENERATED ALWAYS AS (CASE WHEN effective_to IS NULL THEN 1 ELSE NULL END) STORED,
+  UNIQUE KEY uq_terms_versions_uuid (uuid),
+  UNIQUE KEY uq_terms_versions_version (code, version),
+  UNIQUE KEY uq_terms_versions_current (current_gate, code),
+  KEY ix_terms_versions_audience (audience, effective_from),
+  KEY ix_terms_versions_file (document_file_id),
+  KEY ix_terms_versions_publisher (published_by_user_id),
+  CONSTRAINT fk_terms_versions_file FOREIGN KEY (document_file_id) REFERENCES files(id) ON DELETE RESTRICT,
+  CONSTRAINT fk_terms_versions_publisher FOREIGN KEY (published_by_user_id) REFERENCES users(id) ON DELETE RESTRICT,
+  CONSTRAINT ck_terms_versions_audience CHECK (audience IN ('creator','client')),
+  CONSTRAINT ck_terms_versions_content CHECK (body IS NOT NULL OR document_file_id IS NOT NULL),
+  CONSTRAINT ck_terms_versions_hash CHECK (CHAR_LENGTH(content_sha256) = 64),
+  CONSTRAINT ck_terms_versions_dates CHECK (effective_to IS NULL OR effective_to >= effective_from)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- ============================================== D3 Creator: la solicitud
 -- Efimera, repetible y rechazable. Es la puerta, no el creador (2.1).
 CREATE TABLE creator_applications (
@@ -90,6 +140,19 @@ CREATE TABLE creators (
   locale             VARCHAR(10)   NOT NULL DEFAULT 'es',
   timezone           VARCHAR(64)   NOT NULL DEFAULT 'America/Lima',
   activated_at       DATETIME(3)   NULL,
+  -- ---- Identidad verificada (3.5, DEC-058) --------------------------------
+  -- BR-CREATOR-006 exige "identidad verificada" desde la iteracion 2.1 y hasta
+  -- aqui no habia DONDE anotarlo: `identity_gate` (mas abajo) es una columna
+  -- generada para la unicidad del documento, no una marca de verificacion. Se
+  -- exigia una condicion que nadie podia registrar, asi que en la practica no
+  -- se exigia.
+  --
+  -- Tres columnas y no una: una marca sin quien la puso y sin prueba adjunta
+  -- es una casilla. El CHECK `ck_creators_identity_evidence` obliga a que vayan
+  -- las tres o ninguna.
+  identity_verified_at DATETIME(3) NULL,
+  identity_verified_by_user_id BIGINT UNSIGNED NULL,
+  identity_document_file_id BIGINT UNSIGNED NULL,
   -- BR-CREATOR-009: se anonimiza, no se borra. Los datos financieros quedan.
   anonymized_at      DATETIME(3)   NULL,
   created_at         DATETIME(3)   NULL,
@@ -116,14 +179,33 @@ CREATE TABLE creators (
   KEY ix_creators_application (application_id),
   KEY ix_creators_currency (preferred_currency_code),
   KEY ix_creators_birth (birth_date),
+  KEY ix_creators_identity_verifier (identity_verified_by_user_id),
+  KEY ix_creators_identity_file (identity_document_file_id),
   CONSTRAINT fk_creators_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE RESTRICT,
   CONSTRAINT fk_creators_application FOREIGN KEY (application_id) REFERENCES creator_applications(id) ON DELETE RESTRICT,
   CONSTRAINT fk_creators_country FOREIGN KEY (country_id) REFERENCES countries(id) ON DELETE RESTRICT,
   CONSTRAINT fk_creators_currency FOREIGN KEY (preferred_currency_code) REFERENCES currencies(code) ON DELETE RESTRICT,
+  CONSTRAINT fk_creators_identity_verifier FOREIGN KEY (identity_verified_by_user_id) REFERENCES users(id) ON DELETE RESTRICT,
+  CONSTRAINT fk_creators_identity_file FOREIGN KEY (identity_document_file_id) REFERENCES files(id) ON DELETE RESTRICT,
   CONSTRAINT ck_creators_status CHECK (status IN ('pending','active','suspended','rejected','blacklisted','inactive')),
   CONSTRAINT ck_creators_payment_term CHECK (payment_term_days BETWEEN 0 AND 180),
   CONSTRAINT ck_creators_document_type CHECK (document_type IN ('DNI','CE','RUC','PASSPORT','CC','NIT','CURP','RFC','RUT','SSN','NIE','NIF','OTHER')),
-  CONSTRAINT ck_creators_birth_date CHECK (birth_date > '1920-01-01')
+  CONSTRAINT ck_creators_birth_date CHECK (birth_date > '1920-01-01'),
+  -- La marca de identidad va con quien la puso y con el documento adjunto, o
+  -- no va. Es la diferencia entre evidencia y una casilla marcada.
+  CONSTRAINT ck_creators_identity_evidence CHECK (
+    (identity_verified_at IS NULL AND identity_verified_by_user_id IS NULL AND identity_document_file_id IS NULL)
+    OR (identity_verified_at IS NOT NULL AND identity_verified_by_user_id IS NOT NULL AND identity_document_file_id IS NOT NULL)
+  ),
+  -- Activo exige fecha de activacion. Sin esto `activated_at` era decorativa:
+  -- nada impedia un creador activo sin fecha, y la antiguedad de un creador se
+  -- calcula con esa fecha.
+  CONSTRAINT ck_creators_activation CHECK (status <> 'active' OR activated_at IS NOT NULL),
+  -- De las cinco condiciones de BR-CREATOR-006, esta es la UNICA que vive en
+  -- la propia fila y por tanto la unica que la base puede garantizar sola. Las
+  -- otras cuatro estan en otras tablas y las comprueba `CompletitudOperativa`.
+  -- Que solo se pueda blindar una no es razon para no blindarla.
+  CONSTRAINT ck_creators_active_identity CHECK (status <> 'active' OR identity_verified_at IS NOT NULL)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 ALTER TABLE creator_applications
@@ -259,4 +341,57 @@ CREATE TABLE social_account_snapshots (
   CONSTRAINT ck_sas_source CHECK (source IN ('self_declared','api','manual_review','import')),
   CONSTRAINT ck_sas_engagement CHECK (engagement_rate IS NULL OR (engagement_rate >= 0 AND engagement_rate <= 100)),
   CONSTRAINT ck_sas_extra CHECK (extra IS NULL OR JSON_VALID(extra))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ================================ D3 Creator: aceptacion de terminos (3.5)
+-- DEC-059. Solo INSERT: aceptar es un hecho fechado, no un campo que se pone
+-- y se quita.
+--
+-- No hay columna de revocacion, y es a proposito. La vigencia no se apaga a
+-- mano: se apaga sola al publicar una version nueva, porque lo vigente es la
+-- aceptacion de la version vigente. Eso es justo lo que se compra al versionar
+-- el documento, y por eso no hace falta un `revoked_at` que alguien tendria
+-- que acordarse de poner.
+--
+-- `subject_type` + `subject_id` sin clave foranea, igual que `audit_logs` y
+-- `status_transitions`: el mismo documento lo aceptaran creadores y clientes,
+-- y son tablas distintas. El precio es que la integridad de ese id la sostiene
+-- la aplicacion; el CHECK al menos cierra la lista de tipos.
+CREATE TABLE terms_acceptances (
+  id                 BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  uuid               CHAR(36)      NOT NULL,
+  terms_version_id   BIGINT UNSIGNED NOT NULL,
+  subject_type       VARCHAR(20)   NOT NULL,
+  subject_id         BIGINT UNSIGNED NOT NULL,
+  -- Por donde consta. 'portal' = lo hizo el interesado con su sesion; en todo
+  -- lo demas hay un revisor que lo registra a partir de una evidencia.
+  channel            VARCHAR(20)   NOT NULL,
+  recorded_by_user_id BIGINT UNSIGNED NULL,
+  evidence_file_id   BIGINT UNSIGNED NULL,
+  evidence_note      VARCHAR(255)  NULL,
+  ip_address         VARBINARY(16) NULL,
+  user_agent         VARCHAR(255)  NULL,
+  accepted_at        DATETIME(3)   NOT NULL,
+  created_at         DATETIME(3)   NULL,
+  UNIQUE KEY uq_terms_acceptances_uuid (uuid),
+  -- La misma persona no acepta dos veces la misma version. Si hay version
+  -- nueva, hay fila nueva.
+  UNIQUE KEY uq_terms_acceptances_subject (subject_type, subject_id, terms_version_id),
+  KEY ix_terms_acceptances_version (terms_version_id, accepted_at),
+  KEY ix_terms_acceptances_recorder (recorded_by_user_id),
+  KEY ix_terms_acceptances_file (evidence_file_id),
+  CONSTRAINT fk_terms_acceptances_version FOREIGN KEY (terms_version_id) REFERENCES terms_versions(id) ON DELETE RESTRICT,
+  CONSTRAINT fk_terms_acceptances_recorder FOREIGN KEY (recorded_by_user_id) REFERENCES users(id) ON DELETE RESTRICT,
+  CONSTRAINT fk_terms_acceptances_file FOREIGN KEY (evidence_file_id) REFERENCES files(id) ON DELETE RESTRICT,
+  CONSTRAINT ck_terms_acceptances_subject CHECK (subject_type IN ('creator','client')),
+  CONSTRAINT ck_terms_acceptances_channel CHECK (channel IN ('portal','email','whatsapp','paper','phone')),
+  -- Si no lo hizo el interesado, hay una persona que lo registro y un archivo
+  -- que lo respalda. Sin esto, "acepto" es la palabra de quien tecleo.
+  CONSTRAINT ck_terms_acceptances_backing CHECK (
+    channel = 'portal' OR (recorded_by_user_id IS NOT NULL AND evidence_file_id IS NOT NULL)
+  ),
+  -- Y en el portal nadie acepta en nombre de otro.
+  CONSTRAINT ck_terms_acceptances_portal CHECK (
+    channel <> 'portal' OR recorded_by_user_id IS NULL
+  )
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

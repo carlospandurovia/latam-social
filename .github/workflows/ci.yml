@@ -93,6 +93,7 @@ jobs:
         run: |
           bash tools/pruebas/2.12-contenido.sh latam_ref
           bash tools/pruebas/2.13-finanzas.sh  latam_ref
+          bash tools/pruebas/3.5-activacion.sh latam_ref
 
       # La mitad que importa: produccion es Percona 5.7 y NO aplica los CHECK.
       - name: Restricciones (motor sin CHECK, solo triggers generados)
@@ -106,6 +107,7 @@ jobs:
           mysql -h127.0.0.1 -uroot -proot latam_57 < tools/pruebas/semilla.sql
           bash tools/pruebas/2.12-contenido.sh latam_57
           bash tools/pruebas/2.13-finanzas.sh  latam_57
+          bash tools/pruebas/3.5-activacion.sh latam_57
 
       - name: Los dos motores imponen el mismo conjunto de reglas
         run: python3 tools/verificar-equivalencia.py latam_ref latam_57

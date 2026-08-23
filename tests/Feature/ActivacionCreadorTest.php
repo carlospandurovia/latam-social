@@ -1,0 +1,551 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Tests\Feature;
+
+use App\Models\User;
+use App\Modules\Creator\Services\CompletitudOperativa;
+use App\Shared\Auth\Permisos;
+use Database\Seeders\CimientosSeeder;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
+use PHPUnit\Framework\Attributes\DataProvider;
+use Tests\TestCase;
+
+/**
+ * La puerta de activación (iteración 3.5).
+ *
+ * La prueba central es `test_falta_un_requisito_y_no_se_activa`: equipa al
+ * creador con las seis condiciones y luego le quita **una sola**, seis veces.
+ * Escrita al revés —comprobar que con todo puesto sí se activa— pasaría en
+ * verde aunque el servidor no comprobara nada.
+ *
+ * Y la que de verdad ha encontrado errores en este proyecto: la que afirma que
+ * algo **sí se permite**. `test_con_todo_puesto_se_activa` es la que se rompe si
+ * una condición se vuelve imposible de cumplir por un fallo en la consulta, y
+ * ese fallo no lo ve ninguna prueba de rechazo.
+ */
+final class ActivacionCreadorTest extends TestCase
+{
+    use RefreshDatabase;
+
+    private int $creadorId;
+
+    private string $uuid;
+
+    private int $revisorId;
+
+    private int $fileId;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->withoutVite();
+        Storage::fake('local');
+        $this->seed(CimientosSeeder::class);
+        Permisos::olvidar();
+
+        $this->revisorId = (int) User::factory()->create()->id;
+
+        $this->fileId = (int) DB::table('files')->insertGetId([
+            'uuid' => (string) Str::uuid(), 'disk' => 'local', 'path' => 'pruebas/dni.pdf',
+            'original_name' => 'dni.pdf', 'mime_type' => 'application/pdf', 'size_bytes' => 1024,
+            'checksum_sha256' => str_repeat('a', 64), 'visibility' => 'private',
+            'purpose' => 'identity_document', 'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        $this->uuid = (string) Str::uuid();
+        $this->creadorId = $this->crearCreador('1998-05-12');
+    }
+
+    // --------------------------------------------------------------- utilería
+
+    private function crearCreador(string $nacimiento): int
+    {
+        return (int) DB::table('creators')->insertGetId([
+            'uuid' => $this->uuid,
+            'first_name' => 'Ana', 'last_name' => 'Torres', 'display_name' => 'anatorres',
+            'birth_date' => $nacimiento, 'email' => 'ana@ejemplo.test',
+            'country_id' => DB::table('countries')->where('iso2', 'PE')->value('id'),
+            'document_country_code' => 'PE', 'document_type' => 'DNI', 'document_number' => '40000001',
+            'status' => 'pending', 'payment_term_days' => 30, 'preferred_currency_code' => 'PEN',
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+    }
+
+    private function usuarioCon(string $rol): User
+    {
+        $usuario = User::factory()->create();
+        DB::table('role_user')->insert([
+            'user_id' => $usuario->id,
+            'role_id' => DB::table('roles')->where('code', $rol)->value('id'),
+            'assigned_at' => now(),
+        ]);
+        Permisos::olvidar((int) $usuario->id);
+
+        return $usuario;
+    }
+
+    /** Deja al creador cumpliendo las seis condiciones. */
+    private function equiparTodo(): void
+    {
+        $this->ponerIdentidad();
+        $this->ponerRedSocial();
+        $this->ponerFiscal();
+        $this->ponerMedioDePago();
+        $this->ponerTerminos();
+    }
+
+    private function ponerIdentidad(): void
+    {
+        DB::table('creators')->where('id', $this->creadorId)->update([
+            'identity_verified_at' => now(),
+            'identity_verified_by_user_id' => $this->revisorId,
+            'identity_document_file_id' => $this->fileId,
+        ]);
+    }
+
+    private function ponerRedSocial(): void
+    {
+        DB::table('social_accounts')->insert([
+            'uuid' => (string) Str::uuid(), 'creator_id' => $this->creadorId,
+            'platform_id' => DB::table('platforms')->value('id'),
+            'handle' => 'anatorres', 'profile_url' => 'https://ejemplo.test/anatorres',
+            'verification_status' => 'verified', 'verified_at' => now(),
+            'is_primary' => 1, 'is_active' => 1,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+    }
+
+    private function ponerFiscal(): void
+    {
+        DB::table('creator_tax_profiles')->insert([
+            'creator_id' => $this->creadorId,
+            'country_id' => DB::table('countries')->where('iso2', 'PE')->value('id'),
+            'tax_regime_code' => 'RER', 'tax_id_type' => 'RUC', 'tax_id_number' => '10400000012',
+            'issued_document_type' => 'recibo_honorarios',
+            // DEC-048: aprobar con la retención sin decidir lo impide un CHECK.
+            'withholding_status' => 'not_applicable', 'withholding_rate' => 0,
+            'status' => 'approved', 'approved_by_user_id' => $this->revisorId, 'approved_at' => now(),
+            'valid_from' => '2026-01-01', 'created_at' => now(), 'updated_at' => now(),
+        ]);
+    }
+
+    private function ponerMedioDePago(string $dueno = 'creator', ?int $tutorId = null): void
+    {
+        DB::table('creator_payment_methods')->insert([
+            'uuid' => (string) Str::uuid(), 'creator_id' => $this->creadorId,
+            'owner_type' => $dueno, 'owner_guardian_id' => $tutorId,
+            'method_type' => 'bank_account',
+            'country_id' => DB::table('countries')->where('iso2', 'PE')->value('id'),
+            'currency_code' => 'PEN', 'bank_name' => 'BCP', 'account_type' => 'savings',
+            'account_number_encrypted' => 'enc:xxxx', 'account_number_masked' => '****4321',
+            'account_number_fingerprint' => str_repeat('b', 64),
+            'holder_name' => 'Ana Torres', 'holder_document_type' => 'DNI', 'holder_document_number' => '40000001',
+            'status' => 'verified', 'verified_at' => now(), 'verified_by_user_id' => $this->revisorId,
+            // BR-FIN-006: ya fuera del enfriamiento.
+            'eligible_from' => now()->subDay(), 'is_default' => 1,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+    }
+
+    private function publicarTerminos(string $version = '2026.1'): int
+    {
+        DB::table('terms_versions')
+            ->where('code', 'creator_terms')
+            ->whereNull('effective_to')
+            ->update(['effective_to' => now()->toDateString()]);
+
+        return (int) DB::table('terms_versions')->insertGetId([
+            'uuid' => (string) Str::uuid(), 'audience' => 'creator', 'code' => 'creator_terms',
+            'version' => $version, 'title' => 'Términos del creador '.$version,
+            'body' => 'Texto de prueba.', 'content_sha256' => hash('sha256', 'Texto de prueba.'.$version),
+            'effective_from' => '2026-01-01', 'created_at' => now(), 'updated_at' => now(),
+        ]);
+    }
+
+    private function ponerTerminos(): void
+    {
+        $versionId = $this->publicarTerminos();
+
+        DB::table('terms_acceptances')->insert([
+            'uuid' => (string) Str::uuid(), 'terms_version_id' => $versionId,
+            'subject_type' => 'creator', 'subject_id' => $this->creadorId,
+            'channel' => 'email', 'recorded_by_user_id' => $this->revisorId,
+            'evidence_file_id' => $this->fileId, 'evidence_note' => 'Correo archivado',
+            'accepted_at' => now(), 'created_at' => now(),
+        ]);
+    }
+
+    private function ponerTutor(string $estado = 'active'): int
+    {
+        return (int) DB::table('creator_guardians')->insertGetId([
+            'creator_id' => $this->creadorId, 'full_name' => 'Rosa Torres',
+            'relationship' => 'mother', 'document_country_code' => 'PE',
+            'document_type' => 'DNI', 'document_number' => '09000001',
+            'email' => 'rosa@ejemplo.test',
+            'authorization_file_id' => $this->fileId,
+            'proof_of_relationship_file_id' => $this->fileId,
+            'status' => $estado, 'valid_from' => '2026-01-01',
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+    }
+
+    // ------------------------------------------------------------ autorización
+
+    public function test_solo_quien_puede_verificar_o_activar_ve_la_pantalla(): void
+    {
+        $this->actingAs($this->usuarioCon('content_reviewer'))
+            ->get("/creadores/{$this->uuid}/activacion")->assertForbidden();
+        $this->actingAs($this->usuarioCon('finance'))
+            ->get("/creadores/{$this->uuid}/activacion")->assertForbidden();
+        $this->actingAs($this->usuarioCon('admin'))
+            ->get("/creadores/{$this->uuid}/activacion")->assertOk();
+        $this->actingAs($this->usuarioCon('campaign_manager'))
+            ->get("/creadores/{$this->uuid}/activacion")->assertOk();
+    }
+
+    /**
+     * `finance` ve datos fiscales y bancarios (DEC-053) pero NO decide quién
+     * entra al catálogo. Son autorizaciones distintas y esta prueba lo fija.
+     */
+    public function test_finanzas_no_puede_activar(): void
+    {
+        $this->equiparTodo();
+
+        $this->actingAs($this->usuarioCon('finance'))
+            ->post("/creadores/{$this->uuid}/activar")->assertForbidden();
+
+        $this->assertSame('pending', DB::table('creators')->where('id', $this->creadorId)->value('status'));
+    }
+
+    // ------------------------------------------------------- la puerta en sí
+
+    public function test_con_todo_puesto_se_activa(): void
+    {
+        $this->equiparTodo();
+
+        $this->actingAs($this->usuarioCon('admin'))
+            ->post("/creadores/{$this->uuid}/activar", ['motivo' => 'Revisado por reclutamiento'])
+            ->assertRedirect(route('creadores.show', $this->uuid));
+
+        $creador = DB::table('creators')->where('id', $this->creadorId)->first();
+        $this->assertSame('active', $creador->status);
+        $this->assertNotNull($creador->activated_at, 'ck_creators_activation exige fecha de activación.');
+
+        // El histórico, que no es la bitácora: de aquí salen los tiempos del embudo.
+        $this->assertDatabaseHas('status_transitions', [
+            'entity_type' => 'creator', 'entity_id' => $this->creadorId,
+            'from_status' => 'pending', 'to_status' => 'active',
+            'reason' => 'Revisado por reclutamiento',
+        ]);
+
+        $this->assertDatabaseHas('audit_logs', [
+            'action' => 'creator.activated', 'entity_type' => 'creator', 'entity_id' => $this->creadorId,
+        ]);
+    }
+
+    /** Se congela POR QUÉ se pudo activar, no solo que se activó. */
+    public function test_la_bitacora_guarda_con_que_se_dio_por_buena_la_activacion(): void
+    {
+        $this->equiparTodo();
+        $this->actingAs($this->usuarioCon('admin'))->post("/creadores/{$this->uuid}/activar");
+
+        $entrada = DB::table('audit_logs')->where('action', 'creator.activated')->first();
+        $cambios = json_decode((string) $entrada->changes, true);
+
+        $this->assertIsArray($cambios);
+        $this->assertArrayHasKey('completitud', $cambios);
+        $this->assertArrayHasKey(CompletitudOperativa::MEDIO_PAGO, $cambios['completitud']['despues']);
+    }
+
+    /**
+     * @return array<string, list<string>>
+     */
+    public static function requisitos(): array
+    {
+        return [
+            'sin identidad verificada' => [CompletitudOperativa::IDENTIDAD],
+            'sin red social validada' => [CompletitudOperativa::RED_SOCIAL],
+            'sin datos fiscales aprobados' => [CompletitudOperativa::FISCAL],
+            'sin medio de pago elegible' => [CompletitudOperativa::MEDIO_PAGO],
+            'sin aceptación de términos' => [CompletitudOperativa::TERMINOS],
+        ];
+    }
+
+    /**
+     * LA PRUEBA CENTRAL: se pone todo y se quita **una sola** cosa.
+     */
+    #[DataProvider('requisitos')]
+    public function test_falta_un_requisito_y_no_se_activa(string $codigo): void
+    {
+        $this->equiparTodo();
+
+        match ($codigo) {
+            CompletitudOperativa::IDENTIDAD => DB::table('creators')->where('id', $this->creadorId)->update([
+                'identity_verified_at' => null,
+                'identity_verified_by_user_id' => null,
+                'identity_document_file_id' => null,
+            ]),
+            CompletitudOperativa::RED_SOCIAL => DB::table('social_accounts')
+                ->where('creator_id', $this->creadorId)->update(['verification_status' => 'pending', 'verified_at' => null]),
+            CompletitudOperativa::FISCAL => DB::table('creator_tax_profiles')
+                ->where('creator_id', $this->creadorId)->update(['status' => 'rejected']),
+            CompletitudOperativa::MEDIO_PAGO => DB::table('creator_payment_methods')
+                ->where('creator_id', $this->creadorId)->update(['status' => 'pending', 'verified_at' => null, 'verified_by_user_id' => null]),
+            CompletitudOperativa::TERMINOS => DB::table('terms_acceptances')
+                ->where('subject_id', $this->creadorId)->delete(),
+            default => $this->fail("Requisito desconocido: {$codigo}"),
+        };
+
+        $this->actingAs($this->usuarioCon('admin'))
+            ->post("/creadores/{$this->uuid}/activar")
+            ->assertSessionHas('aviso');
+
+        $this->assertSame(
+            'pending',
+            DB::table('creators')->where('id', $this->creadorId)->value('status'),
+            "Se activó al creador faltando «{$codigo}».",
+        );
+        $this->assertDatabaseMissing('status_transitions', [
+            'entity_type' => 'creator', 'entity_id' => $this->creadorId, 'to_status' => 'active',
+        ]);
+    }
+
+    /**
+     * BR-FIN-006. `eligible_from IS NULL` cuenta como NO elegible: nadie ha
+     * fijado desde cuándo se le puede pagar, y el silencio no da permiso.
+     * Es la misma lección que DEC-048 con la retención.
+     */
+    public function test_medio_de_pago_verificado_sin_fecha_de_elegibilidad_no_cuenta(): void
+    {
+        $this->equiparTodo();
+        DB::table('creator_payment_methods')->where('creator_id', $this->creadorId)
+            ->update(['eligible_from' => null]);
+
+        $this->actingAs($this->usuarioCon('admin'))
+            ->post("/creadores/{$this->uuid}/activar")->assertSessionHas('aviso');
+
+        $this->assertSame('pending', DB::table('creators')->where('id', $this->creadorId)->value('status'));
+    }
+
+    /** Y todavía dentro del enfriamiento, tampoco. */
+    public function test_medio_de_pago_en_enfriamiento_no_cuenta(): void
+    {
+        $this->equiparTodo();
+        DB::table('creator_payment_methods')->where('creator_id', $this->creadorId)
+            ->update(['eligible_from' => now()->addDays(3)]);
+
+        $this->actingAs($this->usuarioCon('admin'))
+            ->post("/creadores/{$this->uuid}/activar")->assertSessionHas('aviso');
+
+        $this->assertSame('pending', DB::table('creators')->where('id', $this->creadorId)->value('status'));
+    }
+
+    // -------------------------------------------------------------- menores
+
+    public function test_un_menor_sin_tutela_activa_no_se_activa(): void
+    {
+        DB::table('creators')->where('id', $this->creadorId)->update(['birth_date' => now()->subYears(15)->toDateString()]);
+        $this->equiparTodo();
+
+        $this->actingAs($this->usuarioCon('admin'))
+            ->post("/creadores/{$this->uuid}/activar")->assertSessionHas('aviso');
+
+        $this->assertSame('pending', DB::table('creators')->where('id', $this->creadorId)->value('status'));
+    }
+
+    /**
+     * BR-CREATOR-010: al menor se le paga a nombre del tutor. Un medio de pago
+     * a nombre del propio menor no sirve, aunque esté verificado.
+     */
+    public function test_un_menor_con_medio_de_pago_a_su_nombre_no_se_activa(): void
+    {
+        DB::table('creators')->where('id', $this->creadorId)->update(['birth_date' => now()->subYears(15)->toDateString()]);
+        $this->ponerTutor();
+        $this->equiparTodo();
+
+        $this->actingAs($this->usuarioCon('admin'))
+            ->post("/creadores/{$this->uuid}/activar")->assertSessionHas('aviso');
+
+        $this->assertSame('pending', DB::table('creators')->where('id', $this->creadorId)->value('status'));
+    }
+
+    public function test_un_menor_con_tutela_y_cuenta_del_tutor_si_se_activa(): void
+    {
+        DB::table('creators')->where('id', $this->creadorId)->update(['birth_date' => now()->subYears(15)->toDateString()]);
+        $tutorId = $this->ponerTutor();
+
+        $this->ponerIdentidad();
+        $this->ponerRedSocial();
+        $this->ponerFiscal();
+        $this->ponerMedioDePago('guardian', $tutorId);
+        $this->ponerTerminos();
+
+        $this->actingAs($this->usuarioCon('admin'))->post("/creadores/{$this->uuid}/activar");
+
+        $this->assertSame('active', DB::table('creators')->where('id', $this->creadorId)->value('status'));
+    }
+
+    // ------------------------------------------------------------- términos
+
+    /**
+     * LA PROPIEDAD QUE JUSTIFICA VERSIONAR (DEC-059): publicar unos términos
+     * nuevos deja pendiente a todo el mundo, sin revocar nada y sin que nadie
+     * tenga que acordarse de invalidar las aceptaciones viejas.
+     */
+    public function test_publicar_una_version_nueva_deja_la_aceptacion_anterior_fuera_de_vigencia(): void
+    {
+        $this->equiparTodo();
+
+        $requisitos = CompletitudOperativa::revisar($this->creadorId);
+        $this->assertTrue(CompletitudOperativa::completa($requisitos));
+
+        $this->publicarTerminos('2026.2');
+
+        $requisitos = CompletitudOperativa::revisar($this->creadorId);
+        $this->assertFalse(CompletitudOperativa::completa($requisitos));
+        $this->assertContains('Aceptación vigente de los términos', CompletitudOperativa::pendientes($requisitos));
+    }
+
+    /** Sin términos publicados no es culpa del creador, y el mensaje lo dice. */
+    public function test_sin_terminos_publicados_el_requisito_falla_y_se_explica(): void
+    {
+        $encontrado = false;
+
+        foreach (CompletitudOperativa::revisar($this->creadorId) as $r) {
+            if ($r->codigo !== CompletitudOperativa::TERMINOS) {
+                continue;
+            }
+
+            $encontrado = true;
+            $this->assertFalse($r->cumple);
+            // El mensaje apunta a quien puede resolverlo, que no es el creador.
+            $this->assertStringContainsString('plataforma', $r->detalle);
+        }
+
+        $this->assertTrue($encontrado, 'CompletitudOperativa dejo de evaluar los terminos.');
+    }
+
+    public function test_registrar_una_aceptacion_exige_evidencia_y_deja_rastro(): void
+    {
+        $this->publicarTerminos();
+
+        $this->actingAs($this->usuarioCon('admin'))
+            ->post("/creadores/{$this->uuid}/terminos", [
+                'channel' => 'email',
+                'accepted_at' => now()->subHour()->format('Y-m-d\TH:i'),
+                'evidencia' => UploadedFile::fake()->create('correo.pdf', 20, 'application/pdf'),
+                'confirma_revision' => '1',
+            ])->assertRedirect(route('creadores.activacion', $this->uuid));
+
+        $aceptacion = DB::table('terms_acceptances')->where('subject_id', $this->creadorId)->first();
+        $this->assertNotNull($aceptacion);
+        $this->assertNotNull($aceptacion->evidence_file_id, 'ck_terms_acceptances_backing exige evidencia.');
+        $this->assertNotNull($aceptacion->recorded_by_user_id);
+        $this->assertDatabaseHas('audit_logs', ['action' => 'creator.terms_accepted']);
+    }
+
+    public function test_no_se_registra_una_aceptacion_sin_evidencia(): void
+    {
+        $this->publicarTerminos();
+
+        $this->actingAs($this->usuarioCon('admin'))
+            ->post("/creadores/{$this->uuid}/terminos", [
+                'channel' => 'email',
+                'accepted_at' => now()->subHour()->format('Y-m-d\TH:i'),
+                'confirma_revision' => '1',
+            ])->assertSessionHasErrors('evidencia');
+
+        $this->assertDatabaseCount('terms_acceptances', 0);
+    }
+
+    /** No se puede haber aceptado un documento antes de que existiera. */
+    public function test_no_se_acepta_una_version_antes_de_su_entrada_en_vigor(): void
+    {
+        $this->publicarTerminos();
+
+        $this->actingAs($this->usuarioCon('admin'))
+            ->post("/creadores/{$this->uuid}/terminos", [
+                'channel' => 'email',
+                'accepted_at' => '2025-06-01T10:00',
+                'evidencia' => UploadedFile::fake()->create('correo.pdf', 20, 'application/pdf'),
+                'confirma_revision' => '1',
+            ])->assertSessionHas('aviso');
+
+        $this->assertDatabaseCount('terms_acceptances', 0);
+    }
+
+    // ------------------------------------------------------------- identidad
+
+    public function test_verificar_identidad_guarda_las_tres_columnas_y_el_archivo(): void
+    {
+        $this->actingAs($this->usuarioCon('admin'))
+            ->post("/creadores/{$this->uuid}/identidad", [
+                'documento' => UploadedFile::fake()->create('dni.pdf', 30, 'application/pdf'),
+                'confirma_cotejo' => '1',
+                'nota' => 'DNI cotejado contra la ficha',
+            ])->assertRedirect(route('creadores.activacion', $this->uuid));
+
+        $creador = DB::table('creators')->where('id', $this->creadorId)->first();
+        $this->assertNotNull($creador->identity_verified_at);
+        $this->assertNotNull($creador->identity_verified_by_user_id);
+        $this->assertNotNull($creador->identity_document_file_id);
+
+        $archivo = DB::table('files')->where('id', $creador->identity_document_file_id)->first();
+        $this->assertSame('identity_document', $archivo->purpose);
+        $this->assertSame('private', $archivo->visibility);
+        // La huella se calcula del archivo guardado, no del temporal.
+        $this->assertSame(64, strlen((string) $archivo->checksum_sha256));
+        Storage::disk('local')->assertExists($archivo->path);
+    }
+
+    public function test_no_se_verifica_la_identidad_sin_confirmar_el_cotejo(): void
+    {
+        $this->actingAs($this->usuarioCon('admin'))
+            ->post("/creadores/{$this->uuid}/identidad", [
+                'documento' => UploadedFile::fake()->create('dni.pdf', 30, 'application/pdf'),
+            ])->assertSessionHasErrors('confirma_cotejo');
+
+        $this->assertNull(DB::table('creators')->where('id', $this->creadorId)->value('identity_verified_at'));
+    }
+
+    public function test_no_se_admite_un_ejecutable_disfrazado_de_pdf(): void
+    {
+        $this->actingAs($this->usuarioCon('admin'))
+            ->post("/creadores/{$this->uuid}/identidad", [
+                'documento' => UploadedFile::fake()->create('malicioso.php', 10, 'application/x-php'),
+                'confirma_cotejo' => '1',
+            ])->assertSessionHasErrors('documento');
+
+        $this->assertDatabaseMissing('files', ['purpose' => 'identity_document', 'original_name' => 'malicioso.php']);
+    }
+
+    // ------------------------------------------------------------ concurrencia
+
+    public function test_no_se_activa_dos_veces(): void
+    {
+        $this->equiparTodo();
+        $usuario = $this->usuarioCon('admin');
+
+        $this->actingAs($usuario)->post("/creadores/{$this->uuid}/activar");
+        $this->actingAs($usuario)->post("/creadores/{$this->uuid}/activar")->assertSessionHas('aviso');
+
+        $this->assertSame(1, DB::table('status_transitions')
+            ->where('entity_type', 'creator')->where('entity_id', $this->creadorId)
+            ->where('to_status', 'active')->count());
+    }
+
+    public function test_la_pantalla_dice_que_falta(): void
+    {
+        $this->actingAs($this->usuarioCon('admin'))
+            ->get("/creadores/{$this->uuid}/activacion")
+            ->assertOk()
+            ->assertSee('No hay ninguna cuenta con la propiedad comprobada.')
+            ->assertSee('No hay perfil tributario aprobado y vigente', false);
+    }
+}

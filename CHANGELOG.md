@@ -2,6 +2,61 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 
+## [Fase 3 · 3.5 — La puerta de activación] — 2026-08-23
+
+### Corregido
+- **`BR-CREATOR-006` exigía cinco condiciones y el modelo solo sabía comprobar
+  tres.** «Identidad verificada» no tenía dónde anotarse y «aceptación vigente de
+  los términos» no tenía **ninguna tabla**. Una condición que no se puede evaluar
+  no falla: no se evalúa. La regla llevaba así desde la iteración 2.1.
+- **`BR-PRIV-001`** («cada consentimiento se registra con su texto versionado,
+  fecha, canal y evidencia») describía desde la fase 1 una tabla que no existía.
+- **`activated_at` era decorativa.** Nada impedía un creador `active` sin fecha de
+  activación; las dos filas activas de la semilla de pruebas no la tenían.
+- **`status_transitions` llevaba vacía desde la 2.4** — el mismo caso que
+  `audit_logs` antes de la 3.2. Activar es una transición de estado y ahora la
+  escribe.
+- **`files` tenía claves foráneas apuntando a una tabla vacía** desde la 2.6.
+  Ahora hay una única puerta de entrada: `App\Shared\Files\Almacen`.
+
+### Añadido
+- `terms_versions` y `terms_acceptances` (`DEC-059`). La aceptación es de una
+  **versión concreta**, con huella `sha256` del contenido. **Sin `revoked_at` a
+  propósito**: publicar una versión nueva deja fuera de vigencia las aceptaciones
+  anteriores sola, que es justo lo que se compra al versionar.
+- `creators.identity_verified_at` / `_by_user_id` / `_document_file_id`
+  (`DEC-058`), con un `CHECK` que obliga a que vayan **las tres o ninguna**.
+- `ck_creators_active_identity` y `ck_creators_activation`: un creador activo sin
+  identidad verificada o sin fecha **lo rechaza la base**, no la aplicación. Un
+  `UPDATE` a mano en una consola queda fuera.
+- `App\Modules\Creator\Services\CompletitudOperativa` — evalúa las seis
+  condiciones (las cinco de `BR-CREATOR-006` más la tutela de `BR-CREATOR-010`) y
+  devuelve **la lista de lo que falta**, no un booleano.
+- Pantalla `/creadores/{uuid}/activacion`: lista de requisitos, formularios de
+  evidencia y activación. Permisos nuevos `creator.verify` y `creator.activate`
+  (`DEC-060`).
+- `php artisan terminos:publicar` — los términos **no se siembran**: un texto
+  inventado por el equipo técnico convertido en «lo que el creador aceptó» es lo
+  que `§56` prohíbe. → **T-09**
+- `App\Shared\Workflow\Transicion` y `App\Shared\Files\Almacen`.
+- `App\Modules\Core\Providers\CoreServiceProvider`: registrar el comando desde
+  `ModuleServiceProvider` habría hecho que la capa `Shared` dependiera de `Core`,
+  y Deptrac lo habría rechazado con razón.
+- `tools/pruebas/3.5-activacion.sh` — **29 aserciones × 2 motores**. Comprueban lo
+  que sigue siendo cierto **sin la aplicación en medio**.
+- 20 pruebas de PHPUnit. La central pone las seis condiciones y quita **una sola**,
+  cinco veces.
+
+### Abierto
+- `Q-46` — qué pasa con los creadores **ya activos** cuando se publica una versión
+  nueva de los términos. Hoy **no se desactivan**. Decisión de negocio.
+- `H-01` — `creator_tax_profiles` no dice si el titular es el creador o su tutor,
+  mientras que `creator_payment_methods` sí lo dice. Ambigüedad en un dato fiscal.
+- `H-02` — `eligible_from` admite `NULL` en un medio de pago ya verificado: «no hay
+  enfriamiento» y «nadie lo ha fijado» son el mismo valor, el mismo fallo que
+  `DEC-048` corrigió en la retención. Mientras tanto, `NULL` cuenta como **no
+  elegible**: el silencio no da permiso.
+
 ## [Fase 3 · 3.4 — Bandeja de solicitudes] — 2026-08-22
 
 ### Añadido

@@ -39,6 +39,47 @@ final class DemoSeeder extends Seeder
             return;
         }
 
+        // 3.5: desde esta iteración un creador «activo» no se declara, se
+        // sostiene. `ck_creators_active_identity` exige identidad verificada, y
+        // esa verificación exige un revisor y un documento archivado. Sin un
+        // usuario en la base no hay revisor posible y la demo no puede montar
+        // creadores activos: se dice y se para, en vez de reventar en un
+        // INSERT con un mensaje que no explica nada.
+        $revisorId = DB::table('users')->orderBy('id')->value('id');
+
+        if ($revisorId === null) {
+            $this->command?->error('No hay ningún usuario. Ejecuta antes: php artisan db:seed');
+
+            return;
+        }
+
+        $documentoId = DB::table('files')->where('purpose', 'demo_identity')->value('id')
+            ?? DB::table('files')->insertGetId([
+                'uuid' => (string) Str::uuid(), 'disk' => 'local',
+                'path' => 'demo/documento-identidad.pdf', 'original_name' => 'documento-identidad.pdf',
+                'mime_type' => 'application/pdf', 'size_bytes' => 1024,
+                'checksum_sha256' => hash('sha256', 'documento de demostracion'),
+                'visibility' => 'private', 'purpose' => 'demo_identity',
+                'uploaded_by_user_id' => $revisorId,
+                'created_at' => $ahora, 'updated_at' => $ahora,
+            ]);
+
+        // DEC-059: unos términos de DEMOSTRACIÓN. El texto real se publica con
+        // `php artisan terminos:publicar` cuando exista revisado por el abogado;
+        // este seeder no corre en producción precisamente para que un texto
+        // inventado no acabe siendo «lo que el creador aceptó».
+        $terminosId = DB::table('terms_versions')->where('code', 'creator_terms')->whereNull('effective_to')->value('id')
+            ?? DB::table('terms_versions')->insertGetId([
+                'uuid' => (string) Str::uuid(), 'audience' => 'creator',
+                'code' => 'creator_terms', 'version' => 'demo-1',
+                'title' => 'Términos del creador (DEMOSTRACIÓN)',
+                'body' => 'Texto de demostración. No tiene valor legal.',
+                'content_sha256' => hash('sha256', 'Texto de demostración. No tiene valor legal.'),
+                'effective_from' => $ahora->copy()->subMonths(6)->toDateString(),
+                'published_by_user_id' => $revisorId,
+                'created_at' => $ahora, 'updated_at' => $ahora,
+            ]);
+
         $creadores = [
             ['Valeria', 'Quispe',  'Vale Quispe',  '1997-03-14', 'valeria@demo.pe', '46112233', 'active',  350.00, 'belleza'],
             ['Diego',   'Ramírez', 'Diego R',      '1995-11-02', 'diego@demo.pe',   '44556677', 'active',  500.00, 'gaming'],
@@ -60,8 +101,36 @@ final class DemoSeeder extends Seeder
                 'document_country_code' => 'PE', 'document_type' => 'DNI', 'document_number' => $doc,
                 'status' => $estado, 'payment_term_days' => 30, 'preferred_currency_code' => 'PEN',
                 'activated_at' => $estado === 'active' ? $ahora : null,
+                // Las tres columnas de identidad van juntas o no van
+                // (`ck_creators_identity_evidence`).
+                'identity_verified_at' => $estado === 'active' ? $ahora : null,
+                'identity_verified_by_user_id' => $estado === 'active' ? $revisorId : null,
+                'identity_document_file_id' => $estado === 'active' ? $documentoId : null,
                 'created_at' => $ahora, 'updated_at' => $ahora,
             ]);
+
+            if ($estado === 'active') {
+                // La aceptación de términos y el histórico de estados. Sin
+                // esto, la pantalla de activación de la demo enseñaría a un
+                // creador activo al que «le faltan requisitos», que es
+                // justamente lo que 3.5 viene a evitar.
+                DB::table('terms_acceptances')->insert([
+                    'uuid' => (string) Str::uuid(), 'terms_version_id' => $terminosId,
+                    'subject_type' => 'creator', 'subject_id' => $creadorId,
+                    'channel' => 'email', 'recorded_by_user_id' => $revisorId,
+                    'evidence_file_id' => $documentoId,
+                    'evidence_note' => 'Conformidad por correo (demostración)',
+                    'accepted_at' => $ahora, 'created_at' => $ahora,
+                ]);
+
+                DB::table('status_transitions')->insert([
+                    'entity_type' => 'creator', 'entity_id' => $creadorId,
+                    'from_status' => 'pending', 'to_status' => 'active',
+                    'actor_user_id' => $revisorId,
+                    'reason' => 'Completitud operativa verificada (BR-CREATOR-006).',
+                    'occurred_at' => $ahora,
+                ]);
+            }
 
             // Nicho principal.
             $categoriaId = DB::table('categories')->where('code', $nicho)->value('id');
@@ -167,5 +236,6 @@ final class DemoSeeder extends Seeder
             .DB::table('client_organizations')->count().' clientes · '
             .DB::table('campaigns')->count().' campañas');
         $this->command?->line('  Camila Flores tiene 16 años: fíjate en su ficha y en la tutela pendiente.');
+        $this->command?->line('  Sebastián Ríos está pendiente: abre «Revisar activación» y verás qué le falta.');
     }
 }
