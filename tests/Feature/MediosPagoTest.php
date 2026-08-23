@@ -72,7 +72,7 @@ final class MediosPagoTest extends TestCase
     }
 
     /**
-     * @param  array<string, mixed>  $cambios
+     * @param array<string, mixed> $cambios
      * @return array<string, mixed>
      */
     private function formulario(array $cambios = []): array

@@ -110,7 +110,7 @@ final class MediosPagoController
                 ->where('status', 'active')
                 ->exists();
 
-            if (! $suyo) {
+            if (!$suyo) {
                 return back()->withInput()->with('aviso', 'Ese tutor no es de este creador o su tutela no está activa.');
             }
         } else {
