@@ -36,3 +36,7 @@ yarn-error.log
 /tools/diagnostico.txt
 /tools/ci-github.txt
 /ci.txt
+
+# Cuarentena. Las herramientas remotas no pueden borrar archivos en tu disco,
+# asi que lo que hay que eliminar se mueve aqui y lo borras tu.
+/_to_delete

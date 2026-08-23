@@ -66,6 +66,52 @@ if ($soloEsta !== null) {
 }
 
 $destino = $raiz.$ds.'tools'.$ds.'diagnostico.txt';
+
+// El archivo se reescribe DESPUES DE CADA PUERTA, no al final.
+//
+// La primera version solo escribia al terminar las cuatro, y con las pruebas
+// tardando un minuto eso dejaba un archivo viejo en disco mientras la ejecucion
+// seguia viva: quien lo abriera leia el resultado de la vez ANTERIOR creyendo
+// que era el de ahora. Un informe obsoleto que parece actual es peor que no
+// tener informe.
+$volcar = static function (array $lineas) use ($destino): void {
+    file_put_contents($destino, implode(PHP_EOL, $lineas).PHP_EOL);
+};
+
+/*
+ * Ejecuta un comando MOSTRANDO la salida mientras ocurre, y ademas la devuelve.
+ *
+ * `exec()` no sirve para esto: no imprime nada hasta que el proceso termina, asi
+ * que las pruebas -que tardan dos minutos- parecian colgadas. Un proceso que
+ * trabaja sin dar senales es indistinguible de uno muerto, y quien mira acaba
+ * cortandolo por si acaso.
+ *
+ * `2>&1` va en el comando y no en un descriptor aparte: asi los errores llegan
+ * mezclados en su orden real, que es como hay que leerlos.
+ *
+ * @return array{0: list<string>, 1: int}
+ */
+$ejecutar = static function (string $comando): array {
+    $tuberias = [];
+    $proceso = proc_open($comando.' 2>&1', [1 => ['pipe', 'w']], $tuberias);
+
+    if (!is_resource($proceso)) {
+        return [['No se pudo lanzar: '.$comando], 127];
+    }
+
+    $lineas = [];
+
+    while (($linea = fgets($tuberias[1])) !== false) {
+        $linea = rtrim($linea, "\r\n");
+        $lineas[] = $linea;
+        echo '  | '.$linea.PHP_EOL;
+    }
+
+    fclose($tuberias[1]);
+
+    return [$lineas, proc_close($proceso)];
+};
+
 $informe = [];
 $resumen = [];
 $fallos = 0;
@@ -76,19 +122,15 @@ $informe[] = 'PHP '.PHP_VERSION.' en '.PHP_OS_FAMILY;
 $informe[] = str_repeat('=', 78);
 
 foreach ($puertas as $clave => $puerta) {
-    echo "  ejecutando: {$puerta['titulo']} ... ";
+    echo PHP_EOL."  == {$puerta['titulo']} ==".PHP_EOL;
 
     $inicio = microtime(true);
-    $lineas = [];
-    $codigo = 0;
-    // `2>&1` en el comando hijo: asi la salida de error llega mezclada en su
-    // orden real, que es como hay que leerla, y no como excepciones aparte.
-    exec($puerta['cmd'].' 2>&1', $lineas, $codigo);
+    [$lineas, $codigo] = $ejecutar($puerta['cmd']);
     $segundos = round(microtime(true) - $inicio, 1);
 
     $estado = $codigo === 0 ? 'OK' : "FALLO (codigo {$codigo})";
     $codigo === 0 or $fallos++;
-    echo $estado." [{$segundos}s]\n";
+    echo "  -> {$estado} [{$segundos}s]".PHP_EOL;
 
     $resumen[] = sprintf('  %-36s %s', $puerta['titulo'], $estado);
 
@@ -103,6 +145,10 @@ foreach ($puertas as $clave => $puerta) {
         $informe[] = '';
         $informe[] = '>>> Se arregla solo con: '.$puerta['arreglo'];
     }
+
+    // Volcado incremental: si la ejecucion se corta o alguien abre el archivo
+    // mientras corre, lo que hay dentro es de ESTA ejecucion.
+    $volcar(array_merge($informe, ['', '(ejecucion en curso: faltan puertas por correr)']));
 }
 
 $informe[] = '';
@@ -112,7 +158,7 @@ $informe = array_merge($informe, $resumen);
 $informe[] = str_repeat('=', 78);
 
 // UTF-8 plano, sin BOM: PHP escribe los bytes tal cual.
-file_put_contents($destino, implode(PHP_EOL, $informe).PHP_EOL);
+$volcar($informe);
 
 echo "\n".implode("\n", $resumen)."\n";
 echo "\n  Salida completa en: tools".$ds."diagnostico.txt\n\n";

@@ -39,6 +39,11 @@ final class ActivacionCreadorTest extends TestCase
 
     private int $revisorId;
 
+    /** Quien CAPTURA el perfil fiscal, que no puede ser quien lo aprueba
+     *  (`ck_ctp_segregation`). Desde 3.6 `created_by_user_id` es obligatorio:
+     *  antes esta prueba aprobaba un perfil que nadie constaba haber capturado. */
+    private int $capturadorId;
+
     private int $fileId;
 
     protected function setUp(): void
@@ -50,6 +55,7 @@ final class ActivacionCreadorTest extends TestCase
         Permisos::olvidar();
 
         $this->revisorId = (int) User::factory()->create()->id;
+        $this->capturadorId = (int) User::factory()->create()->id;
 
         $this->fileId = (int) DB::table('files')->insertGetId([
             'uuid' => (string) Str::uuid(), 'disk' => 'local', 'path' => 'pruebas/dni.pdf',
@@ -131,22 +137,36 @@ final class ActivacionCreadorTest extends TestCase
             'uuid' => (string) Str::uuid(), 'creator_id' => $this->creadorId,
             'platform_id' => DB::table('platforms')->value('id'),
             'handle' => 'anatorres', 'profile_url' => 'https://ejemplo.test/anatorres',
+            // 3.7 / H-05: verificada exige decir COMO y QUIEN. Antes bastaba
+            // la fecha, y una cuenta podia quedar verificada sin constancia de
+            // nada.
             'verification_status' => 'verified', 'verified_at' => now(),
+            'verification_method' => 'bio_code', 'verified_by_user_id' => $this->revisorId,
             'is_primary' => 1, 'is_active' => 1,
             'created_at' => now(), 'updated_at' => now(),
         ]);
     }
 
-    private function ponerFiscal(): void
+    /**
+     * Si se pasa `$tutorId`, el perfil queda a nombre del tutor. Para un menor
+     * eso no es opcional: BR-CREATOR-013 exige el perfil DEL TUTOR, que es quien
+     * emite el comprobante. Antes de 3.6 el modelo no sabia decirlo (H-01) y
+     * aqui valia cualquier perfil aprobado, fuera de quien fuera.
+     */
+    private function ponerFiscal(?int $tutorId = null): void
     {
         DB::table('creator_tax_profiles')->insert([
             'creator_id' => $this->creadorId,
+            'holder_type' => $tutorId === null ? 'creator' : 'guardian',
+            'holder_guardian_id' => $tutorId,
             'country_id' => DB::table('countries')->where('iso2', 'PE')->value('id'),
             'tax_regime_code' => 'RER', 'tax_id_type' => 'RUC', 'tax_id_number' => '10400000012',
             'issued_document_type' => 'recibo_honorarios',
             // DEC-048: aprobar con la retención sin decidir lo impide un CHECK.
             'withholding_status' => 'not_applicable', 'withholding_rate' => 0,
-            'status' => 'approved', 'approved_by_user_id' => $this->revisorId, 'approved_at' => now(),
+            'status' => 'approved',
+            'created_by_user_id' => $this->capturadorId,
+            'approved_by_user_id' => $this->revisorId, 'approved_at' => now(),
             'valid_from' => '2026-01-01', 'created_at' => now(), 'updated_at' => now(),
         ]);
     }
@@ -373,6 +393,16 @@ final class ActivacionCreadorTest extends TestCase
             ->post("/creadores/{$this->uuid}/activar")->assertSessionHas('aviso');
 
         $this->assertSame('pending', DB::table('creators')->where('id', $this->creadorId)->value('status'));
+
+        // Y el motivo del medio de pago tiene que decir la verdad: lo que falta
+        // es el tutor, no la cuenta. Antes decia «no hay ningun medio de pago
+        // registrado» porque la consulta usaba un id centinela que no casaba
+        // con nada.
+        foreach (CompletitudOperativa::revisar($this->creadorId) as $r) {
+            if ($r->codigo === CompletitudOperativa::MEDIO_PAGO) {
+                $this->assertStringContainsString('tutela activa', $r->detalle);
+            }
+        }
     }
 
     /**
@@ -382,8 +412,15 @@ final class ActivacionCreadorTest extends TestCase
     public function test_un_menor_con_medio_de_pago_a_su_nombre_no_se_activa(): void
     {
         DB::table('creators')->where('id', $this->creadorId)->update(['birth_date' => now()->subYears(15)->toDateString()]);
-        $this->ponerTutor();
-        $this->equiparTodo();
+        $tutorId = $this->ponerTutor();
+
+        // Todo correcto MENOS la cuenta, que esta a nombre del menor. Asi lo
+        // que falla es una sola cosa y la prueba dice de verdad lo que afirma.
+        $this->ponerIdentidad();
+        $this->ponerRedSocial();
+        $this->ponerFiscal($tutorId);
+        $this->ponerMedioDePago();
+        $this->ponerTerminos();
 
         $this->actingAs($this->usuarioCon('admin'))
             ->post("/creadores/{$this->uuid}/activar")->assertSessionHas('aviso');
@@ -398,7 +435,7 @@ final class ActivacionCreadorTest extends TestCase
 
         $this->ponerIdentidad();
         $this->ponerRedSocial();
-        $this->ponerFiscal();
+        $this->ponerFiscal($tutorId);
         $this->ponerMedioDePago('guardian', $tutorId);
         $this->ponerTerminos();
 

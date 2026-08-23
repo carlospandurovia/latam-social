@@ -25,6 +25,7 @@ DOCS = [
     ("doc-14", "docs/14-BRAND-AND-DESIGN-SYSTEM.md",       "Marca y diseño",        "14"),
     ("doc-15", "docs/15-ARRANQUE-MVP.md",                  "Arranque del MVP",      "15"),
     ("doc-16", "docs/16-RESPUESTAS-NEGOCIO.md",            "Respuestas del negocio","16"),
+    ("doc-17", "docs/17-BLOQUEOS-OPERATIVOS.md",           "Bloqueos operativos",   "17"),
     ("it-2-1", "docs/fase-2/2.1-ENTIDADES-Y-GLOSARIO.md",  "Entidades y glosario",  "2.1"),
     ("it-2-2", "docs/fase-2/2.2-RELACIONES-Y-CARDINALIDADES.md", "Relaciones", "2.2"),
     ("it-2-3", "docs/fase-2/2.3-NORMALIZACION.md", "Normalización", "2.3"),
@@ -45,6 +46,8 @@ DOCS = [
     ("it-3-3", "docs/fase-3/3.3-PANTALLA-DE-BITACORA.md", "Consulta de bitácora", "3.3"),
     ("it-3-4", "docs/fase-3/3.4-BANDEJA-DE-SOLICITUDES.md", "Solicitudes", "3.4"),
     ("it-3-5", "docs/fase-3/3.5-ACTIVACION.md", "Activación del creador", "3.5"),
+    ("it-3-6", "docs/fase-3/3.6-PERFIL-FISCAL.md", "Perfil fiscal", "3.6"),
+    ("it-3-7", "docs/fase-3/3.7-REDES-SOCIALES.md", "Redes sociales", "3.7"),
 ]
 
 FILE_TO_ANCHOR = {f: a for a, f, _, _ in DOCS}

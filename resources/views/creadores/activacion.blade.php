@@ -47,7 +47,21 @@
           <div class="min-w-0">
             <p class="text-sm font-medium text-slate-800">{{ $r->titulo }}</p>
             <p class="text-sm {{ $r->cumple ? 'text-slate-500' : 'text-rose-700' }}">{{ $r->detalle }}</p>
-            <p class="text-xs text-slate-400 mt-0.5">{{ $r->regla }}</p>
+            <p class="text-xs text-slate-400 mt-0.5">
+              {{ $r->regla }}
+              {{-- Cuando falta algo que SE PUEDE resolver desde el panel, se
+                   enlaza. Un requisito sin camino a resolverlo es la razón de
+                   que la 3.4 dejara a todo el mundo en `pending`. --}}
+              @if (!$r->cumple && $r->codigo === 'fiscal')
+                @can('creator.view_sensitive')
+                  <span class="text-slate-300">·</span>
+                  <a href="{{ route('creadores.fiscal', $creador->uuid) }}" class="text-marca-600 hover:underline">resolver</a>
+                @endcan
+              @elseif (!$r->cumple && $r->codigo === 'red_social')
+                <span class="text-slate-300">·</span>
+                <a href="{{ route('creadores.redes', $creador->uuid) }}" class="text-marca-600 hover:underline">resolver</a>
+              @endif
+            </p>
           </div>
         </li>
       @endforeach

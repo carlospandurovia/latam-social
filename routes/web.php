@@ -7,6 +7,8 @@ use App\Modules\Core\Http\Controllers\CatalogosController;
 use App\Modules\Core\Http\Controllers\PanelController;
 use App\Modules\Creator\Http\Controllers\ActivacionController;
 use App\Modules\Creator\Http\Controllers\CreadoresController;
+use App\Modules\Creator\Http\Controllers\PerfilFiscalController;
+use App\Modules\Creator\Http\Controllers\RedesSocialesController;
 use App\Modules\Creator\Http\Controllers\SolicitudesController;
 use App\Modules\Identity\Http\Controllers\AccesoController;
 use Illuminate\Support\Facades\Route;
@@ -103,4 +105,55 @@ Route::middleware('auth')->group(function (): void {
         ->middleware('permiso:creator.activate')
         ->whereUuid('uuid')
         ->name('creadores.activar');
+
+    // ---- Perfil tributario (iteración 3.6, BR-CREATOR-013) ----------------
+    //
+    // Ver exige `creator.view_sensitive` (DEC-053: son datos fiscales).
+    // Capturar y aprobar son permisos distintos, y además `ck_ctp_segregation`
+    // obliga a que sean dos PERSONAS distintas, no solo dos permisos.
+    Route::get('/creadores/{uuid}/fiscal', [PerfilFiscalController::class, 'index'])
+        ->middleware('permiso:creator.view_sensitive')
+        ->whereUuid('uuid')
+        ->name('creadores.fiscal');
+
+    Route::post('/creadores/{uuid}/fiscal', [PerfilFiscalController::class, 'store'])
+        ->middleware('permiso:creator.tax.manage')
+        ->whereUuid('uuid')
+        ->name('creadores.fiscal.store');
+
+    Route::post('/creadores/{uuid}/fiscal/{id}/aprobar', [PerfilFiscalController::class, 'aprobar'])
+        ->middleware('permiso:creator.tax.approve')
+        ->whereUuid('uuid')->whereNumber('id')
+        ->name('creadores.fiscal.aprobar');
+
+    Route::post('/creadores/{uuid}/fiscal/{id}/rechazar', [PerfilFiscalController::class, 'rechazar'])
+        ->middleware('permiso:creator.tax.approve')
+        ->whereUuid('uuid')->whereNumber('id')
+        ->name('creadores.fiscal.rechazar');
+
+    // ---- Cuentas sociales (iteración 3.7, BR-CREATOR-003/004/005) --------
+    //
+    // Dar de alta una cuenta es `creator.manage`; verificarla es
+    // `creator.verify`, el mismo permiso con el que se coteja un documento de
+    // identidad, porque es el mismo tipo de acto: alguien se hace responsable
+    // de que lo que dice el creador es cierto.
+    Route::get('/creadores/{uuid}/redes', [RedesSocialesController::class, 'index'])
+        ->middleware('permiso:creator.view')
+        ->whereUuid('uuid')
+        ->name('creadores.redes');
+
+    Route::post('/creadores/{uuid}/redes', [RedesSocialesController::class, 'store'])
+        ->middleware('permiso:creator.manage')
+        ->whereUuid('uuid')
+        ->name('creadores.redes.store');
+
+    Route::post('/creadores/{uuid}/redes/{id}/verificar', [RedesSocialesController::class, 'verificar'])
+        ->middleware('permiso:creator.verify')
+        ->whereUuid('uuid')->whereNumber('id')
+        ->name('creadores.redes.verificar');
+
+    Route::post('/creadores/{uuid}/redes/{id}/metrica', [RedesSocialesController::class, 'registrarMetrica'])
+        ->middleware('permiso:creator.manage')
+        ->whereUuid('uuid')->whereNumber('id')
+        ->name('creadores.redes.metrica');
 });

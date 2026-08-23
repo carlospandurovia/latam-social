@@ -46,6 +46,23 @@ return [
      * sería tener la misma verdad en dos sitios, y uno de los dos se quedaría
      * viejo.
      */
+    /*
+     * Umbrales de coherencia de métricas sociales (iteración 3.7, DEC-063).
+     *
+     * BR-CREATOR-004 pide «chequeos de coherencia» y no da números, así que los
+     * números son míos y están abiertos a revisión. Viven aquí y no en el código
+     * porque un 3 % de engagement es excelente en una cuenta de un millón de
+     * seguidores y mediocre en una de mil: esto se va a ajustar con datos reales.
+     *
+     * Nada de esto rechaza una métrica. Solo la marca para que la mire alguien.
+     */
+    'redes' => [
+        'engagement_min' => (float) env('LATAM_ENGAGEMENT_MIN', 0.1),
+        'engagement_max' => (float) env('LATAM_ENGAGEMENT_MAX', 20.0),
+        'salto_max_pct' => (float) env('LATAM_SALTO_SEGUIDORES_PCT', 50.0),
+        'ventana_dias' => (int) env('LATAM_SALTO_VENTANA_DIAS', 30),
+    ],
+
     'terminos' => [
         'creador' => env('LATAM_TERMS_CREATOR_CODE', 'creator_terms'),
     ],

@@ -58,12 +58,21 @@ final class CompletitudOperativa
 
         $esMenor = self::esMenor((string) $creador->birth_date);
 
+        // El tutor activo se resuelve UNA vez y se pasa a las tres condiciones
+        // que dependen de el. Consultarlo tres veces invita a que un dia una de
+        // ellas mire un tutor distinto de las otras, y entonces el creador
+        // quedaria activo con el perfil fiscal de un tutor y la cuenta de otro.
+        $tutor = !$esMenor ? null : DB::table('creator_guardians')
+            ->where('creator_id', $creadorId)
+            ->where('status', 'active')
+            ->first(['id', 'full_name']);
+
         return [
             self::identidad($creador),
             self::redSocial($creadorId),
-            self::fiscal($creadorId),
-            self::tutela($creadorId, $esMenor),
-            self::medioDePago($creadorId, $esMenor),
+            self::fiscal($creadorId, $tutor),
+            self::tutela($esMenor, $tutor),
+            self::medioDePago($creadorId, $esMenor, $tutor),
             self::terminos($creadorId),
         ];
     }
@@ -140,7 +149,7 @@ final class CompletitudOperativa
      * `BR-CREATOR-013`: no existe el pago informal. Sin perfil tributario
      * aprobado y vigente no se activa, no se invita y no se liquida.
      */
-    private static function fiscal(int $creadorId): Requisito
+    private static function fiscal(int $creadorId, ?object $tutor): Requisito
     {
         $perfil = DB::table('creator_tax_profiles as p')
             ->join('countries as c', 'c.id', '=', 'p.country_id')
@@ -148,15 +157,50 @@ final class CompletitudOperativa
             ->where('p.status', 'approved')
             ->whereNull('p.valid_to')
             ->orderByDesc('p.id')
-            ->first(['p.tax_regime_code', 'p.withholding_status', 'c.name as pais']);
+            ->first([
+                'p.tax_regime_code', 'p.withholding_status', 'c.name as pais',
+                'p.holder_type', 'p.holder_guardian_id',
+            ]);
+
+        if ($perfil === null) {
+            return new Requisito(
+                codigo: self::FISCAL,
+                titulo: 'Datos fiscales vigentes y aprobados',
+                cumple: false,
+                detalle: 'No hay perfil tributario aprobado y vigente (BR-CREATOR-013).',
+                regla: 'BR-CREATOR-013',
+            );
+        }
+
+        // BR-CREATOR-013 para menores: el perfil exigido es el DEL TUTOR, que es
+        // quien emite el comprobante. Antes de 3.6 el modelo no sabia expresar
+        // esto (H-01) y aqui se daba por bueno cualquier perfil aprobado, fuera
+        // de quien fuera. El titular tiene que ser ademas el tutor ACTIVO: uno
+        // cerrado ya no puede emitir nada.
+        if ($tutor !== null) {
+            $correcto = $perfil->holder_type === 'guardian'
+                && (int) $perfil->holder_guardian_id === (int) $tutor->id;
+
+            if (!$correcto) {
+                return new Requisito(
+                    codigo: self::FISCAL,
+                    titulo: 'Datos fiscales del tutor, vigentes y aprobados',
+                    cumple: false,
+                    detalle: 'Es menor de edad: el perfil tributario debe estar a nombre de '
+                        ."{$tutor->full_name}, que es quien emite el comprobante (BR-CREATOR-010).",
+                    regla: 'BR-CREATOR-013',
+                );
+            }
+        }
+
+        $titular = $perfil->holder_type === 'guardian' ? 'del tutor' : 'del creador';
 
         return new Requisito(
             codigo: self::FISCAL,
             titulo: 'Datos fiscales vigentes y aprobados',
-            cumple: $perfil !== null,
-            detalle: $perfil !== null
-                ? "Régimen {$perfil->tax_regime_code} en {$perfil->pais}; retención: {$perfil->withholding_status}."
-                : 'No hay perfil tributario aprobado y vigente (BR-CREATOR-013).',
+            cumple: true,
+            detalle: "Régimen {$perfil->tax_regime_code} en {$perfil->pais}, a nombre {$titular}; "
+                ."retención: {$perfil->withholding_status}.",
             regla: 'BR-CREATOR-013',
         );
     }
@@ -166,7 +210,7 @@ final class CompletitudOperativa
      * exige autorización firmada y prueba del parentesco —eso último lo impone
      * `ck_creator_guardians_docs` en la base, aquí solo se comprueba que exista.
      */
-    private static function tutela(int $creadorId, bool $esMenor): Requisito
+    private static function tutela(bool $esMenor, ?object $tutor): Requisito
     {
         if (!$esMenor) {
             return new Requisito(
@@ -177,11 +221,6 @@ final class CompletitudOperativa
                 regla: 'BR-CREATOR-010',
             );
         }
-
-        $tutor = DB::table('creator_guardians')
-            ->where('creator_id', $creadorId)
-            ->where('status', 'active')
-            ->first(['full_name']);
 
         return new Requisito(
             codigo: self::TUTELA,
@@ -205,8 +244,29 @@ final class CompletitudOperativa
      * retención. Mientras eso no se cierre en el modelo, el silencio no da
      * permiso. Ver `H-02` en docs/fase-3/3.5-ACTIVACION.md.
      */
-    private static function medioDePago(int $creadorId, bool $esMenor): Requisito
+    private static function medioDePago(int $creadorId, bool $esMenor, ?object $tutor): Requisito
     {
+        $titulo = $esMenor
+            ? 'Medio de pago verificado a nombre del tutor'
+            : 'Al menos un medio de pago verificado y elegible';
+
+        // Sin tutela activa no existe cuenta válida posible, así que se dice y
+        // se sale. La versión anterior metía `$tutor?->id ?? 0` en el WHERE: un
+        // id centinela que no casaba con nada y acababa dando el mensaje
+        // equivocado —«no hay ningún medio registrado»— cuando lo que faltaba
+        // era el tutor. PHPStan señaló el `?->` como innecesario y al mirarlo
+        // apareció el mensaje malo detrás.
+        if ($esMenor && $tutor === null) {
+            return new Requisito(
+                codigo: self::MEDIO_PAGO,
+                titulo: $titulo,
+                cumple: false,
+                detalle: 'Es menor de edad y no tiene tutela activa: todavía no hay a nombre de quién '
+                    .'puede estar la cuenta (BR-CREATOR-010).',
+                regla: 'BR-FIN-003',
+            );
+        }
+
         $consulta = DB::table('creator_payment_methods')
             ->where('creator_id', $creadorId)
             ->where('status', 'verified')
@@ -214,16 +274,16 @@ final class CompletitudOperativa
             ->where('eligible_from', '<=', now());
 
         // El pago del menor se emite a nombre del tutor (BR-CREATOR-010), así
-        // que el medio de pago tiene que ser del tutor, no suyo.
-        if ($esMenor) {
-            $consulta->where('owner_type', 'guardian');
+        // que la cuenta tiene que ser del tutor, y del tutor ACTIVO: la de uno
+        // cuya tutela se cerró no vale. Se compara contra el MISMO tutor que
+        // exige el perfil fiscal, para que no puedan apuntar a personas
+        // distintas y nadie lo note.
+        if ($tutor !== null) {
+            $consulta->where('owner_type', 'guardian')
+                ->where('owner_guardian_id', $tutor->id);
         }
 
         $medio = $consulta->orderByDesc('is_default')->first(['account_number_masked', 'bank_name', 'owner_type']);
-
-        $titulo = $esMenor
-            ? 'Medio de pago verificado a nombre del tutor'
-            : 'Al menos un medio de pago verificado y elegible';
 
         if ($medio !== null) {
             return new Requisito(

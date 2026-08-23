@@ -168,8 +168,14 @@ final class CimientosSeeder extends Seeder
             // 3.5: registrar evidencia y activar son cosas distintas. La
             // primera es trabajo de reclutamiento; la segunda le abre al creador
             // las campañas y los pagos.
-            ['creator.verify',         'Creator',  'Registrar identidad verificada y aceptacion de terminos'],
+            ['creator.verify',         'Creator',  'Registrar identidad, aceptacion de terminos y propiedad de cuentas sociales'],
             ['creator.activate',       'Creator',  'Activar un creador que cumple BR-CREATOR-006'],
+            // 3.6: capturar el dato fiscal y aprobarlo son dos permisos, y
+            // ademas `ck_ctp_segregation` exige que sean dos PERSONAS. Es la
+            // misma separacion que en los lotes de pago (DEC-044): aqui se
+            // decide con que tasa se retiene, y eso toca dinero.
+            ['creator.tax.manage',     'Creator',  'Capturar y corregir el perfil tributario del creador'],
+            ['creator.tax.approve',    'Creator',  'Aprobar o rechazar el perfil tributario (BR-CREATOR-007)'],
             ['client.view',            'Client',   'Ver clientes y marcas'],
             ['client.manage',          'Client',   'Crear y editar clientes'],
             ['finance.view',           'Finance',  'Ver el ledger y los saldos'],
@@ -230,6 +236,12 @@ final class CimientosSeeder extends Seeder
                 // Para pagar hace falta ver la cuenta bancaria. Es el único rol
                 // no administrador con acceso a datos fiscales del creador.
                 'creator.view', 'creator.view_sensitive',
+                // 3.6 / DEC-062: los dos permisos fiscales van al MISMO rol, y
+                // la separacion la impone la base exigiendo dos personas
+                // distintas. Repartirlos entre roles habria obligado a dar
+                // datos fiscales a `campaign_manager`, que es justo lo que
+                // DEC-053 decidio no hacer.
+                'creator.tax.manage', 'creator.tax.approve',
                 'client.view', 'catalog.view',
             ],
             'content_reviewer' => [

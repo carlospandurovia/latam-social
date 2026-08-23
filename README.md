@@ -3,7 +3,7 @@
 > Sistema de operación end-to-end para una empresa de Creator / Influencer Marketing.
 > **Marca de plataforma:** LATAM Social. **Sociedad operadora actual:** Soluciones Tecnológicas a Medida S.A.C. (RUC 20603203896, Perú).
 > La marca y la sociedad son cosas distintas por diseño: ver [`docs/11`](docs/11-ADDENDUM-LEGAL-ENTITIES.md).
-> Estado del proyecto: **Fase 0 y Fase 2 completadas · Fase 3 (back-office) en curso — iteración 3.5 entregada.**
+> Estado del proyecto: **Fase 0 y Fase 2 completadas · Fase 3 (back-office) en curso — iteración 3.7 entregada.**
 > Última actualización: 2026-08-23.
 
 ---
@@ -20,8 +20,8 @@ Arranca en Perú y está diseñado, desde la arquitectura, para operar después 
 |---|---|
 | **F0 — Discovery** | ✅ Entregada |
 | **F1 — Arquitectura y esqueleto** | 🔄 En curso — esqueleto y puertas de calidad listos |
-| **F2 — Modelo de datos** | ✅ **Completa** — iteraciones 2.1 a 2.15. **64 tablas · 161 restricciones · 154 aserciones**, verdes con `CHECK` nativo y con `TRIGGER` generado |
-| **F3 — Back-office** | 🔄 **En curso** — 3.1 permisos · 3.2 bitácora · 3.3 consulta · 3.4 solicitudes · **3.5 activación** |
+| **F2 — Modelo de datos** | ✅ **Completa** — iteraciones 2.1 a 2.15. **64 tablas · 166 restricciones · 185 aserciones**, verdes con `CHECK` nativo y con `TRIGGER` generado |
+| **F3 — Back-office** | 🔄 **En curso** — 3.1 permisos · 3.2 bitácora · 3.3 consulta · 3.4 solicitudes · 3.5 activación · 3.6 perfil fiscal · **3.7 redes sociales** |
 | F4 — Core técnico | ⏸ |
 | F5–F10 — MVP | ⏸ |
 

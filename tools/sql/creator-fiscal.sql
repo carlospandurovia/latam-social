@@ -7,6 +7,15 @@ SET NAMES utf8mb4;
 CREATE TABLE creator_tax_profiles (
   id                  BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
   creator_id          BIGINT UNSIGNED NOT NULL,
+  -- 3.6 / H-01: DE QUIEN son estos datos fiscales.
+  -- `creator_payment_methods` ya distinguia si la cuenta es del creador o del
+  -- tutor, y `creator_tax_documents` ya sabia quien emite el comprobante. Este
+  -- perfil era el unico que no lo decia: para un menor, el `tax_id_number` que
+  -- hay aqui es el del TUTOR (BR-CREATOR-013) y nada en la fila lo indicaba.
+  -- Un numero de RUC sin titular es una ambiguedad en un dato fiscal, y esas
+  -- se pagan en la primera declaracion.
+  holder_type         VARCHAR(10)   NOT NULL DEFAULT 'creator',
+  holder_guardian_id  BIGINT UNSIGNED NULL,
   country_id          BIGINT UNSIGNED NOT NULL,
   -- Codigo del regimen tal como lo llama cada pais (RUS, RER, GENERAL, AUTONOMO...).
   -- Texto libre controlado y no catalogo: cada pais trae los suyos y anadirlos
@@ -27,7 +36,12 @@ CREATE TABLE creator_tax_profiles (
   -- dentro de tres anos nadie sabra si el 30 % salio de la ley o de una
   -- suposicion de alguien que ya no trabaja aqui.
   withholding_basis   VARCHAR(160)  NULL,
-  created_by_user_id  BIGINT UNSIGNED NULL,
+  -- 3.6 / H-03: NOT NULL, como en `payout_batches` (DEC-044). Siendo NULL,
+  -- `ck_ctp_segregation` se apagaba sola: bastaba aprobar un perfil sin decir
+  -- quien lo habia capturado para saltarse la separacion de funciones. Es el
+  -- mismo patron que DEC-048 -- un NULL que desactiva un control -- y se
+  -- comprobo que funcionaba antes de cerrarlo.
+  created_by_user_id  BIGINT UNSIGNED NOT NULL,
   -- BR-CREATOR-007: cambiar datos fiscales exige aprobacion interna.
   status              VARCHAR(15)   NOT NULL DEFAULT 'pending',
   approved_by_user_id BIGINT UNSIGNED NULL,
@@ -42,16 +56,24 @@ CREATE TABLE creator_tax_profiles (
     GENERATED ALWAYS AS (CASE WHEN valid_to IS NULL AND status = 'approved' THEN 1 ELSE NULL END) STORED,
   UNIQUE KEY uq_ctp_current (current_gate, creator_id, country_id),
   KEY ix_ctp_creator (creator_id, status),
+  KEY ix_ctp_holder (holder_guardian_id),
   KEY ix_ctp_country (country_id),
   KEY ix_ctp_approver (approved_by_user_id),
   KEY ix_ctp_creator_user (created_by_user_id),
   KEY ix_ctp_withholding (withholding_status),
   KEY ix_ctp_taxid (tax_id_type, tax_id_number),
   CONSTRAINT fk_ctp_creator FOREIGN KEY (creator_id) REFERENCES creators(id) ON DELETE RESTRICT,
+  CONSTRAINT fk_ctp_holder FOREIGN KEY (holder_guardian_id) REFERENCES creator_guardians(id) ON DELETE RESTRICT,
   CONSTRAINT fk_ctp_country FOREIGN KEY (country_id) REFERENCES countries(id) ON DELETE RESTRICT,
   CONSTRAINT fk_ctp_approver FOREIGN KEY (approved_by_user_id) REFERENCES users(id) ON DELETE RESTRICT,
   CONSTRAINT fk_ctp_creator_user FOREIGN KEY (created_by_user_id) REFERENCES users(id) ON DELETE RESTRICT,
   CONSTRAINT ck_ctp_status CHECK (status IN ('pending','approved','rejected','superseded')),
+  -- Calcada de `ck_cpm_owner`: o es del creador y no hay tutor, o es del tutor
+  -- y hay que decir cual. No existe el titular a medias.
+  CONSTRAINT ck_ctp_holder CHECK (
+    (holder_type = 'creator'  AND holder_guardian_id IS NULL) OR
+    (holder_type = 'guardian' AND holder_guardian_id IS NOT NULL)
+  ),
   CONSTRAINT ck_ctp_doc CHECK (issued_document_type IN ('recibo_honorarios','factura','invoice','none')),
   CONSTRAINT ck_ctp_rate CHECK (withholding_rate >= 0 AND withholding_rate <= 100),
   CONSTRAINT ck_ctp_withholding_status CHECK (
@@ -73,9 +95,11 @@ CREATE TABLE creator_tax_profiles (
   ),
   -- Segregacion de funciones, igual que DEC-044: quien captura el dato fiscal
   -- no es quien lo aprueba.
+  -- La rama `created_by_user_id IS NULL` desaparecio con H-03: ahora la columna
+  -- es NOT NULL, asi que la restriccion se simplifica *porque* el modelo se
+  -- volvio mas estricto. Queda igual que `ck_pbatch_segregation`.
   CONSTRAINT ck_ctp_segregation CHECK (
-    approved_by_user_id IS NULL OR created_by_user_id IS NULL
-    OR approved_by_user_id <> created_by_user_id
+    approved_by_user_id IS NULL OR approved_by_user_id <> created_by_user_id
   ),
   -- Aprobado exige quien y cuando.
   CONSTRAINT ck_ctp_approval CHECK (

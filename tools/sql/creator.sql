@@ -293,7 +293,13 @@ CREATE TABLE social_accounts (
   profile_url        VARCHAR(500)  NOT NULL,
   external_id        VARCHAR(120)  NULL,
   verification_status VARCHAR(15)  NOT NULL DEFAULT 'unverified',
+  -- 3.7 / H-05. Esta columna era texto libre: la unica de todo el modelo con
+  -- pinta de estado y sin lista cerrada. Y `ck_social_accounts_verified_at`
+  -- solo exigia la FECHA, asi que una cuenta se podia marcar verificada sin
+  -- decir COMO ni QUIEN. Es la misma leccion que DEC-058 con la identidad, una
+  -- tabla mas alla: una marca sin metodo y sin persona no es evidencia.
   verification_method VARCHAR(20)  NULL,
+  verified_by_user_id BIGINT UNSIGNED NULL,
   verified_at        DATETIME(3)   NULL,
   is_primary         TINYINT(1)    NOT NULL DEFAULT 0,
   is_active          TINYINT(1)    NOT NULL DEFAULT 1,
@@ -310,10 +316,26 @@ CREATE TABLE social_accounts (
   UNIQUE KEY uq_social_accounts_primary (primary_gate, creator_id, platform_id),
   UNIQUE KEY uq_social_accounts_creator_handle (creator_id, platform_id, handle),
   KEY ix_social_accounts_platform (platform_id, verification_status),
+  KEY ix_social_accounts_verifier (verified_by_user_id),
   CONSTRAINT fk_social_accounts_creator FOREIGN KEY (creator_id) REFERENCES creators(id) ON DELETE RESTRICT,
   CONSTRAINT fk_social_accounts_platform FOREIGN KEY (platform_id) REFERENCES platforms(id) ON DELETE RESTRICT,
+  CONSTRAINT fk_social_accounts_verifier FOREIGN KEY (verified_by_user_id) REFERENCES users(id) ON DELETE RESTRICT,
   CONSTRAINT ck_social_accounts_verification CHECK (verification_status IN ('unverified','pending','verified','failed')),
-  CONSTRAINT ck_social_accounts_verified_at CHECK (verification_status <> 'verified' OR verified_at IS NOT NULL)
+  CONSTRAINT ck_social_accounts_method CHECK (
+    verification_method IS NULL
+    OR verification_method IN ('bio_code','dm_challenge','post_mention','oauth','manual_review')
+  ),
+  -- Verificada exige cuando y COMO. Sin el metodo, dentro de un ano nadie sabe
+  -- si esta cuenta se comprobo con un codigo en la biografia o porque alguien
+  -- la miro por encima.
+  CONSTRAINT ck_social_accounts_evidence CHECK (
+    verification_status <> 'verified' OR (verified_at IS NOT NULL AND verification_method IS NOT NULL)
+  ),
+  -- Y si el metodo lo ejecuto una persona, tiene que constar cual. `oauth` se
+  -- exceptua a proposito: ahi quien verifica es la plataforma, no un operador.
+  CONSTRAINT ck_social_accounts_verifier CHECK (
+    verification_method IS NULL OR verification_method = 'oauth' OR verified_by_user_id IS NOT NULL
+  )
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ============================ D3 Creator: historico de metricas (append-only)
@@ -333,14 +355,28 @@ CREATE TABLE social_account_snapshots (
   -- 2.2 P-09: columnas para lo que se agrega, JSON para lo especifico de cada red.
   extra              LONGTEXT      NULL,
   -- BR-CREATOR-004: lo anomalo se marca para revision humana, no se rechaza solo.
-  is_anomalous       TINYINT(1)    NOT NULL DEFAULT 0,
+  --
+  -- 3.7 / H-06. Antes era `is_anomalous TINYINT NOT NULL DEFAULT 0`, y ahi
+  -- estaba el fallo, identico al que DEC-048 corrigio en la retencion: "paso
+  -- los chequeos" y "nadie los ha ejecutado" eran el MISMO valor, cero. Cada
+  -- snapshot insertado hasta hoy afirmaba no ser anomalo sin que ninguna
+  -- comprobacion hubiera corrido. Tres estados, y el de partida obliga a mirar.
+  coherence_status   VARCHAR(20)   NOT NULL DEFAULT 'pending_review',
   anomaly_note       VARCHAR(255)  NULL,
   KEY ix_sas_account (social_account_id, captured_at),
-  KEY ix_sas_anomaly (is_anomalous, captured_at),
+  KEY ix_sas_anomaly (coherence_status, captured_at),
   CONSTRAINT fk_sas_account FOREIGN KEY (social_account_id) REFERENCES social_accounts(id) ON DELETE RESTRICT,
   CONSTRAINT ck_sas_source CHECK (source IN ('self_declared','api','manual_review','import')),
   CONSTRAINT ck_sas_engagement CHECK (engagement_rate IS NULL OR (engagement_rate >= 0 AND engagement_rate <= 100)),
-  CONSTRAINT ck_sas_extra CHECK (extra IS NULL OR JSON_VALID(extra))
+  CONSTRAINT ck_sas_extra CHECK (extra IS NULL OR JSON_VALID(extra)),
+  CONSTRAINT ck_sas_coherence CHECK (
+    coherence_status IN ('pending_review','clean','anomalous')
+  ),
+  -- Marcar algo como anomalo sin decir por que no sirve para la revision
+  -- humana que exige BR-CREATOR-004.
+  CONSTRAINT ck_sas_anomaly_note CHECK (
+    coherence_status <> 'anomalous' OR anomaly_note IS NOT NULL
+  )
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ================================ D3 Creator: aceptacion de terminos (3.5)
@@ -395,3 +431,35 @@ CREATE TABLE terms_acceptances (
     channel <> 'portal' OR recorded_by_user_id IS NULL
   )
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ===========================================================================
+-- 3.7 / H-07: `social_account_snapshots` era "solo insercion" por CONVENCION.
+--
+-- No tiene `updated_at`, y `esquema:verificar` daba eso por bueno. Pero la
+-- ausencia de una columna no es un candado: un DELETE se llevaba por delante el
+-- historico de metricas, que es con lo que se justifica cuanto se le pago a un
+-- creador. `audit_logs` y `ledger_entries` ya tenian sus disparadores desde 2.4
+-- y 2.13; esta tabla se quedo sin ellos y nadie lo noto hasta que una asercion
+-- lo pregunto.
+--
+-- Prohibir un VERBO no lo puede expresar ningun CHECK, asi que van disparadores,
+-- iguales en los dos motores y fuera del compilador de restricciones.
+-- ===========================================================================
+
+DELIMITER //
+
+CREATE TRIGGER tg_sas_no_update BEFORE UPDATE ON social_account_snapshots
+FOR EACH ROW
+BEGIN
+  SIGNAL SQLSTATE '45000'
+    SET MESSAGE_TEXT = 'social_account_snapshots es solo-insercion (BR-CREATOR-005): un valor nuevo nunca sobrescribe al anterior.';
+END//
+
+CREATE TRIGGER tg_sas_no_delete BEFORE DELETE ON social_account_snapshots
+FOR EACH ROW
+BEGIN
+  SIGNAL SQLSTATE '45000'
+    SET MESSAGE_TEXT = 'social_account_snapshots no admite borrado: es la prueba de por que se pago lo que se pago.';
+END//
+
+DELIMITER ;

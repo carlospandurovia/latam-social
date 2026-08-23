@@ -24,6 +24,22 @@
     </a>
   @endcan
 
+  {{-- 3.7: cuentas sociales. Basta `creator.view` para mirarlas; añadir y
+       verificar piden más, y los formularios se ocultan solos. --}}
+  <a href="{{ route('creadores.redes', $creador->uuid) }}"
+     class="inline-block px-4 py-2 rounded-xl border border-slate-300 text-slate-700 text-sm font-medium hover:bg-slate-50">
+    Redes sociales
+  </a>
+
+  {{-- 3.6: datos fiscales. Detrás de `creator.view_sensitive` porque DEC-053
+       reserva los datos fiscales a finanzas y administración. --}}
+  @can('creator.view_sensitive')
+    <a href="{{ route('creadores.fiscal', $creador->uuid) }}"
+       class="inline-block px-4 py-2 rounded-xl border border-slate-300 text-slate-700 text-sm font-medium hover:bg-slate-50">
+      Datos fiscales
+    </a>
+  @endcan
+
   {{-- 3.5: la puerta hacia `active`. Se enseña siempre que el creador esté
        pendiente, porque no verla es la razón de que nadie saliera de ahí. --}}
   @if ($creador->status === 'pending')

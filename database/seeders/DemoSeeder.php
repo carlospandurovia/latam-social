@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Database\Seeders;
 
+use App\Modules\Creator\Services\CoherenciaMetrica;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -148,20 +149,40 @@ final class DemoSeeder extends Seeder
                 'uuid' => (string) Str::uuid(),
                 'creator_id' => $creadorId, 'platform_id' => $ig,
                 'handle' => $handle, 'profile_url' => "https://instagram.com/{$handle}",
+                // 3.7 / H-05: verificada exige decir COMO y QUIEN. Las tres
+                // columnas van juntas, como las de identidad.
                 'verification_status' => $estado === 'active' ? 'verified' : 'unverified',
+                'verification_method' => $estado === 'active' ? 'bio_code' : null,
+                'verified_by_user_id' => $estado === 'active' ? $revisorId : null,
                 'verified_at' => $estado === 'active' ? $ahora : null,
                 'is_primary' => true, 'is_active' => true,
                 'created_at' => $ahora, 'updated_at' => $ahora,
             ]);
 
+            // 3.7 / H-06: la coherencia se calcula, no se supone. Antes estas
+            // filas nacian con `is_anomalous = 0` -- afirmando haber pasado unos
+            // chequeos que no existian. Ahora pasan por el mismo servicio que
+            // usa la pantalla, y una de las tres creadoras lleva un salto
+            // absurdo a proposito para que la demo enseñe el caso marcado.
             $base = random_int(4_000, 90_000);
-            foreach ([[60, $base], [5, (int) ($base * 1.08)]] as [$diasAtras, $seguidores]) {
-                DB::table('social_account_snapshots')->insert([
-                    'social_account_id' => $cuentaId,
-                    'captured_at' => $ahora->copy()->subDays($diasAtras),
-                    'source' => 'self_declared',
+            $saltoAbsurdo = $alias === 'Cami Flores';
+
+            // 20 y 5 dias: dentro de la ventana de comparacion, para que el
+            // salto de Cami se detecte de verdad en vez de quedar fuera de rango.
+            foreach ([[20, $base], [5, (int) ($base * ($saltoAbsurdo ? 4.7 : 1.08))]] as [$diasAtras, $seguidores]) {
+                $capturada = $ahora->copy()->subDays($diasAtras);
+                $metrica = [
                     'followers' => $seguidores,
                     'engagement_rate' => round(random_int(150, 720) / 100, 4),
+                    'captured_at' => $capturada->format('Y-m-d H:i:s.v'),
+                ];
+                $veredicto = CoherenciaMetrica::evaluar($cuentaId, $metrica);
+
+                DB::table('social_account_snapshots')->insert($metrica + [
+                    'social_account_id' => $cuentaId,
+                    'source' => 'self_declared',
+                    'coherence_status' => $veredicto['estado'],
+                    'anomaly_note' => CoherenciaMetrica::nota($veredicto['motivos']),
                 ]);
             }
 
@@ -237,5 +258,6 @@ final class DemoSeeder extends Seeder
             .DB::table('campaigns')->count().' campañas');
         $this->command?->line('  Camila Flores tiene 16 años: fíjate en su ficha y en la tutela pendiente.');
         $this->command?->line('  Sebastián Ríos está pendiente: abre «Revisar activación» y verás qué le falta.');
+        $this->command?->line('  Cami Flores tiene un salto de seguidores absurdo: mira cómo queda marcado en sus redes.');
     }
 }

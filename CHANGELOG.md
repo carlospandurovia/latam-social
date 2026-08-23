@@ -2,6 +2,159 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 
+## [Fase 3 · 3.6/3.7 — corrección `H-08` y ejecución real de las migraciones] — 2026-08-23
+
+### Corregido
+- **`H-08`: la migración `000470` pasaba en MariaDB y reventaba en MySQL 8.**
+  `ALTER TABLE creator_tax_profiles MODIFY created_by_user_id BIGINT UNSIGNED NOT NULL`
+  sobre una columna que lleva `fk_ctp_creator_user` encima: MariaDB lo acepta,
+  MySQL 8 responde `ERROR 1832` y se planta. Los 13 tests de
+  `PerfilFiscalTest` fallaban por esto —542 s de migraciones reintentándose, no
+  un cuelgue— y la iteración se había dado por entregada. Ahora `up()` y
+  `down()` hacen el baile portable: quitar la foránea, modificar, volver a
+  ponerla.
+- **Diagnóstico equivocado antes del bueno.** Atribuí el cuelgue a un bloqueo de
+  metadatos de MySQL. Lo marqué como hipótesis y no como diagnóstico, pero era
+  falso y costó tiempo. Queda escrito en `docs/fase-3/3.6-PERFIL-FISCAL.md §10`.
+- **Las bases de referencia se quedaban viejas.** Al cerrar 3.7, los
+  verificadores denunciaron 26 discrepancias inexistentes: las migraciones
+  tenían razón y la base de contraste era de dos iteraciones antes.
+
+### Añadido
+- **`tools/verificar-ddl-crudo.py` — nueva puerta: EJECUTA el SQL crudo de las
+  migraciones.** Hasta ahora `verificar-migraciones.py` contrastaba lo que las
+  migraciones *declaran*, con un grabador que **simula** `DB::statement`: esas
+  sentencias no se ejecutaban en ningún sitio salvo CI, y CI se saltó al apilar
+  3.5, 3.6 y 3.7 sin empujar. La puerta nueva hace ida y vuelta
+  (`down()` → `up()`) sobre una copia limpia del esquema de referencia y
+  **está comprobado que reproduce `H-08`**: verde en MariaDB, rojo con el 1832
+  en MySQL 8.
+- **`recolectar-esquema.php --crudo`** — modo nuevo: emite el SQL literal de
+  cada migración separado por `up()`/`down()`, y avisa si `down()` revienta.
+- **MySQL 8.0.46 en el entorno de trabajo**, en el puerto 3307, junto al
+  MariaDB. Aquí solo había MariaDB —el motor que perdona— y por eso las
+  divergencias solo aparecían en la máquina de desarrollo.
+- **`tools/rehacer-referencia.sh`** — rehace las dos bases de referencia de un
+  tirón. El orden de carga lo calcula leyendo los `REFERENCES` en vez de estar
+  escrito a mano en dos sitios.
+- **`tools/pruebas/correr-todo.sh`** — las cinco baterías contra los dos motores
+  lógicos, con base limpia y total al final.
+
+### Verificación
+- `verificar-ddl-crudo.py`: 38 sentencias ejecutadas de verdad, ninguna
+  rechazada, en MariaDB 10.11 **y** en MySQL 8.0.46.
+- 370 aserciones de restricción (26·99·29·16·15 × 2 motores lógicos) en verde en
+  MariaDB **y**, por primera vez, en MySQL 8.
+- `verificar-migraciones.py`: 64 tablas y 766 columnas sin discrepancias.
+- `verificar-equivalencia.py`: 166 restricciones, los dos motores imponen el
+  mismo conjunto de reglas.
+- Pint, PHPStan, Deptrac y PHPUnit **no** se pueden correr aquí: Packagist no es
+  alcanzable desde este entorno y no hay `vendor/`. Siguen dependiendo de la
+  máquina de desarrollo y de CI.
+
+### Flujo de CI
+- Ejecuta `verificar-ddl-crudo.py` contra MySQL 8 antes de `php artisan migrate`.
+- Monta los esquemas de referencia con `rehacer-referencia.sh` en vez de con una
+  lista de módulos escrita a mano.
+
+## [Fase 3 · 3.7 — Cuentas sociales y coherencia de métricas] — 2026-08-23
+
+### Corregido
+- **`H-06`: «no es anómalo» y «nadie lo ha mirado» eran el mismo cero.**
+  `is_anomalous TINYINT NOT NULL DEFAULT 0`, con `BR-CREATOR-004` exigiendo
+  chequeos de coherencia y **ni una línea de código que los ejecutara**. Cada
+  métrica insertada afirmaba haberlos pasado. Es el mismo fallo que `DEC-048`.
+  Pasa a `coherence_status` con tres estados; las filas viejas se convierten a
+  `pending_review`, no a `clean`.
+- **`H-05`: verificar una cuenta no obligaba a decir cómo ni quién.**
+  `verification_method` era texto libre —la única columna con pinta de estado sin
+  lista cerrada— y la restricción solo exigía la fecha. Ni siquiera existía
+  `verified_by_user_id`. Misma lección que `DEC-058`, una tabla más allá.
+- **`H-07`: «solo inserción» era una convención, no un candado.**
+  `social_account_snapshots` no tiene `updated_at` y `esquema:verificar` lo daba
+  por bueno, pero admitía `DELETE` — y ahí vive la justificación de cuánto se le
+  pagó a cada creador. Lo encontró una aserción escrita dando por hecho lo
+  contrario. Ahora lo impiden `tg_sas_no_update` y `tg_sas_no_delete`.
+- **`CompletitudOperativa` daba el motivo equivocado para un menor sin tutela.**
+  La consulta del medio de pago usaba `$tutor?->id ?? 0` —un id centinela que no
+  casa con nada—, así que respondía «no hay ningún medio de pago registrado»
+  cuando lo que faltaba era el tutor. Lo destapó PHPStan señalando el `?->` como
+  innecesario; el mensaje malo estaba detrás.
+- **`tools/diagnostico.php` solo volcaba el archivo al terminar las cuatro
+  puertas.** Mientras las pruebas corrían quedaba en disco el informe de la
+  ejecución anterior, y quien lo abriera leía un resultado viejo creyéndolo
+  actual. Ahora vuelca después de cada puerta.
+- **`CoherenciaMetrica` medía la ventana contra hoy**, no contra la fecha de la
+  captura, y buscaba el último snapshot a secas en vez del último anterior a
+  esa captura: importar una métrica vieja producía un salto inventado y del
+  signo contrario.
+
+### Añadido
+- Pantalla `/creadores/{uuid}/redes`: alta, verificación y captura de métricas.
+- `App\Modules\Creator\Services\CoherenciaMetrica` — dos chequeos, umbrales
+  configurables (`DEC-063`), y **nunca rechaza**: marca para revisión humana,
+  que es lo que dice `BR-CREATOR-004` con esas palabras.
+- `BR-CREATOR-018`, `tools/pruebas/3.7-redes.sh` (15 aserciones × 2 motores) y
+  12 pruebas de PHPUnit. **185 aserciones de restricción en verde.**
+
+### Nota operativa
+- `oauth` no se ofrece como método de verificación: no está implementado, y
+  ofrecerlo dejaría marcar una cuenta como verificada por la plataforma cuando
+  la plataforma no ha dicho nada.
+
+## [Fase 3 · 3.6 — El perfil tributario del creador] — 2026-08-23
+
+### Corregido
+- **`H-03`: la separación de funciones del perfil fiscal se apagaba sola.**
+  `ck_ctp_segregation` decía «aprobador distinto del capturador, **salvo que
+  alguno sea NULL**», y `created_by_user_id` admitía NULL. Bastaba aprobar sin
+  decir quién había capturado para saltarse el control entero — se comprobó que
+  funcionaba antes de cerrarlo. Es el mismo patrón que `DEC-048`: **un NULL que
+  desactiva un control**. La columna pasa a NOT NULL, como en `payout_batches`
+  (`DEC-044`), y la restricción se simplifica *porque* el modelo se volvió más
+  estricto.
+- **`H-01`: el perfil fiscal no decía de quién era.** `creator_payment_methods`
+  y `creator_tax_documents` ya distinguían creador de tutor; este no. Para un
+  menor, el `tax_id_number` guardado es el del tutor y nada lo indicaba. Ahora
+  `holder_type` + `holder_guardian_id`, con `ck_ctp_holder` calcada de
+  `ck_cpm_owner`.
+- **`CompletitudOperativa` daba por bueno cualquier perfil aprobado.** Para un
+  menor exige ahora el del **tutor activo**, y el mismo al que pertenece el
+  medio de pago: antes podían apuntar a personas distintas sin que nadie lo
+  notara.
+- **`recolectar-esquema.php` reventaba** si una migración consultaba datos antes
+  de endurecer una columna, y no sabía leer `ALTER TABLE … MODIFY … NOT NULL`,
+  por lo que el verificador denunciaba una discrepancia inexistente. Las dos
+  cosas arregladas.
+
+- **`H-04`: rechazar escribía «aprobado por» y reventaba.** `ck_ctp_segregation`
+  compara esa columna con el capturador sea cual sea el estado, así que el
+  capturador no podía retirar una captura equivocada suya (error 4025). El
+  arreglo no es relajar la restricción —existe para impedir la autoaprobación,
+  no la autocorrección— sino dejar de usar «aprobado por» para un rechazo. Quién
+  rechazó queda en la bitácora, que además es inmutable.
+- **El perfil anterior se cerraba «hoy»**, lo que solapaba los periodos si el
+  nuevo entraba en vigor en otra fecha. Ahora se cierra cuando empieza el nuevo.
+- **No se capturaban datos fiscales de un creador anonimizado.** La verificación
+  de identidad ya lo comprobaba; esta pantalla no (`BR-CREATOR-009`).
+
+### Añadido
+- Pantalla `/creadores/{uuid}/fiscal`: histórico de perfiles, captura y
+  resolución. Permisos `creator.tax.manage` y `creator.tax.approve` (`DEC-062`).
+- **La retención se decide al aprobar, no al capturar** (`DEC-048`). El
+  formulario de captura ni siquiera ofrece el campo: quien teclea el RUC no es
+  quien conoce la norma.
+- Aprobar un perfil **cierra el anterior** en la misma transacción
+  (`BR-CREATOR-007`). El orden lo impone `uq_ctp_current`, no una convención.
+- `BR-CREATOR-017`, `tools/pruebas/3.6-fiscal.sh` (16 aserciones × 2 motores) y
+  14 pruebas de PHPUnit.
+
+### Abierto
+- `Q-47` — el periodo de gracia de `BR-CREATOR-014` dice «configurable»: ¿global
+  o por creador? Son dos modelos distintos. Sin responder, no se implementa.
+- `T-10` — aviso al creador cuando cambian sus datos fiscales. Hoy la pantalla
+  se lo recuerda al operador; falta automatizarlo.
+
 ## [Fase 3 · 3.5 — La puerta de activación] — 2026-08-23
 
 ### Corregido

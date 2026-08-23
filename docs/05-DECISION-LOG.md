@@ -752,6 +752,34 @@ impecable. Simplemente **la mitad de las reglas que declara no existen en ese se
 
 ---
 
+### DEC-062 — Los dos permisos fiscales van al mismo rol; la separación la impone la base
+
+| | |
+|---|---|
+| **Decisión** | `creator.tax.manage` (capturar) y `creator.tax.approve` (aprobar) se conceden **al mismo rol**: `finance` y `admin`. La separación de funciones la garantiza `ck_ctp_segregation`, que exige que el aprobador **no sea la misma persona** que el capturador. |
+| **Por qué no repartirlos entre roles** | Habría obligado a dar `creator.view_sensitive` a `campaign_manager` para que pudiera capturar, y `DEC-053` decidió que finanzas es el único rol no administrador con acceso a datos fiscales del creador. Repartir los permisos habría deshecho esa decisión por la puerta de atrás. |
+| **Por qué aquí sí hay segregación de personas y en `DEC-060` no** | Aquí se decide **con qué tasa se retiene**. Eso toca dinero, y es el mismo criterio de `DEC-044` y `BR-FIN-005`. Verificar una identidad, en cambio, es reversible. |
+| **Consecuencia operativa** | Hacen falta **al menos dos usuarios internos**. Con uno solo, ningún perfil fiscal se aprueba y ningún creador se activa. `UsuarioAdminSeeder` crea uno; el segundo hay que crearlo. |
+| **De paso se cerró `H-03`** | La restricción tenía la rama `created_by_user_id IS NULL`, y la columna admitía NULL: bastaba aprobar sin decir quién había capturado para saltarse el control. Se comprobó que funcionaba antes de cerrarlo. La columna pasa a NOT NULL —como en `payout_batches`— y la restricción se simplifica *porque* el modelo se volvió más estricto. |
+| **Estado** | ADOPTADA e implementada (2026-08-23, iteración 3.6) |
+
+---
+
+### DEC-063 — Los umbrales de coherencia son juicio, no verdad; y no rechazan nada
+
+| | |
+|---|---|
+| **Decisión** | `BR-CREATOR-004` exige «chequeos de coherencia» sobre las métricas sociales y **no da números**. Los pongo yo, con dos comprobaciones —engagement fuera de rango y salto de seguidores en ambos sentidos— y con los umbrales en `config('latam.redes')`, no en el código. |
+| **Por qué configurables** | Un 3 % de engagement es excelente en una cuenta de un millón de seguidores y mediocre en una de mil. Estos números se van a ajustar con datos reales, y ajustarlos no debe requerir un despliegue de código. |
+| **Nunca se rechaza** | La regla lo dice literalmente: *«se marcan para revisión humana, nunca se rechazan automáticamente»*. Una métrica anómala se guarda igual, con el motivo escrito. La alternativa —rechazarla— haría que el operador la volviera a teclear cambiando el número hasta que entrara, que es peor que no comprobar nada. |
+| **De paso se cerró `H-06`** | `is_anomalous TINYINT NOT NULL DEFAULT 0`: «no es anómalo» y «nadie lo ha mirado» eran el mismo cero, el mismo fallo que `DEC-048`. Cada métrica insertada afirmaba haber pasado unos chequeos que **no existían**. Pasa a `coherence_status` con tres estados; las filas viejas se convierten a `pending_review`, no a `clean` — no se asciende un olvido a «limpio». |
+| **Y `H-05`** | `verification_method` era texto libre y la restricción solo exigía la fecha: una cuenta podía quedar verificada sin decir cómo ni quién. Misma lección que `DEC-058` una tabla más allá. |
+| **Y `H-07`** | `social_account_snapshots` era «solo inserción» por convención —no tiene `updated_at`— pero admitía `DELETE`. Lo encontró una aserción escrita dando por hecho lo contrario. Ahora lo impiden dos disparadores, como en `audit_logs` y `ledger_entries`. |
+| **A revisar** | Con los primeros 200 creadores reales: si el ruido de falsos positivos es alto, se suben los umbrales. Que sea configuración lo hace un ajuste, no una migración. |
+| **Estado** | ADOPTADA e implementada (2026-08-23, iteración 3.7) — umbrales revisables |
+
+---
+
 ## Decisiones pendientes de información del negocio
 
 | # | Pregunta | Bloquea |
@@ -796,6 +824,8 @@ impecable. Simplemente **la mitad de las reglas que declara no existen en ese se
 | **Q-44** | ⚠️ **§56 — nuevo, abierto por `DEC-047`.** ¿Los servicios de marketing de influencers prestados a un cliente **no domiciliado** califican como **exportación de servicios** (sin IGV), o van gravados al 18 %? Depende de las condiciones concurrentes del art. 33-A de la Ley del IGV y de la lista de servicios aplicable, **cuya vigencia he encontrado contradicha entre fuentes**. El modelo admite las cuatro opciones y no fuerza ninguna. **Requiere contador** | Antes de la primera factura al exterior |
 | ~~Q-45~~ | ✅ **RESUELTA (2026-08-22):** opción **B** — sin datos fiscales no hay alta, pero se acompaña al creador a formalizarse. Ver `DEC-049`. El pago a un tercero **no se implementa**; el análisis queda en `docs/fase-2/2.14-PAGO-A-TERCEROS.md` | — |
 | **Q-46** | ⚠️ **§56 — nuevo, abierto por `DEC-059`.** Cuando se publique una **versión nueva de los términos**, ¿qué pasa con los creadores **ya activos**? Hoy el sistema **no los desactiva**: siguen activos con la aceptación de la versión anterior. Las opciones son (a) dejarlo así y pedir la nueva aceptación solo la próxima vez que hagan algo relevante, (b) bloquear invitaciones hasta que re-acepten, (c) suspenderlos. Tiene consecuencias legales y operativas, y **no lo decido yo** | Antes de publicar la segunda versión de los términos |
+| **Q-47** | ⚠️ **Abierto por la iteración 3.6.** `BR-CREATOR-014` fija un **periodo de gracia de 30 días** antes de rechazar a un creador por falta de datos fiscales, y dice «configurable». ¿Configurable **globalmente** (una constante de despliegue) o **por creador**, como `payment_term_days`? No lo invento: son dos modelos de datos distintos. Hasta que se responda, el periodo de gracia no está implementado | Iteración de rechazo de creadores |
+| **T-10** | 📋 **Aviso al creador cuando cambian sus datos fiscales.** `BR-CREATOR-007` lo exige y el módulo Communication no existe. Hoy la pantalla se lo recuerda al operador para que lo haga a mano; queda pendiente automatizarlo | Fase de Communication |
 | **T-09** | 📋 **Publicar la primera versión real de los términos del creador**, revisada legalmente, con `php artisan terminos:publicar`. **Ningún creador puede activarse hasta entonces** — la pantalla lo dice explícitamente | Bloquea toda activación |
 | Q-29 | ¿Se aprueba la propuesta tipográfica (Sora + Plus Jakarta Sans + IBM Plex Mono), o hay una tipografía corporativa ya comprada? | Iteración 3.2 |
 | Q-30 | ¿Existe versión editable del wordmark (AI/Figma) con la tipografía real que usó el diseñador? Si la hay, sustituye a mis contornos. | Calidad del logotipo |

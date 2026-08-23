@@ -74,14 +74,16 @@ jobs:
       - name: Generar el esquema sin CHECK y sus triggers equivalentes
         run: python3 tools/generar-triggers.py
 
-      - name: Cargar el esquema de referencia
+      # Las dos bases de referencia se montan con el mismo script que en local,
+      # y el orden de carga lo calcula el script leyendo los REFERENCES. Antes
+      # estaba escrito a mano aqui y a mano en la maquina de desarrollo: dos
+      # listas que hay que acordarse de tocar a la vez, que es como se cuela un
+      # esquema nuevo en un sitio y no en el otro.
+      - name: Cargar los dos esquemas de referencia
         run: |
-          mysql -h127.0.0.1 -uroot -proot -e "CREATE DATABASE latam_ref CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
-          for f in cimientos creator creator-comercial creator-fiscal cliente \
-                   entidades-legales campana contenido finanzas; do
-            mysql -h127.0.0.1 -uroot -proot latam_ref < tools/sql/$f.sql
-          done
-          mysql -h127.0.0.1 -uroot -proot latam_ref < tools/pruebas/semilla.sql
+          bash tools/rehacer-referencia.sh latam_ref latam_57
+          $MYSQL_CMD latam_ref < tools/pruebas/semilla.sql
+          $MYSQL_CMD latam_57  < tools/pruebas/semilla.sql
 
       - name: Las migraciones declaran lo mismo que el esquema de referencia
         run: python3 tools/verificar-migraciones.py latam_ref
@@ -94,23 +96,28 @@ jobs:
           bash tools/pruebas/2.12-contenido.sh latam_ref
           bash tools/pruebas/2.13-finanzas.sh  latam_ref
           bash tools/pruebas/3.5-activacion.sh latam_ref
+          bash tools/pruebas/3.6-fiscal.sh     latam_ref
+          bash tools/pruebas/3.7-redes.sh      latam_ref
 
       # La mitad que importa: produccion es Percona 5.7 y NO aplica los CHECK.
       - name: Restricciones (motor sin CHECK, solo triggers generados)
         run: |
-          mysql -h127.0.0.1 -uroot -proot -e "CREATE DATABASE latam_57 CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
-          for f in cimientos creator creator-comercial creator-fiscal cliente \
-                   entidades-legales campana contenido finanzas; do
-            mysql -h127.0.0.1 -uroot -proot latam_57 < tools/sql/generado/$f-sin-check.sql
-          done
-          mysql -h127.0.0.1 -uroot -proot latam_57 < tools/sql/generado/triggers.sql
-          mysql -h127.0.0.1 -uroot -proot latam_57 < tools/pruebas/semilla.sql
           bash tools/pruebas/2.12-contenido.sh latam_57
           bash tools/pruebas/2.13-finanzas.sh  latam_57
           bash tools/pruebas/3.5-activacion.sh latam_57
+          bash tools/pruebas/3.6-fiscal.sh     latam_57
+          bash tools/pruebas/3.7-redes.sh      latam_57
 
       - name: Los dos motores imponen el mismo conjunto de reglas
         run: python3 tools/verificar-equivalencia.py latam_ref latam_57
+
+      # H-08: el grabador de `verificar-migraciones.py` SIMULA `DB::statement`,
+      # asi que hasta ahora ninguna sentencia cruda se habia ejecutado nunca
+      # fuera de la maquina de desarrollo. Un `ALTER TABLE ... MODIFY` sobre una
+      # columna con foranea encima lo acepta MariaDB y lo rechaza MySQL 8 con el
+      # error 1832. Esto lo ejecuta de verdad, aqui, contra MySQL 8.
+      - name: El SQL crudo de las migraciones lo acepta MySQL 8
+        run: python3 tools/verificar-ddl-crudo.py latam_ref
 
       - name: Migraciones
         run: php artisan migrate --force

@@ -29,12 +29,28 @@ namespace Illuminate\Support\Facades {
     class DB {
         public static function statement(string $s): void { \Recolector::$raw[] = $s; }
         public static function unprepared(string $s): void { \Recolector::$raw[] = $s; }
-        public static function table(string $t) { return new class { 
-            public function __call($n, $a) { return $this; } }; }
+        // El doble del constructor de consultas. Encadena cualquier metodo
+        // devolviendose a si mismo, PERO los que terminan una consulta
+        // devuelven un escalar neutro. Antes devolvia `$this` siempre, y una
+        // migracion que hiciera `->count()` para comprobar datos antes de
+        // endurecer una columna reventaba aqui con "object could not be
+        // converted to string" -- un error del GRABADOR que parecia un error de
+        // la migracion.
+        public static function table(string $t) { return new class {
+            private const ESCALARES = [
+                'count' => 0, 'sum' => 0, 'exists' => false, 'doesntExist' => true,
+                'value' => null, 'first' => null, 'max' => null, 'min' => null,
+                'get' => [], 'pluck' => [], 'insertGetId' => 0,
+                'insert' => true, 'update' => 0, 'delete' => 0,
+            ];
+            public function __call($n, $a) {
+                return array_key_exists($n, self::ESCALARES) ? self::ESCALARES[$n] : $this;
+            } }; }
         public static function selectOne(string $s) { return null; }
     }
     class Schema {
         public static function create(string $tabla, callable $cb): void {
+        \Recolector::$creadas[] = $tabla;
             \Recolector::$tablaActual = $tabla;
             \Recolector::$tablas[$tabla] ??= ['columnas'=>[], 'indices'=>[], 'unicos'=>[], 'fk'=>[]];
             $cb(new \Illuminate\Database\Schema\Blueprint($tabla));
@@ -127,11 +143,21 @@ namespace {
 class Recolector {
     public static array $tablas = [];
     public static array $raw = [];
+    /** Tablas creadas con Schema::create por la migracion que se esta grabando. */
+    public static array $creadas = [];
     public static string $tablaActual = '';
 }
 
 // Igual que en generar-triggers.php: aqui habia una ruta ABSOLUTA del entorno
 // de trabajo. Fuera de esa maquina no apuntaba a nada.
+// `--crudo` cambia lo que se emite: en vez del esquema reconstruido, la lista
+// de sentencias SQL literales de cada migracion, separadas por up() y down().
+// La usa tools/verificar-ddl-crudo.py para EJECUTARLAS de verdad contra un
+// motor. Ver H-08: este grabador nunca ejecuto nada, y por eso un ALTER que
+// MariaDB acepta y MySQL 8 rechaza llego hasta la maquina de desarrollo.
+$soloCrudo = in_array('--crudo', $argv, true);
+$argv = array_values(array_filter($argv, fn ($a) => $a !== '--crudo'));
+
 $dir = $argv[1] ?? null;
 if ($dir === null) {
     foreach ([__DIR__.'/../app/Modules', __DIR__.'/../stage/app/Modules'] as $candidato) {
@@ -152,6 +178,37 @@ foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator($dir)) as 
     }
 }
 sort($archivos);   // el mismo orden que Laravel: por timestamp del nombre
+
+if ($soloCrudo) {
+    $salida = [];
+    foreach ($archivos as $a) {
+        $m = require $a;
+        Recolector::$raw = [];
+        Recolector::$creadas = [];
+        $m->up();
+        $arriba = Recolector::$raw;
+        $creadas = Recolector::$creadas;
+        Recolector::$raw = [];
+        // Un `down()` que revienta al GRABARSE es un fallo por si mismo: quiere
+        // decir que la vuelta atras nunca se ha mirado.
+        try {
+            $m->down();
+            $abajo = Recolector::$raw;
+            $error = null;
+        } catch (\Throwable $e) {
+            $abajo = [];
+            $error = $e->getMessage();
+        }
+        if ($arriba === [] && $abajo === []) {
+            continue;
+        }
+        $salida[] = ['migracion' => basename($a), 'up' => $arriba, 'down' => $abajo,
+                     'crea' => $creadas, 'error' => $error];
+    }
+    echo json_encode($salida, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    exit(0);
+}
+
 foreach ($archivos as $a) {
     $m = require $a;
     $m->up();
@@ -182,6 +239,25 @@ foreach (Recolector::$raw as $sql) {
     if (preg_match('/ALTER\s+TABLE\s+`?(\w+)`?\s+ADD\s+COLUMN\s+`?(\w+)`?\s+(.+?)\s+GENERATED/is', $sql, $m)) {
         Recolector::$tablas[$m[1]]['columnas'][$m[2]] =
             ['tipo'=>strtoupper(trim($m[3])), 'nullable'=>true, 'default'=>null, 'generada'=>true];
+    }
+}
+
+// `MODIFY <col> <tipo> [NOT] NULL`: endurecer o relajar una columna que ya
+// existe. Sin esto, el grabador se quedaba con la nulabilidad que declaro la
+// migracion ORIGINAL y el verificador denunciaba una discrepancia que no
+// existia -- el peor tipo de falso positivo, porque desgasta la confianza en la
+// herramienta justo cuando acierta.
+foreach (Recolector::$raw as $sql) {
+    if (preg_match('/ALTER\s+TABLE\s+`?(\w+)`?\s+MODIFY\s+(?:COLUMN\s+)?`?(\w+)`?\s+(.+)$/is', $sql, $m)) {
+        [$tabla, $columna, $resto] = [$m[1], $m[2], strtoupper(trim($m[3]))];
+        if (isset(Recolector::$tablas[$tabla]['columnas'][$columna])) {
+            Recolector::$tablas[$tabla]['columnas'][$columna]['nullable'] = ! str_contains($resto, 'NOT NULL');
+            // Un MODIFY tambien puede cambiar el tipo, no solo la nulabilidad.
+            $tipo = trim((string) preg_replace('/\s+(NOT\s+)?NULL\b.*$/i', '', $resto));
+            if ($tipo !== '') {
+                Recolector::$tablas[$tabla]['columnas'][$columna]['tipo'] = $tipo;
+            }
+        }
     }
 }
 
