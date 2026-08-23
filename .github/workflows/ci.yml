@@ -20,6 +20,22 @@ jobs:
         options: >-
           --health-cmd="mysqladmin ping" --health-interval=10s
           --health-timeout=5s --health-retries=5
+      # Percona 5.7 DE VERDAD, no una imitacion.
+      #
+      # Hasta ahora "el motor sin CHECK" se simulaba cargando el esquema
+      # `-sin-check` en MySQL 8. Eso comprueba que los disparadores generados
+      # imponen las mismas reglas, que no es poco, pero **no comprueba que
+      # Percona 5.7 acepte el esquema**: son dos motores distintos y ya hemos
+      # visto tres divergencias en esta fase. Produccion es 5.7; que 5.7 no
+      # aparezca en ningun sitio de la cadena era un hueco.
+      percona57:
+        image: percona:5.7
+        env:
+          MYSQL_ROOT_PASSWORD: root
+        ports: ['3307:3306']
+        options: >-
+          --health-cmd="mysqladmin ping" --health-interval=10s
+          --health-timeout=5s --health-retries=5
       redis:
         image: redis:7
         ports: ['6379:6379']
@@ -112,6 +128,31 @@ jobs:
 
       - name: Los dos motores imponen el mismo conjunto de reglas
         run: python3 tools/verificar-equivalencia.py latam_ref latam_57
+
+      # --- Y ahora lo mismo, pero contra el motor que hay en produccion -----
+      - name: Percona 5.7 acepta el esquema y sus disparadores
+        run: |
+          P57="mysql -h127.0.0.1 -P3307 --protocol=TCP -uroot -proot"
+          # El script crea las dos bases. 5.7 acepta la sintaxis `CHECK` y la
+          # IGNORA en silencio: por eso la que se prueba de verdad es la de
+          # disparadores, que es lo que impone las reglas alli.
+          MYSQL_CMD="$P57" bash tools/rehacer-referencia.sh latam_p57 latam_p57_triggers
+          $P57 latam_p57_triggers < tools/pruebas/semilla.sql
+
+      - name: Restricciones sobre Percona 5.7 (lo que vera produccion)
+        run: |
+          export MYSQL_CMD="mysql -h127.0.0.1 -P3307 --protocol=TCP -uroot -proot"
+          bash tools/pruebas/2.12-contenido.sh latam_p57_triggers
+          bash tools/pruebas/2.13-finanzas.sh  latam_p57_triggers
+          bash tools/pruebas/3.5-activacion.sh latam_p57_triggers
+          bash tools/pruebas/3.6-fiscal.sh     latam_p57_triggers
+          bash tools/pruebas/3.7-redes.sh      latam_p57_triggers
+          bash tools/pruebas/3.8-pagos.sh      latam_p57_triggers
+
+      - name: El SQL crudo de las migraciones lo acepta Percona 5.7
+        run: |
+          export MYSQL_CMD="mysql -h127.0.0.1 -P3307 --protocol=TCP -uroot -proot"
+          python3 tools/verificar-ddl-crudo.py latam_p57
 
       # H-08: el grabador de `verificar-migraciones.py` SIMULA `DB::statement`,
       # asi que hasta ahora ninguna sentencia cruda se habia ejecutado nunca

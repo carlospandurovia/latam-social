@@ -2,6 +2,46 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 
+## [Fase 3 · 3.8 — se cae MariaDB, entra Percona 5.7 de verdad] — 2026-08-23
+
+### Corregido
+- **Los 15 fallos de `ActivacionCreadorTest` eran un fixture de 3.5 sin
+  actualizar.** `1364 Field 'created_by_user_id' doesn't have a default value`:
+  actualicé la semilla SQL al añadir la columna obligatoria (`H-11`) y me olvidé
+  del fixture equivalente en PHPUnit. De paso, ese archivo hacía tres cosas que
+  3.8 ya no permite —desverificar un medio, dejar como predeterminado uno sin
+  verificar, y mover `eligible_from` después de crearlo— y las tres eran, bien
+  mirado, lo que las reglas nuevas vinieron a impedir.
+
+### Cambiado
+- **MariaDB sale de la matriz de pruebas.** No está en el stack de nadie: la
+  máquina de desarrollo tiene MySQL 8, CI tiene MySQL 8 y producción es Percona
+  5.7. Era lo que traía el entorno de trabajo, y ha salido cara:
+  - `H-08` —el `ERROR 1832` que costó 542 s— **existió porque el desarrollo se
+    hacía contra MariaDB**, que perdona ese `ALTER`. Con MySQL 8 delante no
+    habría salido de ahí.
+  - El `ERROR 1901` que se reportó como «divergencia cazada» es **exclusivo de
+    MariaDB**. Se rediseñó una columna por un motor que nadie ejecuta.
+
+  La matriz pasa a ser MySQL 8 con `CHECK` y MySQL 8 solo con disparadores.
+
+### Añadido
+- **Percona 5.7 en CI, de verdad.** Hasta ahora «el motor sin CHECK» se simulaba
+  cargando el esquema `-sin-check` en MySQL 8. Eso comprueba que los
+  disparadores generados imponen las mismas reglas —que no es poco— pero **no
+  comprueba que Percona 5.7 acepte el esquema**, y son motores distintos: van
+  tres divergencias en esta fase. Producción es 5.7 y 5.7 no aparecía en ningún
+  punto de la cadena. Ahora el flujo levanta un servicio `percona:5.7` y corre
+  contra él las 226 aserciones, el esquema completo y el SQL crudo de las
+  migraciones.
+
+### Nota de proceso
+Esta decisión sale de una pregunta del cliente: por qué se gastaba tanto
+esfuerzo en compatibilidad local si la base está en la nube. Tenía razón en la
+mitad: MariaDB era esfuerzo perdido y encima dañino. La otra mitad —la base
+local de pruebas— se queda, porque las pruebas hacen `migrate:fresh` y apuntar
+eso a la nube fue lo que destruyó la base de desarrollo (`DEC-061`).
+
 ## [Fase 3 · 3.8 — corrección `H-15`] — 2026-08-23
 
 ### Corregido
