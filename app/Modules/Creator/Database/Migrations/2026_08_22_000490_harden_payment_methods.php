@@ -169,16 +169,32 @@ return new class extends Migration
             }
         }
 
-        $sinCierre = DB::table('creator_payment_methods')
-            ->whereIn('status', ['rejected', 'disabled'])
-            ->where(fn ($q) => $q->whereNull('closed_at')->orWhereNull('closed_by_user_id'))
-            ->count();
+        // El `hasColumn` va FUERA y la consulta DENTRO, y esto costo una tanda
+        // entera de 18 pruebas rojas.
+        //
+        // La primera version lo tenia al reves: la consulta suelta y el
+        // `hasColumn` en el `if` de abajo. PHP evalua el `count()` en el acto,
+        // asi que en una base recien migrada --donde `closed_at` todavia no
+        // existe, porque la anade esta misma migracion doce lineas mas abajo--
+        // el chequeo previo reventaba con
+        //
+        //   SQLSTATE[42S22]: Unknown column 'closed_at' in 'where clause'
+        //
+        // y como reventaba en `setUp()`, fallaban las 18 pruebas a la vez sin
+        // que ninguna llegara a ejecutarse. Un cortocircuito en un `if` no
+        // protege a una consulta que ya se ha ejecutado.
+        //
+        // El recuento solo puede dar algo en una segunda pasada; se deja porque
+        // una migracion que se reintenta tiene que decir la verdad las dos veces.
+        if (Schema::hasColumn('creator_payment_methods', 'closed_at')) {
+            $sinCierre = DB::table('creator_payment_methods')
+                ->whereIn('status', ['rejected', 'disabled'])
+                ->where(fn ($q) => $q->whereNull('closed_at')->orWhereNull('closed_by_user_id'))
+                ->count();
 
-        // La columna todavía no existe la primera vez, así que este recuento
-        // solo puede dar algo en una segunda pasada. Se deja porque una
-        // migración que se reintenta tiene que decir la verdad las dos veces.
-        if (Schema::hasColumn('creator_payment_methods', 'closed_at') && $sinCierre > 0) {
-            $problemas[] = "Hay {$sinCierre} medios rechazados o desactivados sin decir quién ni cuándo.";
+            if ($sinCierre > 0) {
+                $problemas[] = "Hay {$sinCierre} medios rechazados o desactivados sin decir quién ni cuándo.";
+            }
         }
 
         $verificadoSinFecha = DB::table('creator_payment_methods')

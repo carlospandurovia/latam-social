@@ -91,7 +91,7 @@ $volcar = static function (array $lineas) use ($destino): void {
  *
  * @return array{0: list<string>, 1: int}
  */
-$ejecutar = static function (string $comando): array {
+$ejecutar = static function (string $comando, ?callable $parcial = null): array {
     $tuberias = [];
     $proceso = proc_open($comando.' 2>&1', [1 => ['pipe', 'w']], $tuberias);
 
@@ -101,10 +101,59 @@ $ejecutar = static function (string $comando): array {
 
     $lineas = [];
 
-    while (($linea = fgets($tuberias[1])) !== false) {
-        $linea = rtrim($linea, "\r\n");
-        $lineas[] = $linea;
-        echo '  | '.$linea.PHP_EOL;
+    // Lectura NO bloqueante con `stream_select`.
+    //
+    // Antes esto era un `while (fgets(...))` a secas, y el volcado al archivo
+    // solo ocurria cuando la puerta TERMINABA. Consecuencia: si una puerta se
+    // queda colgada -que es justo cuando hace falta saber donde-, el archivo no
+    // contiene ni una linea de ella. Paso de verdad con PHPUnit: tres puertas
+    // en verde, la cuarta parada, y cero informacion sobre en que test.
+    //
+    // Ahora se vuelca cada dos segundos aunque el proceso no diga nada, y se
+    // anota cuanto tiempo lleva callado. Un silencio de tres minutos en un test
+    // concreto es un dato; un archivo vacio no lo es.
+    stream_set_blocking($tuberias[1], false);
+
+    $ultimoVolcado = 0.0;
+    $ultimaLinea = microtime(true);
+    $resto = '';
+
+    while (true) {
+        $leer = [$tuberias[1]];
+        $escribir = null;
+        $excepcion = null;
+
+        if (stream_select($leer, $escribir, $excepcion, 0, 500000) > 0) {
+            $trozo = fread($tuberias[1], 65536);
+
+            if ($trozo === false || ($trozo === '' && feof($tuberias[1]))) {
+                break;
+            }
+
+            $resto .= $trozo;
+
+            while (($corte = strpos($resto, "\n")) !== false) {
+                $linea = rtrim(substr($resto, 0, $corte), "\r\n");
+                $resto = substr($resto, $corte + 1);
+                $lineas[] = $linea;
+                $ultimaLinea = microtime(true);
+                echo '  | '.$linea.PHP_EOL;
+            }
+        } elseif (feof($tuberias[1])) {
+            break;
+        }
+
+        $ahora = microtime(true);
+
+        if ($parcial !== null && $ahora - $ultimoVolcado >= 2.0) {
+            $callado = (int) round($ahora - $ultimaLinea);
+            $parcial($lineas, $callado);
+            $ultimoVolcado = $ahora;
+        }
+    }
+
+    if ($resto !== '') {
+        $lineas[] = rtrim($resto, "\r\n");
     }
 
     fclose($tuberias[1]);
@@ -125,7 +174,26 @@ foreach ($puertas as $clave => $puerta) {
     echo PHP_EOL."  == {$puerta['titulo']} ==".PHP_EOL;
 
     $inicio = microtime(true);
-    [$lineas, $codigo] = $ejecutar($puerta['cmd']);
+
+    // Lo que se escribe MIENTRAS la puerta corre. Si se queda colgada, esto es
+    // todo lo que va a haber, asi que dice tambien cuanto lleva sin hablar.
+    $enCurso = static function (array $lineas, int $callado) use ($volcar, $informe, $puerta, $inicio): void {
+        $transcurrido = round(microtime(true) - $inicio, 1);
+        $volcar(array_merge($informe, [
+            '',
+            str_repeat('-', 78),
+            "### {$puerta['titulo']}  ->  EN CURSO   [{$transcurrido}s]",
+            '### '.$puerta['cmd'],
+            str_repeat('-', 78),
+            $lineas === [] ? '(todavia sin salida)' : implode(PHP_EOL, $lineas),
+            '',
+            $callado >= 20
+                ? ">>> Lleva {$callado}s sin escribir nada. Si no avanza: php tools/bd-procesos.php"
+                : ">>> En curso ({$callado}s desde la ultima linea).",
+        ]));
+    };
+
+    [$lineas, $codigo] = $ejecutar($puerta['cmd'], $enCurso);
     $segundos = round(microtime(true) - $inicio, 1);
 
     $estado = $codigo === 0 ? 'OK' : "FALLO (codigo {$codigo})";

@@ -2,6 +2,42 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 
+## [Fase 3 · 3.8 — corrección `H-15`] — 2026-08-23
+
+### Corregido
+- **`H-15`: la migración `000490` consultaba `closed_at` antes de crearla.** Las
+  **18** pruebas de `MediosPagoTest` fallaron de golpe, ninguna llegó a
+  ejecutarse: el fallo estaba en `setUp()`, que corre las migraciones.
+  `ERROR 1054: Unknown column 'closed_at' in 'where clause'`, reproducido contra
+  MySQL 8. Había un `if (Schema::hasColumn(...) && $sinCierre > 0)` puesto
+  precisamente para eso, y no protegía nada: **el cortocircuito de un `&&` no
+  salva a una consulta que ya se ha ejecutado** una línea más arriba.
+
+### Añadido
+- **El grabador de migraciones comprueba las columnas que se CONSULTAN.** Era el
+  último hueco grande de la cadena: las 452 aserciones prueban el SQL de
+  referencia, `verificar-migraciones.py` compara lo que las migraciones
+  *declaran*, y `verificar-ddl-crudo.py` ejecuta solo el SQL *literal*. Nada
+  ejecutaba el constructor de consultas. Ahora el doble anota cada columna
+  consultada y la contrasta con las que existían en ese punto de la secuencia;
+  invoca las clausuras de `where(fn ($q) => ...)`; `Schema::hasColumn` deja de
+  devolver `true` siempre; y `DB::statement` registra los `ADD COLUMN` en el
+  momento. `verificar-migraciones.py` falla si encuentra alguno, así que ya
+  corre en CI. **Comprobado que reproduce el fallo** y que calla con la
+  migración corregida.
+- **`tools/diagnostico.php` vuelca también la puerta EN CURSO.** Solo escribía
+  al terminar cada puerta, así que un cuelgue en PHPUnit —justo cuando hace
+  falta saber dónde— dejaba el archivo sin una sola línea de esa puerta. Ahora
+  vuelca cada dos segundos y anota cuántos segundos lleva callada.
+
+### Notas de proceso
+- La primera versión del verificador nuevo daba **nueve falsos positivos**:
+  miraba todos los argumentos, y `whereIn('status', ['rejected','disabled'])`
+  denunciaba dos columnas que eran valores. Corregido antes de entregarlo. Un
+  verificador que grita por nada enseña a ignorarlo.
+- Pint se corre ahora **de verdad** en el entorno de trabajo, con el build
+  tomado de `vendor/`, sobre un espejo con la estructura real del repositorio.
+
 ## [Fase 3 · 3.8 — Medios de pago] — 2026-08-23
 
 Cierra la última condición de la puerta de activación (`BR-CREATOR-006`) y, de

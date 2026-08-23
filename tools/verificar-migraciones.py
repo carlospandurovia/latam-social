@@ -41,7 +41,30 @@ r = subprocess.run(['php', str(RAIZ / 'tools/recolectar-esquema.php')],
                    capture_output=True, text=True)
 if r.returncode != 0:
     print(r.stderr); sys.exit(2)
-mig = json.loads(r.stdout)['tablas']
+_grabado = json.loads(r.stdout)
+mig = _grabado['tablas']
+
+# H-15: una migracion que CONSULTA una columna antes de que exista.
+#
+# `verificar-ddl-crudo.py` ejecuta el SQL literal de las migraciones, pero no
+# las llamadas al constructor de consultas. La migracion 000490 comprobaba el
+# estado de los datos antes de endurecer la tabla y una de esas comprobaciones
+# miraba `closed_at` -- una columna que anade ella misma doce lineas mas abajo.
+# Sobre una base limpia eso es `ERROR 1054`, y como ocurria en `setUp()`
+# fallaron las 18 pruebas de golpe sin que ninguna llegara a ejecutarse.
+#
+# El grabador ya sabe que columnas existen en cada punto de la secuencia. Solo
+# habia que preguntarselo.
+avisos = _grabado.get('avisos', [])
+
+if avisos:
+    print('\n  Columnas consultadas ANTES de existir (esto es ERROR 1054 en una base limpia):')
+    for a in avisos:
+        print(f"  !! {a['migracion']}")
+        print(f"       {a['tabla']}.{a['columna']}  en ->{a['metodo']}()")
+    print('\n  Si la consulta solo debe correr cuando la columna ya este, metala DENTRO')
+    print('  del `if (Schema::hasColumn(...))`. Un cortocircuito en un `if` no protege')
+    print('  a una consulta que ya se ha ejecutado.')
 
 def q(sql):
     p = subprocess.run(CLIENTE + ['-N', DB, '-e', sql], capture_output=True, text=True)
@@ -116,6 +139,8 @@ for t in sorted(tablas_mig & tablas_ref):
     fks_ausentes = ref_fk.get(t, set()) - set(mig[t]['fk'])
     if fks_ausentes:
         print(f"  !! {t}: claves foraneas ausentes en la migracion: {sorted(fks_ausentes)}"); problemas += len(fks_ausentes)
+
+problemas += len(avisos)
 
 cols = sum(len(v['columnas']) for k, v in mig.items() if k not in IGNORAR)
 print(f"\n{len(tablas_mig)} tablas y {cols} columnas contrastadas contra {DB}: "

@@ -27,8 +27,14 @@ namespace Illuminate\Database\Migrations { abstract class Migration {} }
 
 namespace Illuminate\Support\Facades {
     class DB {
-        public static function statement(string $s): void { \Recolector::$raw[] = $s; }
-        public static function unprepared(string $s): void { \Recolector::$raw[] = $s; }
+        public static function statement(string $s): void {
+            \Recolector::$raw[] = $s;
+            \Recolector::registrarDdlCrudo($s);
+        }
+        public static function unprepared(string $s): void {
+            \Recolector::$raw[] = $s;
+            \Recolector::registrarDdlCrudo($s);
+        }
         // El doble del constructor de consultas. Encadena cualquier metodo
         // devolviendose a si mismo, PERO los que terminan una consulta
         // devuelven un escalar neutro. Antes devolvia `$this` siempre, y una
@@ -36,22 +42,7 @@ namespace Illuminate\Support\Facades {
         // endurecer una columna reventaba aqui con "object could not be
         // converted to string" -- un error del GRABADOR que parecia un error de
         // la migracion.
-        public static function table(string $t) { return new class {
-            private const ESCALARES = [
-                'count' => 0, 'sum' => 0, 'exists' => false, 'doesntExist' => true,
-                'value' => null, 'first' => null, 'max' => null, 'min' => null,
-                'insertGetId' => 0,
-                'insert' => true, 'update' => 0, 'delete' => 0,
-            ];
-            public function __call($n, $a) {
-                // `get()` y `pluck()` devuelven una Coleccion, y sobre ella se
-                // encadena `->count()`. Devolver un array pelado hacia reventar
-                // la migracion 000490, que agrupa y luego cuenta.
-                if ($n === 'get' || $n === 'pluck') {
-                    return new \ColeccionVacia();
-                }
-                return array_key_exists($n, self::ESCALARES) ? self::ESCALARES[$n] : $this;
-            } }; }
+        public static function table(string $t) { return new \ConsultaFalsa($t); }
         public static function selectOne(string $s) { return null; }
     }
     class Schema {
@@ -68,7 +59,18 @@ namespace Illuminate\Support\Facades {
         }
         public static function dropIfExists(string $t): void {}
         public static function hasTable(string $t): bool { return true; }
-        public static function hasColumn(string $t, string $c): bool { return true; }
+        // Devolvia `true` siempre, y eso convertia en falso positivo cualquier
+        // consulta protegida por un `hasColumn` -- justo el patron correcto que
+        // se quiere premiar. El grabador SABE que columnas hay: que lo diga.
+        public static function hasColumn(string $t, string $c): bool {
+            if (isset(\Recolector::BASE_LARAVEL[$t]) && in_array($c, \Recolector::BASE_LARAVEL[$t], true)) {
+                return true;
+            }
+            if (! isset(\Recolector::$tablas[$t]['columnas'])) {
+                return true;   // tabla que no ha visto crear: no puede opinar
+            }
+            return isset(\Recolector::$tablas[$t]['columnas'][$c]);
+        }
     }
 }
 
@@ -147,6 +149,94 @@ class Blueprint {
 
 namespace {
 
+/**
+ * Doble del constructor de consultas.
+ *
+ * Encadena cualquier metodo devolviendose a si mismo, PERO los que terminan una
+ * consulta devuelven un escalar neutro. Antes devolvia `$this` siempre, y una
+ * migracion que hiciera `->count()` reventaba aqui con "object could not be
+ * converted to string" -- un error del GRABADOR que parecia de la migracion.
+ *
+ * Y ademas ANOTA QUE COLUMNAS CONSULTA (H-15).
+ *
+ * Por que. La migracion 000490 comprobaba el estado de los datos antes de
+ * endurecer la tabla, y una de esas comprobaciones miraba `closed_at`... una
+ * columna que anade la propia migracion doce lineas mas abajo. En una base
+ * recien migrada eso es
+ *
+ *   SQLSTATE[42S22]: Unknown column 'closed_at' in 'where clause'
+ *
+ * y como pasaba en `setUp()`, fallaron las 18 pruebas a la vez. Ninguna de las
+ * siete herramientas lo vio: el SQL de referencia no ejecuta migraciones, y
+ * `verificar-ddl-crudo.py` solo ejecuta el SQL literal, no las llamadas al
+ * constructor de consultas. Este era el ultimo hueco grande de la cadena.
+ */
+class ConsultaFalsa {
+    private const ESCALARES = [
+        'count' => 0, 'sum' => 0, 'exists' => false, 'doesntExist' => true,
+        'value' => null, 'first' => null, 'max' => null, 'min' => null,
+        'insertGetId' => 0, 'insert' => true, 'update' => 0, 'delete' => 0,
+    ];
+
+    /** Metodos cuyo primer argumento de texto es un NOMBRE DE COLUMNA. */
+    private const POR_COLUMNA = [
+        'where' => true, 'orWhere' => true, 'whereNot' => true,
+        'whereNull' => true, 'orWhereNull' => true,
+        'whereNotNull' => true, 'orWhereNotNull' => true,
+        'whereIn' => true, 'orWhereIn' => true, 'whereNotIn' => true,
+        'whereBetween' => true, 'whereDate' => true, 'whereColumn' => true,
+        'orderBy' => true, 'orderByDesc' => true, 'groupBy' => true,
+        'value' => true, 'pluck' => true, 'max' => true, 'min' => true, 'sum' => true,
+    ];
+
+    public function __construct(private string $tabla) {}
+
+    public function __call($n, $a) {
+        // SOLO el primer argumento. La primera version miraba todos, y
+        // `whereIn('status', ['rejected','disabled'])` denunciaba dos columnas
+        // llamadas `rejected` y `disabled` que son VALORES. Un verificador que
+        // grita por nada ensena a ignorarlo, que es peor que no tenerlo.
+        if (isset(self::POR_COLUMNA[$n]) && isset($a[0]) && is_string($a[0])) {
+            \Recolector::comprobarColumna($this->tabla, $a[0], $n);
+        }
+
+        // `groupBy('a', 'b')` si acepta varias columnas.
+        if ($n === 'groupBy') {
+            foreach ($a as $arg) {
+                if (is_string($arg)) {
+                    \Recolector::comprobarColumna($this->tabla, $arg, $n);
+                }
+            }
+        }
+
+        // `where(fn ($q) => $q->whereNull('x'))`: si no se INVOCA la clausura,
+        // las condiciones anidadas no se ven. Y era justamente ahi donde estaba
+        // la columna inexistente de 000490.
+        foreach ($a as $arg) {
+            if ($arg instanceof \Closure) {
+                $arg($this);
+            }
+        }
+
+        // `update(['col' => valor])` y `first(['col', ...])` tambien nombran
+        // columnas, pero en la primera posicion y como array.
+        if (in_array($n, ['update', 'first', 'get', 'select'], true) && isset($a[0]) && is_array($a[0])) {
+            foreach ($a[0] as $clave => $valor) {
+                $nombre = is_string($clave) ? $clave : $valor;
+                if (is_string($nombre)) {
+                    \Recolector::comprobarColumna($this->tabla, $nombre, $n);
+                }
+            }
+        }
+
+        if ($n === 'get' || $n === 'pluck') {
+            return new \ColeccionVacia();
+        }
+
+        return array_key_exists($n, self::ESCALARES) ? self::ESCALARES[$n] : $this;
+    }
+}
+
 /** Doble de una Coleccion vacia: lo justo para que se pueda encadenar. */
 class ColeccionVacia implements Countable, IteratorAggregate {
     public function count(): int { return 0; }
@@ -173,7 +263,70 @@ class Recolector {
     public static array $raw = [];
     /** Tablas creadas con Schema::create por la migracion que se esta grabando. */
     public static array $creadas = [];
+    /** Columnas que una migracion consulta ANTES de que existan. Ver H-15. */
+    public static array $avisos = [];
+    /** Migracion que se esta grabando, para poder decir cual falla. */
+    public static string $migracionActual = '';
     public static string $tablaActual = '';
+
+    /**
+     * Columnas que la migracion base de Laravel crea y que este grabador nunca
+     * ve, porque no vive en app/Modules. Sin esto, cualquier consulta sobre
+     * `users` seria un falso positivo -- y un verificador que se equivoca
+     * ensena a ignorar sus avisos.
+     */
+    public const BASE_LARAVEL = [
+        'users' => ['id', 'name', 'email', 'email_verified_at', 'password',
+                    'remember_token', 'created_at', 'updated_at'],
+        'migrations' => ['id', 'migration', 'batch'],
+    ];
+
+    /**
+     * Una columna que se consulta antes de existir es `ERROR 1054` en cuanto la
+     * migracion corre sobre una base limpia. Aqui se caza en seco.
+     */
+    public static function comprobarColumna(string $tabla, string $columna, string $metodo): void
+    {
+        // Expresiones, no columnas: `COUNT(*)`, `id as x`.
+        if ($columna === '' || str_contains($columna, '(') || str_contains($columna, ' ')) {
+            return;
+        }
+        $columna = str_contains($columna, '.') ? substr($columna, strrpos($columna, '.') + 1) : $columna;
+        if ($columna === '*') {
+            return;
+        }
+        if (isset(self::BASE_LARAVEL[$tabla]) && in_array($columna, self::BASE_LARAVEL[$tabla], true)) {
+            return;
+        }
+        // Tabla que el grabador no ha visto crear: no puede opinar.
+        if (! isset(self::$tablas[$tabla]['columnas'])) {
+            return;
+        }
+        if (isset(self::$tablas[$tabla]['columnas'][$columna])) {
+            return;
+        }
+        self::$avisos[] = [
+            'migracion' => self::$migracionActual,
+            'tabla' => $tabla,
+            'columna' => $columna,
+            'metodo' => $metodo,
+        ];
+    }
+
+    /**
+     * Las columnas que se anaden o quitan con SQL crudo hay que registrarlas EN
+     * EL MOMENTO. El post-proceso del final llega tarde para este chequeo: la
+     * pregunta es que existia cuando la migracion hizo la consulta.
+     */
+    public static function registrarDdlCrudo(string $sql): void
+    {
+        if (preg_match('/ALTER\s+TABLE\s+`?(\w+)`?\s+ADD\s+COLUMN\s+`?(\w+)`?/is', $sql, $m)) {
+            self::$tablas[$m[1]]['columnas'][$m[2]] ??= ['tipo' => '?', 'nullable' => true, 'default' => null];
+        }
+        if (preg_match('/ALTER\s+TABLE\s+`?(\w+)`?\s+DROP\s+COLUMN\s+`?(\w+)`?/is', $sql, $m)) {
+            unset(self::$tablas[$m[1]]['columnas'][$m[2]]);
+        }
+    }
 }
 
 // Igual que en generar-triggers.php: aqui habia una ruta ABSOLUTA del entorno
@@ -211,6 +364,7 @@ if ($soloCrudo) {
     $salida = [];
     foreach ($archivos as $a) {
         $m = require $a;
+        Recolector::$migracionActual = basename($a);
         Recolector::$raw = [];
         Recolector::$creadas = [];
         $m->up();
@@ -239,6 +393,7 @@ if ($soloCrudo) {
 
 foreach ($archivos as $a) {
     $m = require $a;
+    Recolector::$migracionActual = basename($a);
     $m->up();
 }
 
@@ -293,5 +448,6 @@ echo json_encode([
     'tablas'      => Recolector::$tablas,
     'migraciones' => count($archivos),
     'raw'         => count(Recolector::$raw),
+    'avisos'      => Recolector::$avisos,
 ], JSON_PRETTY_PRINT);
 }
