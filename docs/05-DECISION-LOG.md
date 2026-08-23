@@ -681,6 +681,20 @@ impecable. Simplemente **la mitad de las reglas que declara no existen en ese se
 
 ---
 
+### DEC-057 — Aprobar una solicitud no activa al creador
+
+| | |
+|---|---|
+| **Decisión** | Aprobar crea al creador en **`pending`**, nunca en `active`. |
+| **Por qué** | `BR-CREATOR-006` exige completitud operativa mínima: identidad verificada, una red social validada, datos fiscales y un medio de pago verificado. Nada de eso existe en el momento de aprobar. |
+| **El error que evita** | Un creador «aprobado» al que se invita a una campaña, que entrega el contenido, y al que después **no se le puede pagar** porque nunca verificó una cuenta bancaria. El problema aparece al final, con un cliente esperando. |
+| **Duplicados (`BR-CREATOR-003`)** | Se avisa al abrir la solicitud (solo por correo, que es lo único que trae) y se **comprueba en el servidor al aprobar** (correo y documento, ya tecleado). La casilla de «confirmo que revisé» **no salta la comprobación**: dice que el revisor miró, no le da permiso para crear una colisión. Una confirmación que desactiva una validación es una validación que no existe. |
+| **Identidad tecleada a mano** | El nombre legal, la fecha de nacimiento y el documento los introduce el revisor. No es pereza: es el punto donde una persona se hace responsable de que el documento coincide con quien dice ser — por eso queda en la bitácora con su nombre, y por eso `DEC-055` no deja editarlos luego desde la ficha de contacto. |
+| **Rechazo con explicación obligatoria** | Mínimo 10 caracteres. Un rechazo sin motivo no se puede comunicar al creador ni auditar. Dos motivos distintos: `rejected` cierra la puerta, `duplicate` apunta a que ya está dentro. |
+| **Estado** | ADOPTADA e implementada (2026-08-22, iteración 3.4) |
+
+---
+
 ## Decisiones pendientes de información del negocio
 
 | # | Pregunta | Bloquea |

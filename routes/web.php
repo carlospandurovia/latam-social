@@ -6,6 +6,7 @@ use App\Modules\Core\Http\Controllers\BitacoraController;
 use App\Modules\Core\Http\Controllers\CatalogosController;
 use App\Modules\Core\Http\Controllers\PanelController;
 use App\Modules\Creator\Http\Controllers\CreadoresController;
+use App\Modules\Creator\Http\Controllers\SolicitudesController;
 use App\Modules\Identity\Http\Controllers\AccesoController;
 use Illuminate\Support\Facades\Route;
 
@@ -43,6 +44,17 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/catalogos/{catalogo}', [CatalogosController::class, 'show'])
         ->middleware('permiso:catalog.view')
         ->name('catalogos.show');
+
+    // La bandeja de entrada del sistema. Permiso propio: revisar identidades y
+    // dar de alta no es lo mismo que corregir un teléfono.
+    Route::get('/solicitudes', [SolicitudesController::class, 'index'])
+        ->middleware('permiso:creator.approve')->name('solicitudes.index');
+    Route::get('/solicitudes/{uuid}', [SolicitudesController::class, 'show'])
+        ->middleware('permiso:creator.approve')->whereUuid('uuid')->name('solicitudes.show');
+    Route::post('/solicitudes/{uuid}/aprobar', [SolicitudesController::class, 'aprobar'])
+        ->middleware('permiso:creator.approve')->whereUuid('uuid')->name('solicitudes.aprobar');
+    Route::post('/solicitudes/{uuid}/rechazar', [SolicitudesController::class, 'rechazar'])
+        ->middleware('permiso:creator.approve')->whereUuid('uuid')->name('solicitudes.rechazar');
 
     Route::get('/creadores', [CreadoresController::class, 'index'])
         ->middleware('permiso:creator.view')

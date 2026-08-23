@@ -2,6 +2,19 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 
+## [Fase 3 · 3.4 — Bandeja de solicitudes] — 2026-08-22
+
+### Añadido
+- Bandeja de solicitudes de creador: listado por estado, ficha, aprobación con
+  alta, y rechazo con explicación obligatoria. Permiso `creator.approve`.
+- **Aprobar crea al creador en `pending`, no en `active`** (`DEC-057`). Activar
+  exige la completitud operativa de `BR-CREATOR-006` y es otra puerta.
+- Detección de duplicados en dos momentos: al abrir la solicitud (correo) y en
+  el servidor al aprobar (correo y documento). La casilla «ya lo revisé» **no
+  salta la comprobación** (`BR-SEC-008`).
+- 11 pruebas. La principal verifica que un creador recién aprobado queda en
+  `pending` con `activated_at` nulo.
+
 ## [Fase 3 · 3.3 — Consulta de bitácora] — 2026-08-22
 
 ### Añadido

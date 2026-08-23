@@ -210,7 +210,8 @@ final class CimientosSeeder extends Seeder
         $matriz = [
             'campaign_manager' => [
                 'campaign.view', 'campaign.manage', 'campaign.view_margin',
-                'creator.view', 'creator.manage', 'client.view', 'content.review', 'catalog.view',
+                'creator.view', 'creator.manage', 'creator.approve',
+                'client.view', 'content.review', 'catalog.view',
             ],
             'finance' => [
                 'finance.view', 'finance.payout.create', 'finance.payout.approve',

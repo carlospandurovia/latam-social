@@ -96,6 +96,7 @@
 | **BR-SEC-005** | Ninguna acción de escritura usa `$request->all()`. Solo se persiste lo declarado en las reglas de validación. | 🔴 |
 | **BR-SEC-006** | Los campos de identidad de un creador (nombre legal, nacimiento, documento, correo) y su estado no se editan desde una pantalla de datos de contacto. | 🔴 |
 | **BR-SEC-007** | Ningún valor de un campo sensible se escribe en `audit_logs`. Se registra que cambió, con el valor como `[redactado]`. | 🔴 |
+| **BR-SEC-008** | Una confirmación del usuario («ya lo revisé») nunca sustituye a una validación del servidor. | 🔴 |
 
 ## Marca de plataforma y entidades legales (`BR-LE`)
 

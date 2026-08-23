@@ -138,6 +138,7 @@ composer arch                     # solo las fronteras (deptrac.yaml)
 | [`docs/fase-3/3.1-PERMISOS.md`](docs/fase-3/3.1-PERMISOS.md) | ✅ **Fase 3 arranca.** Autorización por permiso; `permission_role` estaba vacía y nada la comprobaba |
 | [`docs/fase-3/3.2-BITACORA-Y-EDICION.md`](docs/fase-3/3.2-BITACORA-Y-EDICION.md) | ✅ Bitácora inmutable y primera pantalla de escritura |
 | [`docs/fase-3/3.3-PANTALLA-DE-BITACORA.md`](docs/fase-3/3.3-PANTALLA-DE-BITACORA.md) | ✅ Consulta de la bitácora, con redacción de campos sensibles |
+| [`docs/fase-3/3.4-BANDEJA-DE-SOLICITUDES.md`](docs/fase-3/3.4-BANDEJA-DE-SOLICITUDES.md) | ✅ Alta de creador. **Aprobar no es activar** (BR-CREATOR-006) |
 
 ### Verificar el modelo de datos
 

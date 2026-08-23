@@ -27,6 +27,7 @@
         // cosas: la ruta manda, el menú acompaña.
         $secciones = [
           ['Panel', 'panel', 'panel', null],
+          ['Solicitudes', 'solicitudes.index', 'solicitudes', 'creator.approve'],
           ['Creadores', 'creadores.index', 'creadores', 'creator.view'],
           ['Bitácora', 'bitacora', 'bitacora', 'audit.view'],
         ];
