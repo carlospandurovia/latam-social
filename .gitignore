@@ -34,4 +34,5 @@ yarn-error.log
 # Salida local de `php tools/diagnostico.php`. Es el resultado de la ultima
 # ejecucion en UNA maquina: versionarla solo produce conflictos en cada diff.
 /tools/diagnostico.txt
+/tools/ci-github.txt
 /ci.txt

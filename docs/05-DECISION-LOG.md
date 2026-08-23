@@ -737,6 +737,21 @@ impecable. Simplemente **la mitad de las reglas que declara no existen en ese se
 
 ---
 
+### DEC-061 — Las pruebas usan una base local y desechable, nunca la de desarrollo
+
+| | |
+|---|---|
+| **Decisión** | `phpunit.xml` declara su propia conexión: `latam_social_test` en `127.0.0.1`. Las pruebas no tocan jamás la base a la que apunta el `.env`. |
+| **El fallo que corrige** | `phpunit.xml` no declaraba ninguna base, así que las pruebas heredaban el `DB_DATABASE` del `.env` — que apunta al **servidor remoto de desarrollo**. Y `RefreshDatabase` empieza siempre por `migrate:fresh`, que es un `DROP` de todas las tablas. **Cada `php artisan test` destruía la base de desarrollo.** |
+| **Y además tardaba** | Creaba 64 tablas y 161 restricciones por Internet contra un hosting compartido, una sentencia por viaje de ida y vuelta: la suite se quedaba colgada. En local tarda **60 segundos**. |
+| **Desde cuándo** | Desde la iteración 3.1, la primera con pruebas. No dolía con pocas tablas y sin datos; con el modelo completo, sí. Es un fallo mío que debí ver entonces. |
+| **Por qué no sqlite en memoria** | Es lo que suele hacerse y estaba comentado en `phpunit.xml` desde el principio. No sirve aquí: el esquema usa columnas generadas `STORED`, disparadores, `VARBINARY` y la sonda de mecanismo de `Restriccion`. Unas pruebas que pasan contra un motor que no se parece al de producción son peores que no tenerlas. |
+| **CI no se ve afectado** | PHPUnit solo aplica un `<env>` si la variable no existe ya en el entorno, y el flujo de CI las define a nivel de paso. Allí siguen mandando las suyas. |
+| **Herramientas que salieron de aquí** | `tools/crear-bd-pruebas.php` (crea la base sin necesitar el cliente `mysql` en el PATH) y `tools/diagnostico.php` (ejecuta las cuatro puertas y vuelca la salida en UTF-8; `> archivo.txt` en PowerShell escribe UTF-16 y convierte el stderr en objetos de error, lo que hizo ilegibles dos informes seguidos). |
+| **Estado** | ADOPTADA e implementada (2026-08-23, iteración 3.5) |
+
+---
+
 ## Decisiones pendientes de información del negocio
 
 | # | Pregunta | Bloquea |

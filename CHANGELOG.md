@@ -47,6 +47,26 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 - 20 pruebas de PHPUnit. La central pone las seis condiciones y quita **una sola**,
   cinco veces.
 
+### Corregido durante la verificación
+- **`phpunit.xml` no declaraba base de datos**, así que las pruebas usaban la del
+  `.env` —el servidor remoto de desarrollo— y `RefreshDatabase` empieza por
+  `migrate:fresh`. **Cada `php artisan test` borraba la base de desarrollo**, y
+  además tardaba tanto que la suite se colgaba. Ahora usan `latam_social_test` en
+  local: 60 segundos (`DEC-061`). El fallo venía de la iteración 3.1.
+- **`Almacen` guardaba archivos de 0 bytes en Windows.** Hacía `putFileAs()` y
+  luego preguntaba `size()` al disco; ahí discrepaban. Ahora los bytes se leen
+  una vez y de ellos salen contenido, tamaño y huella. Lo destapó `ck_files_size`.
+- **Fixtures de 3.2 y 3.4 creaban creadores «activos» sin nada detrás.** Los
+  rechazó `ck_creators_activation` — a través de Eloquent, no solo por SQL.
+
+### Añadido (herramientas)
+- `tools/diagnostico.php` — ejecuta las cuatro puertas y vuelca todo en UTF-8.
+  `> archivo.txt` en PowerShell escribe UTF-16 y convierte el stderr en objetos
+  de error: dos informes seguidos salieron ilegibles antes de detectarlo.
+- `tools/ci-github.php` — trae el resultado del último CI al mismo formato.
+- `tools/crear-bd-pruebas.php` — crea la base de pruebas sin necesitar el cliente
+  `mysql` en el PATH; distingue «no hay servidor» de «te rechaza el usuario».
+
 ### Abierto
 - `Q-46` — qué pasa con los creadores **ya activos** cuando se publica una versión
   nueva de los términos. Hoy **no se desactivan**. Decisión de negocio.
