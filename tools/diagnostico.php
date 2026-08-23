@@ -101,7 +101,7 @@ $ejecutar = static function (string $comando, ?callable $parcial = null): array 
 
     $lineas = [];
 
-    // Lectura NO bloqueante con `stream_select`.
+    // Lectura NO bloqueante, a base de `fread` + `usleep`.
     //
     // Antes esto era un `while (fgets(...))` a secas, y el volcado al archivo
     // solo ocurria cuando la puerta TERMINABA. Consecuencia: si una puerta se
@@ -112,6 +112,12 @@ $ejecutar = static function (string $comando, ?callable $parcial = null): array 
     // Ahora se vuelca cada dos segundos aunque el proceso no diga nada, y se
     // anota cuanto tiempo lleva callado. Un silencio de tres minutos en un test
     // concreto es un dato; un archivo vacio no lo es.
+    //
+    // Y NO con `stream_select`, que fue el primer intento: en Windows no
+    // funciona sobre las tuberias de `proc_open` --solo sobre sockets-- y se
+    // quedaba bloqueado ahi. El sintoma era exquisito: el archivo se escribia
+    // UNA vez, a los dos segundos, y despues nada. Aqui, en Linux, funcionaba
+    // perfectamente. Es la tercera divergencia de entorno de esta iteracion.
     stream_set_blocking($tuberias[1], false);
 
     $ultimoVolcado = 0.0;
@@ -119,17 +125,13 @@ $ejecutar = static function (string $comando, ?callable $parcial = null): array 
     $resto = '';
 
     while (true) {
-        $leer = [$tuberias[1]];
-        $escribir = null;
-        $excepcion = null;
+        $trozo = fread($tuberias[1], 65536);
 
-        if (stream_select($leer, $escribir, $excepcion, 0, 500000) > 0) {
-            $trozo = fread($tuberias[1], 65536);
+        if ($trozo === false) {
+            break;
+        }
 
-            if ($trozo === false || ($trozo === '' && feof($tuberias[1]))) {
-                break;
-            }
-
+        if ($trozo !== '') {
             $resto .= $trozo;
 
             while (($corte = strpos($resto, "\n")) !== false) {
@@ -139,8 +141,24 @@ $ejecutar = static function (string $comando, ?callable $parcial = null): array 
                 $ultimaLinea = microtime(true);
                 echo '  | '.$linea.PHP_EOL;
             }
-        } elseif (feof($tuberias[1])) {
-            break;
+        } else {
+            // Nada que leer ahora mismo. Si ademas el hijo ya termino y la
+            // tuberia esta vacia, se acabo.
+            $estado = proc_get_status($proceso);
+
+            if (feof($tuberias[1]) || ($estado !== false && $estado['running'] === false)) {
+                // Una ultima pasada por si quedaba algo en el buffer.
+                $ultimo = stream_get_contents($tuberias[1]);
+
+                if (is_string($ultimo) && $ultimo !== '') {
+                    $resto .= $ultimo;
+                    continue;
+                }
+
+                break;
+            }
+
+            usleep(100000);
         }
 
         $ahora = microtime(true);
