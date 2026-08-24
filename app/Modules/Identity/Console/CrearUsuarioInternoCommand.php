@@ -56,9 +56,40 @@ final class CrearUsuarioInternoCommand extends Command
         $rolId = DB::table('roles')->where('code', $rol)->where('scope', 'internal')->value('id');
 
         if ($rolId === null) {
+            // La primera version decia «no existe el rol X» y debajo imprimia
+            // la lista de roles internos. Cuando la tabla estaba VACIA, esa
+            // lista salia vacia tambien y el mensaje se quedaba en un callejon
+            // sin salida: el problema no era el rol, era que no habia ninguno.
+            // Un error tiene que decir que hacer a continuacion.
+            $internos = DB::table('roles')->where('scope', 'internal')->orderBy('code')->pluck('code')->all();
+
+            if ($internos === []) {
+                $total = DB::table('roles')->count();
+
+                $this->error('No hay ningun rol interno en esta base de datos.');
+                $this->newLine();
+
+                if ($total === 0) {
+                    $this->line('La tabla `roles` esta vacia: faltan los cimientos. Corre:');
+                    $this->newLine();
+                    $this->line('    php artisan db:seed --class=Database\\Seeders\\CimientosSeeder');
+                } else {
+                    $this->line("Hay {$total} roles, pero ninguno con `scope = internal`:");
+                    foreach (DB::table('roles')->orderBy('code')->get(['code', 'scope']) as $r) {
+                        $this->line("    {$r->code}  ->  scope = {$r->scope}");
+                    }
+                }
+
+                $this->newLine();
+                $this->line('Comprueba tambien que apuntas a la base que crees: '
+                    .'DB_DATABASE = '.(string) config('database.connections.'
+                        .config('database.default').'.database'));
+
+                return self::FAILURE;
+            }
+
             $this->error("No existe el rol interno «{$rol}».");
-            $this->line('Roles internos: '.implode(', ', DB::table('roles')
-                ->where('scope', 'internal')->orderBy('code')->pluck('code')->all()));
+            $this->line('Roles internos disponibles: '.implode(', ', $internos));
 
             return self::FAILURE;
         }
