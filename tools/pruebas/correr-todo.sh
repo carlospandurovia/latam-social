@@ -8,7 +8,7 @@
 # "recree la base y cargue la semilla".
 set -e
 cd "$(dirname "$0")/../.."
-SUITES="2.12-contenido 2.13-finanzas 3.5-activacion 3.6-fiscal 3.7-redes 3.8-pagos 3.9-tarifas"
+SUITES="2.12-contenido 2.13-finanzas 3.5-activacion 3.6-fiscal 3.7-redes 3.8-pagos 3.9-tarifas 3.10-periodos"
 
 # Los nombres son argumentos para poder correr la misma bateria en otro motor:
 #   MYSQL_CMD=mysql8 bash tools/pruebas/correr-todo.sh latam_m8 latam_m8_57
@@ -45,5 +45,11 @@ echo ""; echo "TOTAL: $tot_ok correctas, $tot_fail fallidas"
 # contradecia al esquema, y las tres se habrian visto aqui en dos segundos.
 echo ""; echo "===== fixturas de PHPUnit ====="
 python3 tools/verificar-fixturas.py "$SIN" --cliente "$CLIENTE" || tot_fail=$((tot_fail+1))
+
+# Que el esquema de referencia y las migraciones digan lo mismo sobre periodos.
+# Los dos salen de la misma clase, asi que hoy coinciden; esto es lo que hace
+# que sigan coincidiendo manana.
+echo ""; echo "===== periodos: esquema contra migraciones ====="
+python3 tools/verificar-periodos.py || tot_fail=$((tot_fail+1))
 
 [ "$tot_fail" -eq 0 ]

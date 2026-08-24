@@ -137,3 +137,56 @@ CREATE TABLE contacts (
   CONSTRAINT ck_contacts_type CHECK (contact_type IN ('commercial','billing','legal','operations')),
   CONSTRAINT ck_contacts_status CHECK (status IN ('active','inactive'))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ===========================================================================
+-- 3.10 -- El historico no se solapa
+--
+-- `uq_ctxp_current` ya garantizaba una sola fila VIGENTE. Lo que no garantizaba era que
+-- el historico tuviera una sola respuesta para una fecha PASADA:
+--
+--     .cual es el perfil fiscal del cliente de HOY?          -> una sola, garantizado
+--     .cual era el 1 de mayo?          -> podian ser dos
+--
+-- Es el mismo agujero que `T-12` en el creador, del lado del cliente: el dato
+-- con el que se emite la factura.
+--
+-- Generados por App\Shared\Database\Periodo, no escritos a mano: la migracion
+-- usa esa misma clase, asi que esquema de referencia y produccion no pueden
+-- divergir. Van en disparadores porque la regla mira OTRAS FILAS, y eso ningun
+-- CHECK lo admite --tampoco en MySQL 8--.
+-- ===========================================================================
+
+DELIMITER //
+
+CREATE TRIGGER `tg_ctxp_sin_solape_ins`
+BEFORE INSERT ON `client_tax_profiles`
+FOR EACH ROW
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM `client_tax_profiles`
+         WHERE `client_organization_id` <=> NEW.`client_organization_id`
+           AND `country_id` <=> NEW.`country_id`
+           AND NEW.`valid_from` <= IFNULL(`valid_to`, '9999-12-31')
+           AND `valid_from` <= IFNULL(NEW.`valid_to`, '9999-12-31')
+    ) THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Ya hay un perfil fiscal de ese cliente para ese pais en esas fechas.';
+    END IF;
+END//
+
+CREATE TRIGGER `tg_ctxp_sin_solape_upd`
+BEFORE UPDATE ON `client_tax_profiles`
+FOR EACH ROW
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM `client_tax_profiles`
+         WHERE `id` <> NEW.`id`
+           AND `client_organization_id` <=> NEW.`client_organization_id`
+           AND `country_id` <=> NEW.`country_id`
+           AND NEW.`valid_from` <= IFNULL(`valid_to`, '9999-12-31')
+           AND `valid_from` <= IFNULL(NEW.`valid_to`, '9999-12-31')
+    ) THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Ya hay un perfil fiscal de ese cliente para ese pais en esas fechas.';
+    END IF;
+END//
+
+DELIMITER ;

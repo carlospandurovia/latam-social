@@ -397,3 +397,63 @@ BEGIN
 END//
 
 DELIMITER ;
+
+-- ===========================================================================
+-- 3.10 -- El historico no se solapa
+--
+-- `uq_ctp_current` ya garantizaba una sola fila VIGENTE. Lo que no garantizaba era que
+-- el historico tuviera una sola respuesta para una fecha PASADA:
+--
+--     .cual es el regimen fiscal de HOY?          -> una sola, garantizado
+--     .cual era el 1 de mayo?          -> podian ser dos
+--
+-- En un historial fiscal esa ambiguedad se paga en una declaracion: `T-12`.
+--
+-- La regla solo mira los perfiles APROBADOS. Uno `pending` o `rejected` nunca
+-- estuvo vigente, y si ocupara periodo un error de captura bloquearia el
+-- historico del creador para siempre.
+--
+-- Generados por App\Shared\Database\Periodo, no escritos a mano: la migracion
+-- usa esa misma clase, asi que esquema de referencia y produccion no pueden
+-- divergir. Van en disparadores porque la regla mira OTRAS FILAS, y eso ningun
+-- CHECK lo admite --tampoco en MySQL 8--.
+-- ===========================================================================
+
+DELIMITER //
+
+CREATE TRIGGER `tg_ctp_sin_solape_ins`
+BEFORE INSERT ON `creator_tax_profiles`
+FOR EACH ROW
+BEGIN
+    IF (NEW.`status` = 'approved')
+       AND EXISTS (
+        SELECT 1 FROM `creator_tax_profiles`
+         WHERE `creator_id` <=> NEW.`creator_id`
+           AND `country_id` <=> NEW.`country_id`
+           AND NEW.`valid_from` <= IFNULL(`valid_to`, '9999-12-31')
+           AND `valid_from` <= IFNULL(NEW.`valid_to`, '9999-12-31')
+           AND (status = 'approved')
+    ) THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Ya hay un perfil fiscal aprobado para ese pais en esas fechas: cierre el anterior el dia antes.';
+    END IF;
+END//
+
+CREATE TRIGGER `tg_ctp_sin_solape_upd`
+BEFORE UPDATE ON `creator_tax_profiles`
+FOR EACH ROW
+BEGIN
+    IF (NEW.`status` = 'approved')
+       AND EXISTS (
+        SELECT 1 FROM `creator_tax_profiles`
+         WHERE `id` <> NEW.`id`
+           AND `creator_id` <=> NEW.`creator_id`
+           AND `country_id` <=> NEW.`country_id`
+           AND NEW.`valid_from` <= IFNULL(`valid_to`, '9999-12-31')
+           AND `valid_from` <= IFNULL(NEW.`valid_to`, '9999-12-31')
+           AND (status = 'approved')
+    ) THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Ya hay un perfil fiscal aprobado para ese pais en esas fechas: cierre el anterior el dia antes.';
+    END IF;
+END//
+
+DELIMITER ;

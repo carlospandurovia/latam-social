@@ -854,6 +854,39 @@ impecable. Simplemente **la mitad de las reglas que declara no existen en ese se
 
 ### DEC-070 — Un bloqueo de agenda se registra aunque pise una campaña aceptada
 
+### DEC-071 — Un perfil fiscal nuevo no puede empezar antes que el vigente
+
+**Contexto.** Al cerrar `T-12` había que decidir qué pasa cuando el perfil nuevo
+entra en vigor antes —o el mismo día— que el que está vigente. En tarifas
+(`DEC-068` y alrededores) se eligió rechazarlo. Pero un cambio de régimen ante
+SUNAT **sí puede ser retroactivo**, así que rechazar no era obviamente correcto.
+
+**Decisión.** Se rechaza, igual que en tarifas. El histórico fiscal no se
+reescribe desde la pantalla.
+
+**Por qué.** La alternativa —dejar que el perfil nuevo anule al vigente— convierte
+la pantalla de perfil fiscal en una herramienta para reescribir un histórico del
+que sale la retención practicada. Eso necesita rastro de quién y por qué, y eso
+es otra iteración, no un `if`.
+
+**Consecuencia asumida y explícita.** Si SUNAT emite una resolución retroactiva,
+hoy hay que corregirlo en base de datos. Queda como `Q-48`: si pasa más de una
+vez, la opción buena es la tercera que se descartó —permitirlo solo a Finanzas,
+con motivo obligatorio en la bitácora—.
+
+### DEC-072 — `creator_addresses` queda fuera de la regla de periodos
+
+**Contexto.** De las cinco tablas con histórico sin blindar, cuatro necesitaban
+la regla. `creator_addresses` no.
+
+**Decisión.** No se le pone regla de solape.
+
+**Por qué.** Su clave es `uq_creator_addresses_default (default_gate, creator_id,
+address_type)`. El esquema **ya decidió** que puede haber varias direcciones del
+mismo tipo y que una está marcada como la de por defecto. Prohibir el solape ahí
+no sería endurecer el diseño, sería contradecirlo. Se confirmó antes de tocar
+nada en lugar de blindar las cinco de una pasada.
+
 | | |
 |---|---|
 | **Decisión** | El bloqueo entra siempre. La pantalla dice qué campañas **ya aceptadas** quedan dentro, con su código y su estado. |
@@ -911,6 +944,7 @@ impecable. Simplemente **la mitad de las reglas que declara no existen en ese se
 | **Q-46** | ⚠️ **§56 — nuevo, abierto por `DEC-059`.** Cuando se publique una **versión nueva de los términos**, ¿qué pasa con los creadores **ya activos**? Hoy el sistema **no los desactiva**: siguen activos con la aceptación de la versión anterior. Las opciones son (a) dejarlo así y pedir la nueva aceptación solo la próxima vez que hagan algo relevante, (b) bloquear invitaciones hasta que re-acepten, (c) suspenderlos. Tiene consecuencias legales y operativas, y **no lo decido yo** | Antes de publicar la segunda versión de los términos |
 | **Q-47** | ⚠️ **Abierto por la iteración 3.6.** `BR-CREATOR-014` fija un **periodo de gracia de 30 días** antes de rechazar a un creador por falta de datos fiscales, y dice «configurable». ¿Configurable **globalmente** (una constante de despliegue) o **por creador**, como `payment_term_days`? No lo invento: son dos modelos de datos distintos. Hasta que se responda, el periodo de gracia no está implementado | Iteración de rechazo de creadores |
 | **T-12** | 📋 **`creator_tax_profiles` cierra el perfil anterior con `valid_to = valid_from` del nuevo**, o sea que se solapan un día. `uq_ctp_current` garantiza un solo perfil *vigente*, pero el histórico fiscal tiene el mismo defecto que `H-16` cerró en tarifas: «qué régimen aplicaba el 1 de mayo» puede tener dos respuestas. En un historial fiscal eso se paga en una declaración. Encontrado al escribir 3.9; merece iteración propia, no colarlo aquí | Antes de la primera declaración con dos regímenes |
+| **T-14** | 📋 **Los cuatro disparadores de 3.9 siguen escritos a mano.** `creator_rates` y `creator_availability` imponen la misma regla que ahora genera `App\Shared\Database\Periodo`, pero con SQL tecleado. Son doce líneas duplicadas cuatro veces, y un arreglo futuro habría que aplicarlo en dos sitios. Migrarlos es mecánico y la suite de 3.9 (23 aserciones) lo verifica sin depender de PHPUnit. Se deja para su propia iteración porque 3.9 todavía no tiene la suite de PHPUnit confirmada en verde | Cuando 3.9 esté en verde |
 | **T-13** | 📋 **Los `insert` de los fixtures están escritos a mano en 10 sitios de 7 archivos.** Cada tabla que gana una restricción los deja obsoletos de uno en uno, y el aviso llega como «14 failed» en la máquina de quien recibe la entrega. `tools/verificar-fixturas.py` ya detecta la contradicción, pero no la evita: hace falta un apoyo compartido en `tests/` que sepa construir un creador `pending` y uno `active` **con su evidencia** (fecha de activación, identidad verificada, revisor y documento). Hoy nadie puede escribir un creador activo en una prueba sin descubrir tres restricciones a base de errores 4025 | Cuando una prueba necesite un creador activo |
 | **T-11** | 📋 **Rotar `APP_KEY` invalida las huellas de las cuentas bancarias.** Los números siguen siendo recuperables (`Crypt` conserva `APP_PREVIOUS_KEYS`), pero la huella es un HMAC con esa clave: tras una rotación, la detección de cuentas repetidas (`DEC-065`) deja de funcionar sobre las filas viejas. Hace falta un comando que las recalcule. No es un problema hoy y sí lo será el día de la primera rotación | Antes de la primera rotación de clave |
 | **T-10** | 📋 **Aviso al creador cuando cambian sus datos fiscales.** `BR-CREATOR-007` lo exige y el módulo Communication no existe. Hoy la pantalla se lo recuerda al operador para que lo haga a mano; queda pendiente automatizarlo | Fase de Communication |

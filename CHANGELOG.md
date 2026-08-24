@@ -2,6 +2,61 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 
+## [Fase 3 · 3.10 (1/2) — El histórico no se solapa] — 2026-08-24
+
+Siete tablas del esquema llevan `valid_from` / `valid_to`, y las siete
+garantizaban que hay una sola fila **vigente**. Ninguna garantizaba que el
+histórico tuviera una sola respuesta para una fecha **pasada**.
+
+### Corregido
+- **`T-12`: el histórico fiscal del creador admitía dos regímenes el mismo día.**
+  `PerfilFiscalController` cierra el perfil anterior con `valid_to = valid_from`
+  del nuevo, y `valid_to` es inclusivo: el día del relevo los dos están vigentes.
+  En un historial de precios eso se paga explicando una factura; en uno fiscal,
+  en una declaración.
+- **El mismo agujero en `client_tax_profiles`** — de ahí salen el RUC y la razón
+  social con los que se emitió la factura.
+- **Y en `legal_entity_countries`, que es el más caro.** `uq_lec_country` impedía
+  dos sociedades vigentes a la vez, pero el resolver de facturación elige por
+  país **y por fecha**: dos filas cerradas solapadas son exactamente el empate
+  que esa clave existía para evitar. Una factura emitida por la sociedad
+  equivocada no se corrige con un `UPDATE`.
+
+### Añadido
+- **`App\Shared\Database\Periodo`** — una declaración por tabla genera los dos
+  disparadores. A diferencia de `Restriccion`, aquí no hay elección de mecanismo:
+  la regla mira otras filas y ningún motor admite una subconsulta en un `CHECK`,
+  tampoco MySQL 8. Siempre disparador, y queda escrito para que nadie lo
+  reintente.
+- `Periodo::exigirSinSolapePrevio()` — un disparador no valida lo que ya está
+  dentro, así que las tres migraciones se plantan si la tabla ya se contradice.
+  Y no arreglan nada: cuál de los dos periodos valía ese día es una respuesta
+  contable.
+- `tools/pruebas/3.10-periodos.sh` (24 aserciones) y
+  `tools/verificar-periodos.py`, que contrasta el esquema de referencia contra
+  las migraciones.
+- `DEC-071` retroactividad fiscal: se rechaza, como en tarifas ·
+  `DEC-072` `creator_addresses` queda fuera a propósito · `T-14` migrar los
+  cuatro disparadores de 3.9 a `Periodo`.
+
+### Cerrado en las herramientas
+- **`rehacer-referencia.sh` cargaba copias viejas.** La base que imita a Percona
+  5.7 se carga de las copias `-sin-check` generadas, no de `tools/sql/*.sql`.
+  Editar el esquema sin regenerar dejaba esa base sin la regla recién añadida, en
+  silencio. El síntoma fue una suite en rojo acusando a la regla de no funcionar
+  cuando lo que pasaba es que no estaba. Regenerar tarda 0,16 s: ahora lo hace el
+  propio constructor.
+- **El grabador no conocía `Periodo`.** Sin el doble, las dos puertas que leen
+  migraciones se caían con «Class not found» sin llegar a comprobar nada. Es el
+  mismo hueco que dejó pasar `H-15`.
+- **La suite chocaba con la de 3.6**, que escribe en la misma tabla. 3.10 se trae
+  ahora su propio creador y no depende del orden.
+
+### Falta
+- La segunda mitad: hasta que `PerfilFiscalController` cierre el perfil anterior
+  el día **antes**, no se puede reemplazar un perfil fiscal desde la pantalla —la
+  base ya lo rechaza, con razón—.
+
 ## [Puerta nueva · fixturas contra el esquema] — 2026-08-24
 
 ### Corregido

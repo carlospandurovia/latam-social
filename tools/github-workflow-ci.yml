@@ -151,11 +151,17 @@ jobs:
           bash tools/pruebas/3.7-redes.sh      latam_p57_triggers
           bash tools/pruebas/3.8-pagos.sh      latam_p57_triggers
           bash tools/pruebas/3.9-tarifas.sh    latam_p57_triggers
+          bash tools/pruebas/3.10-periodos.sh  latam_p57_triggers
 
       # Los fixtures de PHPUnit ejecutados contra el esquema, ANTES de que
       # PHPUnit los use. Aqui el fallo dice «`ck_camp_confirmed` incumplida, el
       # fixture pone status='in_progress'»; en PHPUnit dice «14 failed» y hay
       # que ir a buscarlo. Tres iteraciones se fueron en rojo por esto.
+      # La regla de periodos vive en el esquema de referencia Y en la migracion.
+      # Hoy salen de la misma clase; esto es lo que impide que manana no.
+      - name: El esquema y las migraciones dicen lo mismo sobre periodos
+        run: python3 tools/verificar-periodos.py
+
       - name: Los fixtures de las pruebas no contradicen al esquema
         run: |
           export MYSQL_CMD="mysql -h127.0.0.1 -P3307 --protocol=TCP -uroot -proot"

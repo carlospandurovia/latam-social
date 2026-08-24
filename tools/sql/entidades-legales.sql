@@ -118,3 +118,55 @@ CREATE TABLE document_series (
   CONSTRAINT ck_ds_env CHECK (environment IN ('sandbox','production')),
   CONSTRAINT ck_ds_number CHECK (next_number >= 1)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ===========================================================================
+-- 3.10 -- El historico no se solapa
+--
+-- `uq_lec_country` ya garantizaba una sola fila VIGENTE. Lo que no garantizaba era que
+-- el historico tuviera una sola respuesta para una fecha PASADA:
+--
+--     .cual es la sociedad que cubre el pais de HOY?          -> una sola, garantizado
+--     .cual era el 1 de mayo?          -> podian ser dos
+--
+-- Y aqui es lo mas caro de los tres. El resolver de facturacion elige sociedad
+-- por pais Y POR FECHA. Dos filas vigentes para una misma fecha pasada es un
+-- empate, y un empate ahi es una factura emitida por la sociedad equivocada.
+--
+-- Generados por App\Shared\Database\Periodo, no escritos a mano: la migracion
+-- usa esa misma clase, asi que esquema de referencia y produccion no pueden
+-- divergir. Van en disparadores porque la regla mira OTRAS FILAS, y eso ningun
+-- CHECK lo admite --tampoco en MySQL 8--.
+-- ===========================================================================
+
+DELIMITER //
+
+CREATE TRIGGER `tg_lec_sin_solape_ins`
+BEFORE INSERT ON `legal_entity_countries`
+FOR EACH ROW
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM `legal_entity_countries`
+         WHERE `country_id` <=> NEW.`country_id`
+           AND NEW.`valid_from` <= IFNULL(`valid_to`, '9999-12-31')
+           AND `valid_from` <= IFNULL(NEW.`valid_to`, '9999-12-31')
+    ) THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Ya hay una sociedad cubriendo ese pais en esas fechas: cierre la anterior el dia antes.';
+    END IF;
+END//
+
+CREATE TRIGGER `tg_lec_sin_solape_upd`
+BEFORE UPDATE ON `legal_entity_countries`
+FOR EACH ROW
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM `legal_entity_countries`
+         WHERE `id` <> NEW.`id`
+           AND `country_id` <=> NEW.`country_id`
+           AND NEW.`valid_from` <= IFNULL(`valid_to`, '9999-12-31')
+           AND `valid_from` <= IFNULL(NEW.`valid_to`, '9999-12-31')
+    ) THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Ya hay una sociedad cubriendo ese pais en esas fechas: cierre la anterior el dia antes.';
+    END IF;
+END//
+
+DELIMITER ;

@@ -23,6 +23,34 @@ namespace App\Shared\Database { class Restriccion {
     public static function quitar(...$a): void {}
 } }
 
+// `Periodo` (3.10) tenia que estar aqui desde el primer dia de su existencia.
+// Sin el doble, cualquier migracion que lo use muere con "Class not found" y
+// las dos puertas que leen migraciones --`verificar-migraciones.py` y
+// `verificar-ddl-crudo.py`-- se caen sin llegar a comprobar nada. Es el mismo
+// hueco de grabador que dejo pasar `H-15`: la herramienta no sabia de algo que
+// el codigo ya usaba.
+//
+// Se anota la DECLARACION, no el SQL. El SQL lo genera la clase de verdad y lo
+// contrasta `tools/verificar-periodos.py`; reimplementarlo aqui seria repetir
+// el error contra el que avisa `generar-triggers.py`: un doble que se equivoca
+// igual que el original nunca encuentra nada.
+namespace App\Shared\Database { class Periodo {
+    public static function sinSolape(
+        string $tabla, string $nombre, array $serie, string $mensaje,
+        ?string $donde = null, array $columnasDonde = [],
+        string $desde = 'valid_from', string $hasta = 'valid_to', string $clavePrimaria = 'id',
+    ): void {
+        \Recolector::$periodos[] = [
+            'tabla' => $tabla, 'nombre' => $nombre, 'serie' => $serie,
+            'mensaje' => $mensaje, 'donde' => $donde, 'columnasDonde' => $columnasDonde,
+            'desde' => $desde, 'hasta' => $hasta, 'clavePrimaria' => $clavePrimaria,
+        ];
+    }
+    public static function quitar(...$a): void {}
+    public static function exigirSinSolapePrevio(...$a): void {}
+    public static function solapes(...$a): array { return []; }
+} }
+
 namespace Illuminate\Database\Migrations { abstract class Migration {} }
 
 namespace Illuminate\Support\Facades {
@@ -273,6 +301,8 @@ class Recolector {
     public static array $creadas = [];
     /** Columnas que una migracion consulta ANTES de que existan. Ver H-15. */
     public static array $avisos = [];
+    /** Reglas de periodo declaradas con `Periodo::sinSolape` (3.10). */
+    public static array $periodos = [];
     /** Migracion que se esta grabando, para poder decir cual falla. */
     public static string $migracionActual = '';
     public static string $tablaActual = '';
@@ -457,5 +487,6 @@ echo json_encode([
     'migraciones' => count($archivos),
     'raw'         => count(Recolector::$raw),
     'avisos'      => Recolector::$avisos,
+    'periodos'    => Recolector::$periodos,
 ], JSON_PRETTY_PRINT);
 }

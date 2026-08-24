@@ -17,6 +17,18 @@ CLIENTE=${MYSQL_CMD:-mariadb}
 CON=${1:-latam_fin}
 SIN=${2:-latam_fin_57}
 
+# Las copias `-sin-check` y `triggers.sql` se REGENERAN antes de cargar nada.
+#
+# Sin esto, editar un `tools/sql/*.sql` y no acordarse de regenerar deja la base
+# de disparadores --la que imita a Percona 5.7, o sea a PRODUCCION-- cargando
+# una copia vieja. Y falla en silencio: la base se crea, las tablas estan todas,
+# y lo unico que falta es la regla que se acaba de anadir. Paso con los
+# disparadores de periodo de 3.10, y el sintoma fue una suite en rojo acusando a
+# la regla de no funcionar cuando lo que pasaba es que no estaba.
+#
+# Tarda 0,16 s. No habia ninguna razon para no hacerlo aqui.
+python3 tools/generar-triggers.py > /dev/null
+
 ORDEN=$(python3 - <<'PY'
 import re, glob, os
 mods = {}
