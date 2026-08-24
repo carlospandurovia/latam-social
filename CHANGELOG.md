@@ -2,6 +2,25 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 
+## [PHPUnit en verde · y un hueco que salió al hacerlo] — 2026-08-24
+
+**1 fallo, 145 pasan (418 aserciones)** — venía de 14 fallos y 129 pasando.
+
+### Corregido
+- `test_para_un_menor_el_perfil_del_creador_no_cuenta` capturaba los dos perfiles
+  —el del menor y el del tutor— con la misma fecha de inicio, y `DEC-071` lo
+  rechaza con razón: el relevo cierra el anterior **el día antes**, y no se puede
+  cerrar un perfil la víspera de su propio inicio. Ahora el del tutor empieza en
+  febrero.
+
+### Anotado
+- **`T-15`: no existe anular un perfil fiscal aprobado.** Es lo que ese caso
+  pedía de verdad —un perfil a nombre de un menor no fue válido ni un día—, y no
+  hay forma de decirlo: `superseded` significa *reemplazado* (estuvo vigente) y
+  `rejected` significa rechazado en revisión (antes de aprobarse). El histórico
+  queda honesto —en enero el perfil del expediente era el del menor, y no
+  valía— pero no es lo que querríamos poder hacer.
+
 ## [T-14 — Un solo generador de periodos] — 2026-08-24
 
 ### Cambiado

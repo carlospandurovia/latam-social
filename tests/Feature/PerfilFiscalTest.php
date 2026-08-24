@@ -452,11 +452,27 @@ final class PerfilFiscalTest extends TestCase
         $this->assertSame('approved', DB::table('creator_tax_profiles')->where('id', $id)->value('status'));
         $this->assertFalse($this->cumpleFiscal(), 'Un perfil a nombre del menor no puede dar por buena la condicion fiscal.');
 
-        // A nombre del tutor: ahora sí.
+        // A nombre del tutor: ahora sí. Y **desde febrero**, no desde el mismo
+        // día.
+        //
+        // Esta prueba capturaba los dos perfiles con la fecha por defecto
+        // (`2026-01-01`), y `DEC-071` la puso en rojo con razón: el relevo se
+        // hace cerrando el anterior el día antes, y no se puede cerrar un
+        // perfil el día anterior a su propio inicio.
+        //
+        // Lo que el caso pide de verdad no es un relevo, es **anular** el
+        // primero: un perfil a nombre de un menor no debió aprobarse nunca. Y
+        // eso hoy no existe --`superseded` significa reemplazado, o sea que
+        // estuvo vigente--. Queda como `T-15`.
+        //
+        // Con febrero, el histórico dice lo que de verdad pasó: en enero el
+        // perfil que había en el expediente era el del menor, y no valía —que
+        // es justo lo que `cumpleFiscal()` comprueba más arriba—.
         $nuevo = $this->capturar($capturador, [
             'tax_id_number' => '10999999999',
             'holder_type' => 'guardian',
             'holder_guardian_id' => $tutorId,
+            'valid_from' => '2026-02-01',
         ]);
         $this->actingAs($aprobador)->post("/creadores/{$this->uuid}/fiscal/{$nuevo}/aprobar", [
             'withholding_status' => 'not_applicable', 'confirma_revision' => '1',
