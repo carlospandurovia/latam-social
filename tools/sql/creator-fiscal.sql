@@ -47,6 +47,20 @@ CREATE TABLE creator_tax_profiles (
   approved_by_user_id BIGINT UNSIGNED NULL,
   approved_at         DATETIME(3)   NULL,
   rejection_note      VARCHAR(255)  NULL,
+  -- 3.11 / T-15: ANULAR no es reemplazar.
+  --
+  -- `superseded` dice «este perfil dejo de aplicar y otro tomo su lugar»: estuvo
+  -- vigente. `rejected` dice «no paso la revision»: nunca llego a aprobarse.
+  -- Faltaba poder decir la tercera cosa: «se aprobo y no debio aprobarse
+  -- nunca». El caso que lo destapo fue un perfil fiscal a nombre de un MENOR,
+  -- que no fue valido ni un dia.
+  --
+  -- Quien y por que son obligatorios: anular reescribe el historico del que sale
+  -- la retencion practicada, y un historico que se puede cambiar sin dejar
+  -- rastro no es un historico.
+  annulled_at         DATETIME(3)   NULL,
+  annulled_by_user_id BIGINT UNSIGNED NULL,
+  annulment_reason    VARCHAR(255)  NULL,
   valid_from          DATE          NOT NULL,
   valid_to            DATE          NULL,
   created_at          DATETIME(3)   NULL,
@@ -67,7 +81,15 @@ CREATE TABLE creator_tax_profiles (
   CONSTRAINT fk_ctp_country FOREIGN KEY (country_id) REFERENCES countries(id) ON DELETE RESTRICT,
   CONSTRAINT fk_ctp_approver FOREIGN KEY (approved_by_user_id) REFERENCES users(id) ON DELETE RESTRICT,
   CONSTRAINT fk_ctp_creator_user FOREIGN KEY (created_by_user_id) REFERENCES users(id) ON DELETE RESTRICT,
-  CONSTRAINT ck_ctp_status CHECK (status IN ('pending','approved','rejected','superseded')),
+  CONSTRAINT fk_ctp_annuller FOREIGN KEY (annulled_by_user_id) REFERENCES users(id) ON DELETE RESTRICT,
+  CONSTRAINT ck_ctp_status CHECK (status IN ('pending','approved','rejected','superseded','annulled')),
+  -- Anulado exige los tres datos, y no anulado exige que no haya ninguno. Sin
+  -- la segunda mitad, un `annulled_at` suelto en una fila aprobada seria una
+  -- anulacion a medias que nadie sabria leer.
+  CONSTRAINT ck_ctp_annulled CHECK (
+    (status =  'annulled' AND annulled_at IS NOT NULL AND annulled_by_user_id IS NOT NULL AND annulment_reason IS NOT NULL) OR
+    (status <> 'annulled' AND annulled_at IS     NULL AND annulled_by_user_id IS     NULL AND annulment_reason IS     NULL)
+  ),
   -- Calcada de `ck_cpm_owner`: o es del creador y no hay tutor, o es del tutor
   -- y hay que decir cual. No existe el titular a medias.
   CONSTRAINT ck_ctp_holder CHECK (
@@ -394,6 +416,47 @@ BEGIN
   ELSE
     SET NEW.shared_account_status = 'unique';
   END IF;
+END//
+
+DELIMITER ;
+
+-- ===========================================================================
+-- 3.11 / T-15 -- Solo se anula el VIGENTE
+--
+-- La decision fue que un perfil ya reemplazado no se anula: durante su ventana
+-- fue el que habia en el expediente, y sobre esa ventana puede haberse
+-- liquidado dinero con esa retencion. Deshacerlo no es corregir un error, es
+-- reescribir un periodo que ya paso.
+--
+-- Asi que anular solo vale saliendo de `approved` con `valid_to` abierto. La
+-- comprobacion mira OLD, que es lo unico que un CHECK no puede hacer.
+-- ===========================================================================
+
+DELIMITER //
+
+CREATE TRIGGER `tg_ctp_solo_el_vigente_se_anula`
+BEFORE UPDATE ON `creator_tax_profiles`
+FOR EACH ROW
+BEGIN
+    -- Una vez anulado, la fila se congela.
+    --
+    -- La primera version solo miraba la ENTRADA en `annulled`
+    -- (`OLD.status <> 'annulled'`), y eso dejaba reescribir el motivo de una
+    -- anulacion ya hecha tantas veces como se quisiera. Lo destapo una asercion
+    -- de la suite que leia el motivo y encontraba el ultimo, no el primero.
+    --
+    -- Anular existe justamente para no destruir el historico. Un motivo que se
+    -- puede cambiar despues no es evidencia de nada.
+    IF OLD.status = 'annulled' THEN
+        SIGNAL SQLSTATE '45000'
+          SET MESSAGE_TEXT = 'Un perfil fiscal anulado ya no se toca: el motivo y quien lo anulo son evidencia.';
+    END IF;
+
+    IF NEW.status = 'annulled'
+       AND NOT (OLD.status = 'approved' AND OLD.valid_to IS NULL) THEN
+        SIGNAL SQLSTATE '45000'
+          SET MESSAGE_TEXT = 'Solo se puede anular el perfil fiscal vigente: uno ya reemplazado se queda como esta.';
+    END IF;
 END//
 
 DELIMITER ;

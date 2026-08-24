@@ -62,6 +62,10 @@
               'bg-amber-50 text-amber-800' => $p->status === 'pending',
               'bg-rose-50 text-rose-700' => $p->status === 'rejected',
               'bg-slate-100 text-slate-600' => $p->status === 'superseded',
+            {{-- Anulado se ve DISTINTO de reemplazado a propósito: uno estuvo
+                 vigente y el otro no valió nunca, y esa diferencia es la que
+                 explica un hueco en el histórico. --}}
+            'bg-rose-100 text-rose-800 line-through' => $p->status === 'annulled',
             ])">
             {{ $p->status }}
           </span>
@@ -94,6 +98,42 @@
 
         @if ($p->rejection_note)
           <p class="text-xs text-rose-700 mt-1">Motivo del rechazo: {{ $p->rejection_note }}</p>
+        @endif
+
+        @if ($p->status === 'annulled')
+          <p class="text-xs text-rose-800 mt-1">
+            <strong>Anulado:</strong> {{ $p->annulment_reason }}
+            <span class="text-slate-500">— no estuvo vigente ningún día; quién lo anuló consta en la bitácora.</span>
+          </p>
+        @endif
+
+        {{-- Anular el vigente. Va detrás de su propio permiso (`creator.tax.annul`)
+             y no de `creator.tax.approve`: rechazar para a un perfil ANTES de que
+             aplique, anular deshace uno que YA aplicaba. --}}
+        @if ($p->status === 'approved' && $p->valid_to === null)
+          @can('creator.tax.annul')
+            <details class="mt-3">
+              <summary class="text-xs text-rose-700 cursor-pointer hover:underline">Anular este perfil</summary>
+              <form method="POST" action="{{ route('creadores.fiscal.anular', [$creador->uuid, $p->id]) }}" class="mt-2 space-y-2">
+                @csrf
+                <p class="text-xs text-slate-600">
+                  Anular no es reemplazar: dice que este perfil <strong>no debió aprobarse nunca</strong>.
+                  El creador se queda <strong>sin perfil fiscal vigente</strong> y no se le podrá invitar
+                  ni liquidar hasta que se apruebe otro.
+                </p>
+                <input name="annulment_reason" maxlength="255"
+                       placeholder="Por qué no debió aprobarse (mínimo 10 caracteres)"
+                       class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm">
+                <label class="flex items-center gap-2 text-xs text-slate-600">
+                  <input type="checkbox" name="confirma" value="1" class="rounded border-slate-300">
+                  Entiendo que el creador se queda sin perfil fiscal vigente.
+                </label>
+                <button class="px-4 py-2 rounded-xl border border-rose-300 text-rose-700 text-sm font-medium hover:bg-rose-50">
+                  Anular
+                </button>
+              </form>
+            </details>
+          @endcan
         @endif
 
         {{-- La resolución: decidir la retención es parte de aprobar. --}}

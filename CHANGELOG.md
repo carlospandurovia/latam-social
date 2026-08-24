@@ -2,6 +2,60 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 
+## [Fase 3 · 3.11 — Anular un perfil fiscal] — 2026-08-24
+
+Cierra `T-15`. El estado del perfil sabía decir dos cosas y le faltaba una
+tercera:
+
+| estado | significa |
+|---|---|
+| `rejected` | no pasó la revisión — nunca llegó a aprobarse |
+| `superseded` | otro tomó su lugar — **sí** estuvo vigente |
+| `annulled` | **se aprobó y no debió aprobarse nunca** |
+
+La diferencia entre las dos últimas se paga en dinero: de un `superseded` salió
+la retención de sus meses; de un anulado, ninguna.
+
+### Añadido
+- Estado `annulled` con `annulled_at`, `annulled_by_user_id` y
+  `annulment_reason`, los tres obligatorios —y prohibidos si no está anulado—.
+  Anular reescribe el histórico del que sale la retención practicada; uno que se
+  puede cambiar sin dejar rastro no es un histórico.
+- **Permiso propio `creator.tax.annul`**, no `creator.tax.approve`. La prueba
+  que lo demuestra no es «un rol sin permisos no puede», es
+  `test_quien_aprueba_no_anula_por_eso`: alguien que **sí** puede aprobar
+  recibe un 403.
+- `tg_ctp_solo_el_vigente_se_anula`: solo se anula el vigente, y **una vez
+  anulado la fila se congela**. Uno ya reemplazado se queda como está — durante
+  su ventana fue el que había en el expediente, y sobre esa ventana puede
+  haberse liquidado dinero.
+- Al anular, el creador **deja de cumplir `BR-CREATOR-013`** y no se le invita ni
+  se le liquida hasta que se apruebe otro. Es la decisión, no un efecto
+  secundario: si el perfil no valía, no hay perfil válido.
+- `tools/pruebas/3.11-anulacion.sh` (18 aserciones) y cuatro pruebas de PHPUnit.
+
+### Lo que NO se puso, y por qué se dice
+- **No hay segregación entre quien aprueba y quien anula**, al contrario que
+  `ck_ctp_segregation`. Anular es *admitir un error*, y exigir una segunda
+  persona significa que quien lo cometió no puede arreglarlo — en un equipo
+  pequeño eso bloquea más de lo que protege. El control aquí es el rastro, que no
+  se reescribe. Si el equipo crece, es lo primero que hay que reconsiderar.
+
+### Encontrado construyéndolo
+- **El disparador dejaba re-anular un perfil ya anulado**, o sea reescribir el
+  motivo tantas veces como se quisiera. Lo destapó una aserción que leía el
+  motivo y encontraba el último, no el primero. Ahora la fila se congela.
+- **`T-16`: `creator_tax_profiles` se puede borrar con un `DELETE`.** Anular
+  existe para no destruir el histórico, y un `DELETE` se lo lleva entero. La
+  aserción que iba a escribir habría dicho «el DELETE funciona» — habría fijado
+  el hueco como correcto, el mismo error que `PerfilFiscalTest` cometió con
+  `T-12`. Así que no hay aserción, hay una tarea.
+- `verificar-migraciones.py` ahora sugiere rehacer la base cuando encuentra
+  discrepancias. Compara contra una base **ya construida**, y si está vieja las
+  discrepancias son fantasmas — ya pasó una vez y costó 26 hallazgos inventados.
+
+596 aserciones en verde sobre los dos motores.
+
 ## [PHPUnit en verde · y un hueco que salió al hacerlo] — 2026-08-24
 
 **1 fallo, 145 pasan (418 aserciones)** — venía de 14 fallos y 129 pasando.

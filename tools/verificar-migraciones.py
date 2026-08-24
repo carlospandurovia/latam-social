@@ -145,4 +145,17 @@ problemas += len(avisos)
 cols = sum(len(v['columnas']) for k, v in mig.items() if k not in IGNORAR)
 print(f"\n{len(tablas_mig)} tablas y {cols} columnas contrastadas contra {DB}: "
       + ("sin discrepancias." if problemas == 0 else f"{problemas} DISCREPANCIAS."))
+
+if problemas:
+    # La pista que falta cuando esto se pone rojo.
+    #
+    # Este script compara las migraciones contra una base YA CONSTRUIDA. Si esa
+    # base se hizo antes del ultimo cambio de esquema, las discrepancias son
+    # fantasmas: la migracion tiene razon y la base esta vieja. Ya paso una vez
+    # y costo 26 hallazgos inventados antes de que alguien sospechara de la base
+    # en vez del codigo.
+    print(f"\n  Antes de creerselas: .esta `{DB}` al dia?")
+    print(f"      bash tools/rehacer-referencia.sh {DB}")
+    print("  Si las discrepancias desaparecen, no eran discrepancias.")
+
 sys.exit(1 if problemas else 0)

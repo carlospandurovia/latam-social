@@ -133,6 +133,15 @@ Route::middleware('auth')->group(function (): void {
         ->whereUuid('uuid')->whereNumber('id')
         ->name('creadores.fiscal.rechazar');
 
+    // 3.11 / T-15: anular NO es rechazar ni reemplazar, y por eso no comparte
+    // permiso con ninguno de los dos. Rechazar para a un perfil antes de que
+    // aplique; anular deshace uno que ya aplicaba, y eso reescribe el historico
+    // del que sale la retencion practicada.
+    Route::post('/creadores/{uuid}/fiscal/{id}/anular', [PerfilFiscalController::class, 'anular'])
+        ->middleware('permiso:creator.tax.annul')
+        ->whereUuid('uuid')->whereNumber('id')
+        ->name('creadores.fiscal.anular');
+
     // ---- Cuentas sociales (iteración 3.7, BR-CREATOR-003/004/005) --------
     //
     // Dar de alta una cuenta es `creator.manage`; verificarla es

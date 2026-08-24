@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Creator\Http\Controllers;
 
+use App\Modules\Creator\Http\Requests\AnularPerfilFiscalRequest;
 use App\Modules\Creator\Http\Requests\AprobarPerfilFiscalRequest;
 use App\Modules\Creator\Http\Requests\GuardarPerfilFiscalRequest;
 use App\Shared\Audit\Bitacora;
@@ -68,7 +69,7 @@ final class PerfilFiscalController
                     'p.id', 'p.tax_regime_code', 'p.tax_id_type', 'p.tax_id_number',
                     'p.issued_document_type', 'p.status', 'p.valid_from', 'p.valid_to',
                     'p.withholding_status', 'p.withholding_rate', 'p.withholding_basis',
-                    'p.holder_type', 'p.rejection_note', 'p.approved_at',
+                    'p.holder_type', 'p.rejection_note', 'p.approved_at', 'p.annulment_reason',
                     'c.name as pais', 'cap.name as capturado_por', 'apr.name as aprobado_por',
                     'g.full_name as tutor',
                 ]),
@@ -249,6 +250,63 @@ final class PerfilFiscalController
             ->route('creadores.fiscal', $uuid)
             ->with('exito', 'Perfil aprobado y vigente. Avisa al creador por su canal de contacto anterior: '
                 .'BR-CREATOR-007 lo exige y todavía no hay envío automático (T-10).');
+    }
+
+    /**
+     * Anular el perfil vigente: se aprobó y no debió aprobarse nunca (`T-15`).
+     *
+     * No es lo mismo que rechazar ni que reemplazar, y la diferencia se paga en
+     * dinero: un perfil `superseded` **estuvo vigente** y de él salió la
+     * retención de esos meses; uno anulado no valió nunca. El caso que lo
+     * destapó fue un perfil fiscal a nombre de un menor.
+     *
+     * Después de esto el creador **se queda sin perfil vigente** y deja de
+     * cumplir `BR-CREATOR-013`: no se le invita ni se le liquida hasta que se
+     * apruebe otro. Es la verdad, no un efecto secundario.
+     */
+    public function anular(AnularPerfilFiscalRequest $request, string $uuid, int $id): RedirectResponse
+    {
+        $creador = $this->porUuid($uuid);
+        $perfil = $this->perfilDe($creador, $id);
+
+        // La base lo impide igual (`tg_ctp_solo_el_vigente_se_anula`), pero un
+        // 45000 en pantalla no le dice al operador qué miró mal.
+        if ($perfil->status !== 'approved' || $perfil->valid_to !== null) {
+            return back()->with('aviso', sprintf(
+                'Solo se anula el perfil VIGENTE, y éste está en «%s»%s. Un perfil ya reemplazado '
+                .'se queda como está: durante su ventana fue el que había en el expediente.',
+                $perfil->status,
+                $perfil->valid_to === null ? '' : ' y cerrado el '.$perfil->valid_to,
+            ));
+        }
+
+        /** @var array<string, mixed> $datos */
+        $datos = $request->validated();
+
+        DB::table('creator_tax_profiles')->where('id', $perfil->id)->update([
+            'status' => 'annulled',
+            'annulled_at' => now(),
+            'annulled_by_user_id' => (int) $request->user()?->getAuthIdentifier(),
+            'annulment_reason' => $datos['annulment_reason'],
+            'updated_at' => now(),
+        ]);
+
+        Bitacora::registrar(
+            accion: 'creator_tax_profile.annulled',
+            tipoEntidad: 'creator',
+            idEntidad: (int) $creador->id,
+            cambios: [
+                'perfil_fiscal' => ['antes' => $perfil->id, 'despues' => null],
+                'status' => ['antes' => 'approved', 'despues' => 'annulled'],
+                'motivo' => ['antes' => null, 'despues' => $datos['annulment_reason']],
+            ],
+        );
+
+        return redirect()->route('creadores.fiscal', $uuid)->with(
+            'exito',
+            'Perfil anulado. El creador se queda SIN perfil fiscal vigente: no se le puede '
+            .'invitar ni liquidar hasta que se apruebe otro (BR-CREATOR-013).',
+        );
     }
 
     public function rechazar(Request $request, string $uuid, int $id): RedirectResponse

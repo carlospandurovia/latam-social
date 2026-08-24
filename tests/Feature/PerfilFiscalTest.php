@@ -481,7 +481,176 @@ final class PerfilFiscalTest extends TestCase
         $this->assertTrue($this->cumpleFiscal());
     }
 
+    // ------------------------------------------------------- anular (3.11, T-15)
+
+    /**
+     * `creator.tax.annul` es un permiso PROPIO, y esto es lo que lo demuestra.
+     *
+     * No basta con comprobar que un rol sin permisos fiscales no puede anular
+     * —eso no distingue nada—. Lo que hay que comprobar es que alguien que SÍ
+     * puede aprobar **no** puede anular, porque esa es exactamente la decisión:
+     * quien aprueba a diario no debe poder borrar del histórico por descuido.
+     */
+    public function test_quien_aprueba_no_anula_por_eso(): void
+    {
+        $capturador = $this->usuarioCon('finance');
+        $aprobador = $this->usuarioCon('finance');
+
+        $id = $this->capturar($capturador);
+        $this->actingAs($aprobador)->post("/creadores/{$this->uuid}/fiscal/{$id}/aprobar", [
+            'withholding_status' => 'not_applicable', 'confirma_revision' => '1',
+        ]);
+
+        // Un rol con `creator.tax.approve` y NADA más de lo fiscal.
+        $soloAprueba = $this->usuarioConPermisos('solo_aprueba', [
+            'creator.view', 'creator.tax.approve',
+        ]);
+
+        $this->actingAs($soloAprueba)
+            ->post("/creadores/{$this->uuid}/fiscal/{$id}/anular", [
+                'annulment_reason' => 'Estaba a nombre del menor y no del tutor',
+                'confirma' => '1',
+            ])
+            ->assertForbidden();
+
+        $this->assertSame('approved', DB::table('creator_tax_profiles')->where('id', $id)->value('status'));
+    }
+
+    public function test_anular_exige_motivo_y_confirmacion(): void
+    {
+        $id = $this->vigente();
+        $finanzas = $this->usuarioCon('finance');
+
+        $this->actingAs($finanzas)
+            ->post("/creadores/{$this->uuid}/fiscal/{$id}/anular", ['confirma' => '1'])
+            ->assertSessionHasErrors('annulment_reason');
+
+        // Un motivo de una palabra no explica nada dentro de dos años.
+        $this->actingAs($finanzas)
+            ->post("/creadores/{$this->uuid}/fiscal/{$id}/anular", [
+                'annulment_reason' => 'error', 'confirma' => '1',
+            ])
+            ->assertSessionHasErrors('annulment_reason');
+
+        // Y sin confirmar que se entiende la consecuencia, tampoco.
+        $this->actingAs($finanzas)
+            ->post("/creadores/{$this->uuid}/fiscal/{$id}/anular", [
+                'annulment_reason' => 'Estaba a nombre del menor y no del tutor',
+            ])
+            ->assertSessionHasErrors('confirma');
+
+        $this->assertSame('approved', DB::table('creator_tax_profiles')->where('id', $id)->value('status'));
+    }
+
+    /**
+     * La consecuencia dicha en voz alta: el creador deja de cumplir.
+     *
+     * Es la decisión que se tomó a propósito, no un efecto secundario. Si el
+     * perfil no valía, no hay perfil válido, y `BR-CREATOR-013` dice que sin él
+     * no se invita ni se liquida.
+     */
+    public function test_anular_deja_al_creador_sin_perfil_vigente(): void
+    {
+        $id = $this->vigente();
+        $this->assertTrue($this->cumpleFiscal(), 'Punto de partida: cumplía.');
+
+        $finanzas = $this->usuarioCon('finance');
+        $this->actingAs($finanzas)
+            ->post("/creadores/{$this->uuid}/fiscal/{$id}/anular", [
+                'annulment_reason' => 'Estaba a nombre del menor y no del tutor',
+                'confirma' => '1',
+            ])
+            ->assertRedirect(route('creadores.fiscal', $this->uuid));
+
+        $fila = DB::table('creator_tax_profiles')->where('id', $id)->first();
+
+        $this->assertSame('annulled', $fila->status);
+        $this->assertSame((int) $finanzas->id, (int) $fila->annulled_by_user_id);
+        $this->assertNotNull($fila->annulled_at);
+        $this->assertSame('Estaba a nombre del menor y no del tutor', $fila->annulment_reason);
+
+        $this->assertFalse($this->cumpleFiscal(), 'Sin perfil válido no se cumple BR-CREATOR-013.');
+        $this->assertDatabaseHas('audit_logs', ['action' => 'creator_tax_profile.annulled']);
+    }
+
+    /**
+     * Un perfil ya reemplazado NO se anula.
+     *
+     * Durante su ventana fue el que había en el expediente, y sobre esa ventana
+     * puede haberse liquidado dinero con esa retención. Deshacerlo no sería
+     * corregir un error, sería reescribir un periodo que ya pasó.
+     */
+    public function test_no_se_anula_un_perfil_ya_reemplazado(): void
+    {
+        $capturador = $this->usuarioCon('finance');
+        $aprobador = $this->usuarioCon('finance');
+
+        $primero = $this->capturar($capturador);
+        $this->actingAs($aprobador)->post("/creadores/{$this->uuid}/fiscal/{$primero}/aprobar", [
+            'withholding_status' => 'not_applicable', 'confirma_revision' => '1',
+        ]);
+
+        $segundo = $this->capturar($capturador, [
+            'tax_id_number' => '10400000055', 'valid_from' => '2026-07-01',
+        ]);
+        $this->actingAs($aprobador)->post("/creadores/{$this->uuid}/fiscal/{$segundo}/aprobar", [
+            'withholding_status' => 'not_applicable', 'confirma_revision' => '1',
+        ]);
+
+        $this->assertSame('superseded', DB::table('creator_tax_profiles')->where('id', $primero)->value('status'));
+
+        $this->actingAs($this->usuarioCon('finance'))
+            ->post("/creadores/{$this->uuid}/fiscal/{$primero}/anular", [
+                'annulment_reason' => 'Quiero reescribir un periodo que ya paso',
+                'confirma' => '1',
+            ])
+            ->assertSessionHas('aviso');
+
+        $this->assertSame('superseded', DB::table('creator_tax_profiles')->where('id', $primero)->value('status'));
+    }
+
     // ------------------------------------------------------------------- apoyo
+
+    /** Un perfil aprobado y vigente, que es el punto de partida de anular. */
+    private function vigente(): int
+    {
+        $id = $this->capturar($this->usuarioCon('finance'));
+        $this->actingAs($this->usuarioCon('finance'))
+            ->post("/creadores/{$this->uuid}/fiscal/{$id}/aprobar", [
+                'withholding_status' => 'not_applicable', 'confirma_revision' => '1',
+            ]);
+
+        return $id;
+    }
+
+    /**
+     * Un usuario con EXACTAMENTE los permisos que se le digan.
+     *
+     * `usuarioCon()` reparte roles enteros, y para distinguir `approve` de
+     * `annul` hace falta un rol que tenga uno y no el otro. Ninguno de los del
+     * catálogo sirve, así que se arma aquí.
+     *
+     * @param list<string> $permisos
+     */
+    private function usuarioConPermisos(string $codigo, array $permisos): User
+    {
+        $rolId = (int) DB::table('roles')->insertGetId([
+            'code' => $codigo, 'name' => $codigo, 'scope' => 'internal',
+            'is_system' => 0, 'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        foreach (DB::table('permissions')->whereIn('code', $permisos)->pluck('id') as $permisoId) {
+            DB::table('permission_role')->insert(['role_id' => $rolId, 'permission_id' => $permisoId]);
+        }
+
+        $usuario = User::factory()->create();
+        DB::table('role_user')->insert([
+            'user_id' => $usuario->id, 'role_id' => $rolId, 'assigned_at' => now(),
+        ]);
+        Permisos::olvidar((int) $usuario->id);
+
+        return $usuario;
+    }
 
     private function cumpleFiscal(): bool
     {

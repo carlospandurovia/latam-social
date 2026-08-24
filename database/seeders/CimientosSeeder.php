@@ -176,6 +176,10 @@ final class CimientosSeeder extends Seeder
             // decide con que tasa se retiene, y eso toca dinero.
             ['creator.tax.manage',     'Creator',  'Capturar y corregir el perfil tributario del creador'],
             ['creator.tax.approve',    'Creator',  'Aprobar o rechazar el perfil tributario (BR-CREATOR-007)'],
+            // 3.11 / T-15: permiso PROPIO, no reutilizar `approve`. Anular
+            // reescribe el historico del que sale la retencion practicada;
+            // quien aprueba a diario no debe poder hacerlo por descuido.
+            ['creator.tax.annul',      'Creator',  'Anular el perfil tributario vigente: se aprobo y no debio aprobarse'],
             // 3.8: mismo reparto que los fiscales, y por el mismo motivo. Aqui
             // se decide A DONDE VA EL DINERO, asi que `ck_cpm_segregation`
             // exige ademas dos personas distintas, no solo dos permisos.
@@ -255,7 +259,7 @@ final class CimientosSeeder extends Seeder
                 // distintas. Repartirlos entre roles habria obligado a dar
                 // datos fiscales a `campaign_manager`, que es justo lo que
                 // DEC-053 decidio no hacer.
-                'creator.tax.manage', 'creator.tax.approve',
+                'creator.tax.manage', 'creator.tax.approve', 'creator.tax.annul',
                 'creator.payment.manage', 'creator.payment.verify',
                 'creator.rate.manage',
                 'client.view', 'catalog.view',
