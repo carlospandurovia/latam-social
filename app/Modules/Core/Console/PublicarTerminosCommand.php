@@ -61,8 +61,38 @@ final class PublicarTerminosCommand extends Command
             return self::FAILURE;
         }
 
-        if ($archivo === '' || !is_file($archivo)) {
-            $this->error('Falta --archivo con el texto de los terminos, o la ruta no existe.');
+        // El error dice QUE HACER, no solo que fallo.
+        //
+        // El mensaje anterior --«Falta --archivo ..., o la ruta no existe»--
+        // juntaba dos cosas distintas en una frase y no daba ningun ejemplo.
+        // Alguien copio el marcador de posicion `ruta\terminos.md` de una
+        // instruccion y se llevo ese error sin saber cual de los dos casos era.
+        // Es la misma leccion que `usuarios:crear`.
+        if ($archivo === '') {
+            $this->error('Falta --archivo: hay que decirle donde esta el texto de los terminos.');
+            $this->line('');
+            $this->line('  Ejemplo (la ruta es un archivo DE VERDAD, no un marcador):');
+            $this->line('    php artisan terminos:publicar creator_terms 2026.1 --archivo=docs/legal/terminos-creador-2026.1.md');
+
+            return self::FAILURE;
+        }
+
+        if (!is_file($archivo)) {
+            $this->error("No existe el archivo «{$archivo}».");
+            $this->line('');
+            $this->line('  Ruta actual: '.getcwd());
+            $this->line('  Si la ruta es relativa, lo es respecto a ahi.');
+
+            $dir = \dirname($archivo);
+            if (is_dir($dir)) {
+                $cerca = array_values(array_filter(
+                    scandir($dir) ?: [],
+                    static fn (string $f): bool => (bool) preg_match('/\.(md|txt|html)$/i', $f),
+                ));
+                if ($cerca !== []) {
+                    $this->line("  En «{$dir}» hay: ".implode(', ', \array_slice($cerca, 0, 8)));
+                }
+            }
 
             return self::FAILURE;
         }
