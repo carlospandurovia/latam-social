@@ -84,7 +84,21 @@ CREATE TABLE creator_rates (
   content_format_id BIGINT UNSIGNED NOT NULL,
   currency_code     CHAR(3)        NOT NULL,
   amount            DECIMAL(18,4)  NOT NULL,
-  source            VARCHAR(15)    NOT NULL DEFAULT 'self_declared',
+  -- H-17: `DEFAULT 'self_declared'` afirmaba de donde salia el precio cuando
+  -- nadie lo habia dicho. «El creador lo declaro» y «se lo estimamos nosotros»
+  -- no pueden ser el mismo valor por omision: la diferencia es si el creador
+  -- sostiene ese numero o nos lo inventamos. Sin DEFAULT, en modo estricto una
+  -- insercion que no lo diga falla, que es exactamente lo que se quiere.
+  -- Es DEC-048 aplicado al precio.
+  source            VARCHAR(15)    NOT NULL,
+  -- Cero es un precio valido --canje por producto, primera colaboracion-- pero
+  -- tiene que declararse. Sin esto, «trabaja gratis» y «nadie le pregunto su
+  -- tarifa» eran el mismo cero, y no se responden igual delante de un cliente.
+  is_gratis         TINYINT(1)     NOT NULL DEFAULT 0,
+  -- H-18: quien fijo ese precio. `campaign_creators.agreed_amount` congela el
+  -- compromiso, si, pero la tarifa es DE DONDE SALE ese numero: si nadie firma
+  -- la referencia, no hay a quien preguntarle por que subio.
+  created_by_user_id BIGINT UNSIGNED NOT NULL,
   valid_from        DATE           NOT NULL,
   valid_to          DATE           NULL,
   created_at        DATETIME(3)    NULL,
@@ -97,10 +111,16 @@ CREATE TABLE creator_rates (
   KEY ix_creator_rates_creator (creator_id, content_format_id),
   KEY ix_creator_rates_format (content_format_id, currency_code),
   KEY ix_creator_rates_currency (currency_code),
+  KEY ix_creator_rates_author (created_by_user_id),
   CONSTRAINT fk_crate_creator FOREIGN KEY (creator_id) REFERENCES creators(id) ON DELETE RESTRICT,
+  CONSTRAINT fk_crate_author FOREIGN KEY (created_by_user_id) REFERENCES users(id) ON DELETE RESTRICT,
   CONSTRAINT fk_crate_format FOREIGN KEY (content_format_id) REFERENCES content_formats(id) ON DELETE RESTRICT,
   CONSTRAINT fk_crate_currency FOREIGN KEY (currency_code) REFERENCES currencies(code) ON DELETE RESTRICT,
-  CONSTRAINT ck_creator_rates_amount CHECK (amount >= 0),
+  -- Cero si y solo si esta declarado como gratuito. Las dos direcciones, no
+  -- solo una: un `is_gratis = 1` con importe tampoco tiene sentido.
+  CONSTRAINT ck_creator_rates_amount CHECK (
+    (is_gratis = 1 AND amount = 0) OR (is_gratis = 0 AND amount > 0)
+  ),
   CONSTRAINT ck_creator_rates_source CHECK (source IN ('self_declared','negotiated','estimated')),
   CONSTRAINT ck_creator_rates_dates CHECK (valid_to IS NULL OR valid_to >= valid_from)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -153,3 +173,91 @@ CREATE TABLE creator_blackouts (
   CONSTRAINT fk_cb_creator FOREIGN KEY (creator_id) REFERENCES creators(id) ON DELETE RESTRICT,
   CONSTRAINT ck_creator_blackouts_dates CHECK (ends_on >= starts_on)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ===========================================================================
+-- Historial sin solapes (iteracion 3.9)
+--
+-- `uq_creator_rates_current` garantiza UNA tarifa vigente por creador, formato
+-- y moneda. No garantiza que el historial sea coherente: se comprobo que dos
+-- tarifas cerradas con periodos solapados entraban sin protestar, y entonces
+-- «cuanto costaba el 1 de mayo» tiene DOS respuestas:
+--
+--     ACEPTADO. el 2026-05-01 la tarifa era: 1000.0000, 2500.0000
+--
+-- Un historial de precios con dos respuestas para la misma fecha no sirve para
+-- lo unico para lo que existe, que es explicar por que se pago lo que se pago.
+--
+-- `valid_to` es INCLUSIVO --lo dice `ck_creator_rates_dates`, que admite
+-- `valid_to = valid_from`--, asi que cerrar la anterior es ponerle el dia
+-- ANTERIOR al inicio de la nueva, no el mismo dia. De eso se encarga el
+-- controlador; aqui solo se impide el solape.
+--
+-- Va en disparadores porque mira OTRAS FILAS, y eso ningun CHECK lo puede hacer.
+-- ===========================================================================
+
+DELIMITER //
+
+CREATE TRIGGER tg_crate_sin_solape_ins BEFORE INSERT ON creator_rates
+FOR EACH ROW
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM creator_rates
+     WHERE creator_id = NEW.creator_id
+       AND content_format_id = NEW.content_format_id
+       AND currency_code = NEW.currency_code
+       AND NEW.valid_from <= IFNULL(valid_to, '9999-12-31')
+       AND valid_from <= IFNULL(NEW.valid_to, '9999-12-31')
+  ) THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'Ya hay una tarifa para ese formato y moneda en esas fechas: cierre la anterior el dia antes.';
+  END IF;
+END//
+
+CREATE TRIGGER tg_crate_sin_solape_upd BEFORE UPDATE ON creator_rates
+FOR EACH ROW
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM creator_rates
+     WHERE id <> NEW.id
+       AND creator_id = NEW.creator_id
+       AND content_format_id = NEW.content_format_id
+       AND currency_code = NEW.currency_code
+       AND NEW.valid_from <= IFNULL(valid_to, '9999-12-31')
+       AND valid_from <= IFNULL(NEW.valid_to, '9999-12-31')
+  ) THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'El cambio dejaria dos tarifas solapadas para el mismo formato y moneda.';
+  END IF;
+END//
+
+-- La disponibilidad tiene el mismo modelo de vigencia y el mismo hueco.
+CREATE TRIGGER tg_cav_sin_solape_ins BEFORE INSERT ON creator_availability
+FOR EACH ROW
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM creator_availability
+     WHERE creator_id = NEW.creator_id
+       AND NEW.valid_from <= IFNULL(valid_to, '9999-12-31')
+       AND valid_from <= IFNULL(NEW.valid_to, '9999-12-31')
+  ) THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'Ya hay una disponibilidad declarada en esas fechas: cierre la anterior el dia antes.';
+  END IF;
+END//
+
+CREATE TRIGGER tg_cav_sin_solape_upd BEFORE UPDATE ON creator_availability
+FOR EACH ROW
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM creator_availability
+     WHERE id <> NEW.id
+       AND creator_id = NEW.creator_id
+       AND NEW.valid_from <= IFNULL(valid_to, '9999-12-31')
+       AND valid_from <= IFNULL(NEW.valid_to, '9999-12-31')
+  ) THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'El cambio dejaria dos disponibilidades solapadas.';
+  END IF;
+END//
+
+DELIMITER ;

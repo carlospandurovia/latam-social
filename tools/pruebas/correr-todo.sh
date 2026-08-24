@@ -8,7 +8,7 @@
 # "recree la base y cargue la semilla".
 set -e
 cd "$(dirname "$0")/../.."
-SUITES="2.12-contenido 2.13-finanzas 3.5-activacion 3.6-fiscal 3.7-redes 3.8-pagos"
+SUITES="2.12-contenido 2.13-finanzas 3.5-activacion 3.6-fiscal 3.7-redes 3.8-pagos 3.9-tarifas"
 
 # Los nombres son argumentos para poder correr la misma bateria en otro motor:
 #   MYSQL_CMD=mysql8 bash tools/pruebas/correr-todo.sh latam_m8 latam_m8_57

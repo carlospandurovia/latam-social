@@ -181,6 +181,11 @@ final class CimientosSeeder extends Seeder
             // exige ademas dos personas distintas, no solo dos permisos.
             ['creator.payment.manage', 'Creator',  'Capturar medios de pago del creador'],
             ['creator.payment.verify', 'Creator',  'Verificar o retirar un medio de pago (BR-FIN-006)'],
+            // 3.9 / DEC-069: la tarifa es el COSTO del creador y alimenta el
+            // margen que BR-FIN-007 protege. Permiso propio para poder darselo
+            // a campanas y a finanzas sin abrir tambien los datos fiscales ni
+            // la cuenta bancaria, que estan detras de `creator.view_sensitive`.
+            ['creator.rate.manage',    'Creator',  'Fijar tarifas, disponibilidad y bloqueos de agenda del creador'],
             ['client.view',            'Client',   'Ver clientes y marcas'],
             ['client.manage',          'Client',   'Crear y editar clientes'],
             ['finance.view',           'Finance',  'Ver el ledger y los saldos'],
@@ -233,6 +238,10 @@ final class CimientosSeeder extends Seeder
                 // (DEC-044, BR-FIN-005), donde el dano de un error no se
                 // deshace.
                 'creator.verify', 'creator.activate',
+                // DEC-069: para armar una campana hay que saber cuanto cuesta
+                // un creador y cuando puede trabajar. Eso NO abre sus datos
+                // fiscales ni su cuenta bancaria, que siguen en otro permiso.
+                'creator.rate.manage',
                 'client.view', 'content.review', 'catalog.view',
             ],
             'finance' => [
@@ -248,6 +257,7 @@ final class CimientosSeeder extends Seeder
                 // DEC-053 decidio no hacer.
                 'creator.tax.manage', 'creator.tax.approve',
                 'creator.payment.manage', 'creator.payment.verify',
+                'creator.rate.manage',
                 'client.view', 'catalog.view',
             ],
             'content_reviewer' => [

@@ -44,6 +44,14 @@ namespace Illuminate\Support\Facades {
         // la migracion.
         public static function table(string $t) { return new \ConsultaFalsa($t); }
         public static function selectOne(string $s) { return null; }
+        // `DB::select()` devuelve una lista de filas. Una migracion que
+        // comprueba el estado de los datos antes de endurecer --que es el
+        // patron que se adopto en 000490-- la usa para lo que el constructor de
+        // consultas no expresa bien, como un JOIN de una tabla consigo misma.
+        public static function select(string $s, array $b = []): array { return []; }
+        public static function scalar(string $s, array $b = []) { return null; }
+        public static function raw(string $s): string { return $s; }
+        public static function transaction(callable $cb) { return $cb(); }
     }
     class Schema {
         public static function create(string $tabla, callable $cb): void {

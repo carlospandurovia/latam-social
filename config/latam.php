@@ -94,4 +94,16 @@ return [
          */
         'capturador_migracion' => env('LATAM_PAGOS_CAPTURADOR_MIGRACION'),
     ],
+
+    /*
+     * Tarifas del creador (iteración 3.9).
+     *
+     * Solo para la migración `000495`, y normalmente null. `created_by_user_id`
+     * pasa a ser obligatoria (`H-18`) y para las filas que ya existen no hay
+     * ningún valor verdadero que inventar. Misma decisión que en los medios de
+     * pago: se pide explícitamente en vez de rellenarla sola.
+     */
+    'tarifas' => [
+        'autor_migracion' => env('LATAM_TARIFAS_AUTOR_MIGRACION'),
+    ],
 ];
