@@ -71,6 +71,34 @@ final class ActivacionCreadorTest extends TestCase
 
     // --------------------------------------------------------------- utilería
 
+    /**
+     * Cierra la versión vigente de los términos y publica otra.
+     *
+     * La aceptación del creador se queda apuntando a la anterior, que es
+     * exactamente lo que pasa cuando se actualizan los términos: hay que volver
+     * a aceptar.
+     */
+    private function publicarTerminosNuevos(): void
+    {
+        $codigo = (string) config('latam.terminos.creador', 'creator_terms');
+
+        DB::table('terms_versions')
+            ->where('audience', 'creator')->where('code', $codigo)->whereNull('effective_to')
+            ->update(['effective_to' => now()->subDay()->toDateString(), 'updated_at' => now()]);
+
+        DB::table('terms_versions')->insert([
+            'uuid' => (string) Str::uuid(),
+            'audience' => 'creator',
+            'code' => $codigo,
+            'version' => 'v2-prueba',
+            'body' => 'Texto nuevo que nadie ha aceptado todavia.',
+            'content_sha256' => hash('sha256', 'Texto nuevo que nadie ha aceptado todavia.'),
+            'effective_from' => now()->toDateString(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+    }
+
     private function crearCreador(string $nacimiento): int
     {
         return (int) DB::table('creators')->insertGetId([
@@ -348,8 +376,21 @@ final class ActivacionCreadorTest extends TestCase
                     'is_default' => 0, 'status' => 'disabled',
                     'closed_at' => now(), 'closed_by_user_id' => $this->revisorId,
                 ]),
-            CompletitudOperativa::TERMINOS => DB::table('terms_acceptances')
-                ->where('subject_id', $this->creadorId)->delete(),
+            // No se borra la aceptación: se PUBLICA UNA VERSIÓN NUEVA.
+            //
+            // Borrarla era destruir la prueba de que el creador aceptó, y desde
+            // `T-16` la base no lo admite. Pero el arreglo no es rodear el
+            // disparador: es que borrar nunca fue lo que pasa de verdad.
+            //
+            // Lo que ocurre en la vida real es que los términos se actualizan y
+            // la aceptación anterior deja de valer —`CompletitudOperativa` mira
+            // la versión VIGENTE—. Así que eso es lo que hace la prueba ahora, y
+            // de paso cubre un caso que antes no cubría nadie.
+            //
+            // Es el tercer requisito de esta misma lista que deja de simularse
+            // rompiendo datos: el fiscal ya se rechaza y el medio de pago ya se
+            // retira, «que es lo que se haría de verdad».
+            CompletitudOperativa::TERMINOS => $this->publicarTerminosNuevos(),
             default => $this->fail("Requisito desconocido: {$codigo}"),
         };
 

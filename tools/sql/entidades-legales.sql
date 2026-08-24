@@ -170,3 +170,33 @@ BEGIN
 END//
 
 DELIMITER ;
+
+-- ===========================================================================
+-- 3.12 / T-16 -- Lo que es evidencia no se borra
+--
+-- Nueve tablas ya tenian `no_delete` --`audit_logs`, `invoices`,
+-- `ledger_entries`, `payouts`, `payments`, `invoice_lines`, `campaign_costs`,
+-- `creator_payment_methods` y `social_account_snapshots`-- y otras nueve
+-- guardaban evidencia igual de definitiva sin ninguna proteccion.
+--
+-- Salio al escribir la suite de 3.11. La asercion que iba a escribir alli
+-- habria dicho «el DELETE funciona», o sea habria fijado el hueco como si fuera
+-- lo correcto --el mismo error que `PerfilFiscalTest` cometio con `T-12`--.
+-- Anular un perfil fiscal existe para NO destruir el historico, y un DELETE se
+-- lo llevaba entero.
+--
+-- El criterio para entrar aqui es uno solo: la fila es EVIDENCIA de algo que
+-- paso, y de ella depende dinero o una obligacion legal. Los catalogos, las
+-- tablas de union y los datos operativos se siguen pudiendo borrar.
+-- ===========================================================================
+
+DELIMITER //
+
+CREATE TRIGGER tg_lec_no_delete BEFORE DELETE ON legal_entity_countries
+FOR EACH ROW
+BEGIN
+  SIGNAL SQLSTATE '45000'
+    SET MESSAGE_TEXT = 'legal_entity_countries no admite borrado: dice que sociedad facturo cada pais y desde cuando.';
+END//
+
+DELIMITER ;

@@ -153,6 +153,7 @@ jobs:
           bash tools/pruebas/3.9-tarifas.sh    latam_p57_triggers
           bash tools/pruebas/3.10-periodos.sh  latam_p57_triggers
           bash tools/pruebas/3.11-anulacion.sh latam_p57_triggers
+          bash tools/pruebas/3.12-no-borrar.sh latam_p57_triggers
 
       # Los fixtures de PHPUnit ejecutados contra el esquema, ANTES de que
       # PHPUnit los use. Aqui el fallo dice «`ck_camp_confirmed` incumplida, el

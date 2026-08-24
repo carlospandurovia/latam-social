@@ -156,3 +156,33 @@ CREATE TABLE permanence_checks (
   CONSTRAINT fk_pc_publication FOREIGN KEY (publication_id) REFERENCES publications(id) ON DELETE RESTRICT,
   CONSTRAINT fk_pc_evidence FOREIGN KEY (evidence_id) REFERENCES publication_evidence(id) ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ===========================================================================
+-- 3.12 / T-16 -- Lo que es evidencia no se borra
+--
+-- Nueve tablas ya tenian `no_delete` --`audit_logs`, `invoices`,
+-- `ledger_entries`, `payouts`, `payments`, `invoice_lines`, `campaign_costs`,
+-- `creator_payment_methods` y `social_account_snapshots`-- y otras nueve
+-- guardaban evidencia igual de definitiva sin ninguna proteccion.
+--
+-- Salio al escribir la suite de 3.11. La asercion que iba a escribir alli
+-- habria dicho «el DELETE funciona», o sea habria fijado el hueco como si fuera
+-- lo correcto --el mismo error que `PerfilFiscalTest` cometio con `T-12`--.
+-- Anular un perfil fiscal existe para NO destruir el historico, y un DELETE se
+-- lo llevaba entero.
+--
+-- El criterio para entrar aqui es uno solo: la fila es EVIDENCIA de algo que
+-- paso, y de ella depende dinero o una obligacion legal. Los catalogos, las
+-- tablas de union y los datos operativos se siguen pudiendo borrar.
+-- ===========================================================================
+
+DELIMITER //
+
+CREATE TRIGGER tg_pev_no_delete BEFORE DELETE ON publication_evidence
+FOR EACH ROW
+BEGIN
+  SIGNAL SQLSTATE '45000'
+    SET MESSAGE_TEXT = 'publication_evidence no admite borrado: es la prueba de que se publico, y de ella depende que se pague.';
+END//
+
+DELIMITER ;

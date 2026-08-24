@@ -198,7 +198,10 @@ fi
 if [ "${cuantas:-0}" -lt 2 ]; then
   echo "  (omitido: no pude crear una segunda sociedad)"
 else
-  $CLIENTE $DB -e "DELETE FROM legal_entity_countries WHERE country_id=$CO;" 2>/dev/null
+  # Ya no se limpia con DELETE: desde `T-16` esta tabla no admite borrado --dice
+  # que sociedad facturo cada pais y desde cuando--. La suite usa Colombia, que
+  # la semilla no cubre, asi que no hacia falta.
+  :
   probar "una sociedad cubre Colombia de enero a marzo" \
     "INSERT INTO legal_entity_countries (legal_entity_id,country_id,valid_from,valid_to) VALUES ($LE1,$CO,'2026-01-01','2026-03-31');" OK
   probar "OTRA sociedad para el mismo pais y fechas: empate en el resolver" \

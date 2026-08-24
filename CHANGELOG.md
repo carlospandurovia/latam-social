@@ -2,6 +2,50 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 
+## [Fase 3 · 3.12 — Lo que es evidencia no se borra] — 2026-08-24
+
+Cierra `T-16`. Nueve tablas ya tenían `no_delete`; otras **nueve** guardaban
+evidencia igual de definitiva sin ninguna protección.
+
+### Añadido
+- `no_delete` en `creator_tax_profiles`, `creator_tax_documents`,
+  `client_tax_profiles`, `terms_acceptances`, `terms_versions`,
+  `creator_guardians`, `exchange_rates`, `legal_entity_countries` y
+  `publication_evidence`. De 9 tablas protegidas a 18.
+- `tools/pruebas/3.12-no-borrar.sh`, y **la mitad que importa** es la segunda:
+  comprueba que lo que *no* es evidencia se sigue pudiendo borrar. Una regla
+  aplicada a todo no protege nada, solo estorba.
+
+### El criterio, que es uno solo
+La fila es **evidencia de algo que pasó**, y de ella depende dinero o una
+obligación legal. Los catálogos, las tablas de unión y los datos operativos se
+siguen borrando: `creator_blackouts` es el ejemplo — un bloqueo de agenda
+apuntado por error se borra y no pasa nada, porque no es prueba de nada.
+
+### Cambiado
+- **Una prueba dejaba de simular «no aceptó los términos» borrando la
+  aceptación.** El arreglo no fue rodear el disparador: borrar nunca fue lo que
+  pasa de verdad. Lo que ocurre en la vida real es que **los términos se
+  actualizan** y la aceptación anterior deja de valer, así que eso es lo que
+  hace la prueba ahora — y de paso cubre un caso que antes no cubría nadie.
+  Es el tercer requisito de esa misma lista que deja de simularse rompiendo
+  datos; el fiscal ya se rechazaba y el medio de pago ya se retiraba.
+
+### Dejado fuera a propósito (`Q-50`)
+`campaign_creators` (lleva `agreed_amount`, el precio pactado),
+`agreement_amendments`, `domain_events` y `status_transitions`. Sus módulos no
+están construidos, y decidir ahora si una participación se borra o se cancela
+sería adivinar. Que lo decida quien los construya.
+
+### Coste medido, no escondido
+El gate de fixturas vacía las tablas donde las pruebas escriben, y siete de
+ellas ya no se dejan vaciar. Los sin-veredicto pasan de 6 a 7 de 44. Es el
+precio de la protección y sale impreso en cada ejecución.
+
+**634 aserciones** en verde sobre los dos motores, y el gate de DDL crudo pasa
+de 74 a **101 sentencias ejecutadas de verdad**: esta migración sí tiene vuelta
+en `down()`, así que el viaje de ida y vuelta la ejercita entera.
+
 ## [Fase 3 · 3.11 — Anular un perfil fiscal] — 2026-08-24
 
 Cierra `T-15`. El estado del perfil sabía decir dos cosas y le faltaba una
