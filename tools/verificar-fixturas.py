@@ -328,6 +328,9 @@ def sintetico(tabla, col, info, fks, cache, enumerados):
 
 COLUMNAS_DE = {}
 MENSAJES_DE = {}
+# Tablas que no se dejaron vaciar, y reglas que miran OTRAS FILAS de la tabla.
+TOZUDAS = set()
+MIRAN_OTRAS_FILAS = set()
 
 
 def cargar_columnas_de_restriccion():
@@ -336,6 +339,31 @@ def cargar_columnas_de_restriccion():
         return {}
     return {d['nombre']: set(d['columnas'])
             for d in json.loads(ruta.read_text(encoding='utf-8'))}
+
+
+def cargar_reglas_que_miran_otras_filas():
+    """Disparadores cuyo cuerpo consulta la propia tabla.
+
+    Hacen falta para no acusar en falso. Una regla que solo mira la fila que
+    entra --un CHECK de columna-- se puede juzgar con la tabla llena o vacia. Una
+    que mira OTRAS FILAS, no: si la tabla no se pudo vaciar, el rechazo puede
+    venir de una fila de la semilla y no del fixture.
+
+    Paso de verdad con `terms_versions`: desde que es evidencia (`T-16`) no se
+    deja vaciar, asi que la version que trae la semilla se queda ahi y choca con
+    la que inserta la prueba. El fixture no tenia ningun defecto.
+    """
+    fuera = set()
+    for fila in consultar(
+        "SELECT TRIGGER_NAME, REPLACE(ACTION_STATEMENT, '\n', ' ') "
+        f"FROM information_schema.TRIGGERS WHERE TRIGGER_SCHEMA='{BASE}'"
+    ):
+        nombre, cuerpo = fila[0], fila[1]
+        if re.search(r'SELECT\s+1\s+FROM', cuerpo, re.IGNORECASE):
+            fuera.add(nombre)
+            for mensaje in re.findall(r"MESSAGE_TEXT\s*=\s*'((?:[^']|'')*)'", cuerpo):
+                fuera.add(mensaje.replace("''", "'").strip())
+    return fuera
 
 
 def cargar_mensajes_de_disparador():
@@ -366,7 +394,7 @@ NOMBRE_RESTRICCION = re.compile(
     r'Restriccion (\w+) incumplida|CONSTRAINT `(\w+)` failed', re.IGNORECASE)
 
 
-def culpa_del_fixture(error, literales):
+def culpa_del_fixture(error, literales, tabla):
     """
     ?Este rechazo lo provoco el fixture, o lo provoque yo al rellenar huecos?
 
@@ -387,6 +415,20 @@ def culpa_del_fixture(error, literales):
         # Choque con la semilla, no contradiccion con el esquema. En una base
         # de pruebas recien creada la fila entraria.
         return False, 'choca con la semilla, no con el esquema'
+
+    if tabla in TOZUDAS:
+        # La tabla no se pudo vaciar --lleva `no_delete`--, asi que puede haber
+        # filas de la semilla estorbando. Solo importa si la regla que rechazo
+        # mira otras filas; un CHECK de columna se juzga igual de bien lleno.
+        m = NOMBRE_RESTRICCION.search(error)
+        etiqueta = (m.group(1) or m.group(2)) if m else None
+        mira_otras = (etiqueta is not None
+                      and any(etiqueta in r or r in etiqueta for r in MIRAN_OTRAS_FILAS))
+        if not mira_otras:
+            mira_otras = any(r and r in error for r in MIRAN_OTRAS_FILAS)
+        if mira_otras:
+            return False, ('la tabla no se deja vaciar (`no_delete`) y la regla mira otras '
+                           'filas: el rechazo puede venir de la semilla')
 
     if 'Unknown column' in error:
         return True, None                      # 1054: siempre del fixture
@@ -421,11 +463,12 @@ def culpa_del_fixture(error, literales):
 
 
 def main():
-    global COLUMNAS_DE, MENSAJES_DE
+    global COLUMNAS_DE, MENSAJES_DE, TOZUDAS, MIRAN_OTRAS_FILAS
     cols, fks = cargar_esquema()
     cols_global[0] = cols
     COLUMNAS_DE = cargar_columnas_de_restriccion()
     MENSAJES_DE = cargar_mensajes_de_disparador()
+    MIRAN_OTRAS_FILAS = cargar_reglas_que_miran_otras_filas()
     enumerados = cargar_enumerados()
     cache = {}
     problemas = []
@@ -467,6 +510,7 @@ def main():
             capture_output=True, text=True)
         if r.returncode != 0:
             tozudas.append(t)
+    TOZUDAS = set(tozudas)
     if tozudas and '-v' in sys.argv:
         print('  No se dejan vaciar (disparador `no_delete`): ' + ', '.join(tozudas))
 
@@ -523,7 +567,7 @@ def main():
                             if not l.startswith('mysql: [Warning]')).strip()
             if err:
                 detalle = err.split('\n')[0]
-                acusar, motivo = culpa_del_fixture(detalle, literales_puestos)
+                acusar, motivo = culpa_del_fixture(detalle, literales_puestos, tabla)
                 if not acusar:
                     inconcluyentes.append((donde, motivo))
                     continue

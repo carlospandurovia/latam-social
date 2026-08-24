@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Core\Console;
 
+use Carbon\CarbonImmutable;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -83,15 +84,51 @@ final class PublicarTerminosCommand extends Command
         $desde = self::texto($this->option('desde')) ?: now()->toDateString();
         $titulo = self::texto($this->option('titulo')) ?: $codigo.' '.$version;
 
-        DB::transaction(function () use ($codigo, $version, $publico, $texto, $desde, $titulo): void {
-            // Cerrar la vigente ANTES de abrir la nueva: `uq_terms_versions_current`
-            // solo admite una fila con `effective_to IS NULL` por codigo, asi
-            // que si esto se hiciera al reves la base lo rechazaria. Es la
-            // restriccion haciendo de guardarrail del orden correcto.
-            DB::table('terms_versions')
-                ->where('code', $codigo)
-                ->whereNull('effective_to')
-                ->update(['effective_to' => $desde, 'updated_at' => now()]);
+        $vigente = DB::table('terms_versions')
+            ->where('code', $codigo)
+            ->whereNull('effective_to')
+            ->first(['id', 'version', 'effective_from']);
+
+        // La nueva version tiene que empezar DESPUES que la vigente.
+        //
+        // Si empezara el mismo dia o antes, cerrar la anterior «el dia antes» le
+        // pondria un `effective_to` anterior a su propio `effective_from`, que
+        // es lo que prohibe `ck_terms_versions_dates`. Y lo que ese caso
+        // significaria es que la version vigente no rigio NUNCA, cosa que no se
+        // puede decir de un texto que alguien pudo aceptar.
+        if ($vigente !== null && $desde <= (string) $vigente->effective_from) {
+            $this->error(sprintf(
+                'La nueva version empieza el %s y la vigente (%s) empezo el %s. Tiene que '
+                .'empezar despues: si no, habria dos textos vigentes el mismo dia y no se '
+                .'podria decir cual acepto un creador ese dia.',
+                $desde,
+                $vigente->version,
+                $vigente->effective_from,
+            ));
+
+            return self::FAILURE;
+        }
+
+        DB::transaction(function () use ($codigo, $version, $publico, $texto, $desde, $titulo, $vigente): void {
+            if ($vigente !== null) {
+                // EL DIA ANTES, no el mismo dia.
+                //
+                // Aqui estaba la cuarta reaparicion del defecto de `H-16`.
+                // `effective_to` es INCLUSIVO --lo dice `ck_terms_versions_dates`,
+                // que admite `effective_to = effective_from`--, asi que cerrar la
+                // anterior el dia en que empieza la nueva dejaba las dos vigentes
+                // ese dia. Y esta no es una tabla cualquiera: aqui esta el texto
+                // legal que el creador acepto.
+                //
+                // `uq_terms_versions_current` no lo veia porque solo mira las
+                // filas ABIERTAS, y tras el cierre solo queda una.
+                DB::table('terms_versions')
+                    ->where('id', $vigente->id)
+                    ->update([
+                        'effective_to' => CarbonImmutable::parse($desde)->subDay()->toDateString(),
+                        'updated_at' => now(),
+                    ]);
+            }
 
             DB::table('terms_versions')->insert([
                 'uuid' => (string) Str::uuid(),

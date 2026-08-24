@@ -178,8 +178,14 @@ final class Periodo
         string $queSignifica,
         string $comoSeArregla,
         ?string $donde = null,
+        // `valid_from`/`valid_to` es lo comun, pero no es universal:
+        // `terms_versions` usa `effective_*`. La primera version de este metodo
+        // no admitia otros nombres --el mismo sesgo que dejo esa tabla fuera del
+        // barrido de 3.10 durante tres iteraciones--.
+        string $desde = 'valid_from',
+        string $hasta = 'valid_to',
     ): void {
-        $solapes = self::solapes($tabla, $serie, $donde);
+        $solapes = self::solapes($tabla, $serie, $donde, 20, $desde, $hasta);
 
         if ($solapes === []) {
             return;

@@ -507,3 +507,50 @@ BEGIN
 END//
 
 DELIMITER ;
+
+-- ===========================================================================
+-- 3.13 -- Los TERMINOS tampoco se solapan
+--
+-- Cuarta vez el mismo defecto, y en la tabla que peor lo lleva: aqui esta el
+-- texto legal que el creador acepto. «.Que version de los terminos regia el 1
+-- de mayo?» podia tener DOS respuestas, y esa es la pregunta que se contesta el
+-- dia que alguien discute lo que acepto.
+--
+-- Se escapo del barrido de 3.10 por una razon tonta: aquella busqueda miro las
+-- columnas que se llaman `valid_from`, y estas se llaman `effective_from`. El
+-- gate ahora busca por FORMA --cualquier par `X_from`/`X_to` de tipo fecha-- en
+-- vez de por nombre, que es como habria aparecido a la primera.
+-- ===========================================================================
+
+DELIMITER //
+
+CREATE TRIGGER `tg_tver_sin_solape_ins`
+BEFORE INSERT ON `terms_versions`
+FOR EACH ROW
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM `terms_versions`
+         WHERE `code` <=> NEW.`code`
+           AND NEW.`effective_from` <= IFNULL(`effective_to`, '9999-12-31')
+           AND `effective_from` <= IFNULL(NEW.`effective_to`, '9999-12-31')
+    ) THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Ya hay una version de esos terminos vigente en esas fechas: cierre la anterior el dia antes.';
+    END IF;
+END//
+
+CREATE TRIGGER `tg_tver_sin_solape_upd`
+BEFORE UPDATE ON `terms_versions`
+FOR EACH ROW
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM `terms_versions`
+         WHERE `id` <> NEW.`id`
+           AND `code` <=> NEW.`code`
+           AND NEW.`effective_from` <= IFNULL(`effective_to`, '9999-12-31')
+           AND `effective_from` <= IFNULL(NEW.`effective_to`, '9999-12-31')
+    ) THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Ya hay una version de esos terminos vigente en esas fechas: cierre la anterior el dia antes.';
+    END IF;
+END//
+
+DELIMITER ;

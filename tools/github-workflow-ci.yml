@@ -162,7 +162,9 @@ jobs:
       # La regla de periodos vive en el esquema de referencia Y en la migracion.
       # Hoy salen de la misma clase; esto es lo que impide que manana no.
       - name: El esquema y las migraciones dicen lo mismo sobre periodos
-        run: python3 tools/verificar-periodos.py
+        run: |
+          python3 tools/verificar-periodos.py latam_p57_triggers \
+            --cliente "mysql -h127.0.0.1 -P3307 --protocol=TCP -uroot -proot"
 
       - name: Los fixtures de las pruebas no contradicen al esquema
         run: |

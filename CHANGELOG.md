@@ -2,6 +2,54 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 
+## [Fase 3 · 3.13 — Los términos tampoco se solapan] — 2026-08-24
+
+**Cuarta reaparición del defecto de `H-16`, y en la peor tabla: la que guarda el
+texto legal que el creador aceptó.**
+
+`PublicarTerminosCommand` cerraba la versión vigente con
+`effective_to = effective_from` de la nueva, y `effective_to` es inclusivo. El
+día de cada publicación había **dos versiones vigentes**. «¿Qué texto regía el 1
+de mayo?» tenía dos respuestas — que es exactamente la pregunta que se contesta
+el día que alguien discute qué aceptó.
+
+### Por qué se escapó de 3.10, que es lo que hay que recordar
+Aquel barrido buscó tablas con columnas **`valid_from`**. Éstas se llaman
+`effective_from`. Un defecto de clase escondido detrás de un nombre, tres
+iteraciones.
+
+`tools/verificar-periodos.py` busca ahora por **forma** —cualquier par
+`X_from` / `X_to` de tipo fecha— y exige que cada tabla así o tenga regla o esté
+en una lista de exclusiones **con el motivo escrito**. Hoy: 8 tablas con forma de
+periodo, 6 con regla, 2 excluidas a propósito (`creator_addresses` por
+`DEC-072`, `creator_guardians` por redundante). Probado al revés: quitando los
+disparadores de `terms_versions`, los señala.
+
+### Corregido
+- `Periodo::sinSolape` en `terms_versions` (serie: `code`).
+- `PublicarTerminosCommand` cierra **el día antes** y rechaza, con un mensaje que
+  lo explica, que la versión nueva empiece antes o el mismo día que la vigente.
+- `Periodo::exigirSinSolapePrevio()` no admitía otros nombres de columna que
+  `valid_*` — **el mismo sesgo que dejó esta tabla fuera del barrido**.
+- **Y una quinta copia del defecto**: `3.5-activacion.sh` cerraba la versión
+  vigente el mismo día que empezaba la nueva. Van cinco sitios que lo tenían
+  escrito como si fuera lo correcto: el controlador fiscal, `PerfilFiscalTest`,
+  `3.6-fiscal.sh`, `PublicarTerminosCommand` y esa suite.
+
+### En el gate de fixturas
+- Una tabla que **no se deja vaciar** (`no_delete`) conserva las filas de la
+  semilla, así que un rechazo de una regla que mira *otras filas* puede venir de
+  la semilla y no del fixture. Ahora eso sale como «sin veredicto» con ese
+  motivo, en vez de acusar al fixture. Lo destapó `terms_versions` en cuanto
+  ganó las dos cosas a la vez.
+
+**644 aserciones** en verde sobre los dos motores.
+
+### Nota sobre `B-1`
+Se revisó por si quedaba algo técnico: no queda. `php artisan terminos:publicar`
+existe y ahora además cierra bien. **`B-1` está bloqueado únicamente por el texto
+legal revisado**, y sigue impidiendo toda activación de creadores.
+
 ## [Fase 3 · 3.12 — Lo que es evidencia no se borra] — 2026-08-24
 
 Cierra `T-16`. Nueve tablas ya tenían `no_delete`; otras **nueve** guardaban

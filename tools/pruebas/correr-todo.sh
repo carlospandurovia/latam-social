@@ -50,6 +50,6 @@ python3 tools/verificar-fixturas.py "$SIN" --cliente "$CLIENTE" || tot_fail=$((t
 # Los dos salen de la misma clase, asi que hoy coinciden; esto es lo que hace
 # que sigan coincidiendo manana.
 echo ""; echo "===== periodos: esquema contra migraciones ====="
-python3 tools/verificar-periodos.py || tot_fail=$((tot_fail+1))
+python3 tools/verificar-periodos.py "$SIN" --cliente "$CLIENTE" || tot_fail=$((tot_fail+1))
 
 [ "$tot_fail" -eq 0 ]

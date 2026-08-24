@@ -211,6 +211,23 @@ else
 fi
 
 echo ""
+echo "--- 3.13: y los TERMINOS, que se escaparon del barrido ---"
+# Cuarta vez el mismo defecto, y en la tabla que peor lo lleva: aqui esta el
+# texto legal que el creador acepto. Se escapo de 3.10 por una razon tonta:
+# aquella busqueda miro columnas `valid_from`, y estas se llaman
+# `effective_from`. El gate ahora busca por FORMA.
+probar "una version de terminos de prueba, cerrada en marzo" \
+  "INSERT INTO terms_versions (uuid,audience,code,version,title,body,content_sha256,effective_from,effective_to,created_at) VALUES (UUID(),'creator','zz_prueba_313','v1','T1','texto uno',REPEAT('a',64),'2026-01-01','2026-03-31',NOW(3));" OK
+probar "la siguiente empieza el MISMO dia en que acaba la anterior" \
+  "INSERT INTO terms_versions (uuid,audience,code,version,title,body,content_sha256,effective_from,created_at) VALUES (UUID(),'creator','zz_prueba_313','v2','T2','texto dos',REPEAT('b',64),'2026-03-31',NOW(3));" RECHAZO
+probar "empezando el dia despues, encaja" \
+  "INSERT INTO terms_versions (uuid,audience,code,version,title,body,content_sha256,effective_from,created_at) VALUES (UUID(),'creator','zz_prueba_313','v2','T2','texto dos',REPEAT('b',64),'2026-04-01',NOW(3));" OK
+probar "otro codigo de terminos es otra serie" \
+  "INSERT INTO terms_versions (uuid,audience,code,version,title,body,content_sha256,effective_from,effective_to,created_at) VALUES (UUID(),'client','zz_prueba_313b','v1','T1','texto tres',REPEAT('c',64),'2026-01-01','2026-12-31',NOW(3));" OK
+valor "el 2026-03-31 regia UN solo texto" \
+  "SELECT COUNT(*) FROM terms_versions WHERE code='zz_prueba_313' AND effective_from<='2026-03-31' AND IFNULL(effective_to,'9999-12-31')>='2026-03-31';" "1"
+
+echo ""
 echo "--- Lo que quedo en la base es un historico sin ambiguedad ---"
 valor "el 2026-02-15 el creador tenia un solo regimen en PE" \
   "SELECT COUNT(*) FROM creator_tax_profiles WHERE creator_id=$CR AND country_id=$PA AND status IN ('approved','superseded') AND valid_from<='2026-02-15' AND IFNULL(valid_to,'9999-12-31')>='2026-02-15';" "1"

@@ -81,8 +81,14 @@ echo ""
 echo "--- Terminos versionados (DEC-059) ---"
 probar "segunda version vigente del mismo documento" \
  "INSERT INTO terms_versions (uuid,audience,code,version,title,body,content_sha256,effective_from,created_at) VALUES (UUID(),'creator','creator_terms','2026.2','Otros terminos','Texto',REPEAT('e',64),'2026-06-01',NOW(3));" RECHAZO
-probar "version cerrada + version nueva vigente" \
- "UPDATE terms_versions SET effective_to='2026-06-01' WHERE code='creator_terms' AND effective_to IS NULL;" OK
+# EL DIA ANTES, no el mismo dia. Esta linea decia `2026-06-01` --el mismo dia en
+# que empieza la 2026.2-- y con eso esta suite daba por buena la ambiguedad: ese
+# dia habia DOS textos vigentes, y es el texto que el creador acepta.
+#
+# Quinta vez el mismo defecto escrito como si fuera lo correcto: el controlador
+# fiscal, PerfilFiscalTest, 3.6-fiscal.sh, PublicarTerminosCommand y esta.
+probar "version cerrada EL DIA ANTES + version nueva vigente" \
+ "UPDATE terms_versions SET effective_to='2026-05-31' WHERE code='creator_terms' AND effective_to IS NULL;" OK
 probar "ahora si entra la 2026.2" \
  "INSERT INTO terms_versions (uuid,audience,code,version,title,body,content_sha256,effective_from,created_at) VALUES (UUID(),'creator','creator_terms','2026.2','Otros terminos','Texto',REPEAT('e',64),'2026-06-01',NOW(3));" OK
 probar "misma version dos veces" \
