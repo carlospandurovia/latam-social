@@ -36,4 +36,14 @@ for base in "$CON" "$SIN"; do
   done
 done
 echo ""; echo "TOTAL: $tot_ok correctas, $tot_fail fallidas"
+
+# Los fixtures de PHPUnit, contra el esquema de verdad.
+#
+# Va aqui y no en PHPUnit porque no necesita `vendor/`: se puede correr desde
+# donde se escriben las pruebas, que es justo donde no hay Laravel instalado.
+# Tres iteraciones seguidas se entregaron en rojo por un fixture que
+# contradecia al esquema, y las tres se habrian visto aqui en dos segundos.
+echo ""; echo "===== fixturas de PHPUnit ====="
+python3 tools/verificar-fixturas.py "$SIN" --cliente "$CLIENTE" || tot_fail=$((tot_fail+1))
+
 [ "$tot_fail" -eq 0 ]

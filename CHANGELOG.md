@@ -2,6 +2,44 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 
+## [Puerta nueva · fixturas contra el esquema] — 2026-08-24
+
+### Corregido
+- **`PerfilComercialTest` fallaba entero (14 de 14) en `setUp()`.** Dos veces el
+  mismo error en el mismo archivo, y es un error con nombre: **una palabra de
+  estado tecleada como si fuera una palabra**.
+  - `'status' => 'active'` en `creators`. Aquí `active` no es una cadena: son
+    tres restricciones a la vez —`ck_creators_activation` exige fecha de
+    activación, `ck_creators_active_identity` exige identidad verificada, y
+    `ck_creators_identity_evidence` exige además quién la verificó y con qué
+    documento—. Y no hacía falta para nada: `PerfilComercialController` no mira
+    el estado del creador en ninguna línea. Lo escribí porque *sonaba* al estado
+    correcto para un creador con tarifas. Un valor por defecto que parece una
+    respuesta (`DEC-048`), otra vez.
+  - `'status' => 'in_progress'` en `campaigns`, sin `confirmed_at`, que es lo
+    que exige `ck_camp_confirmed`.
+
+### Añadido
+- **`tools/verificar-fixturas.py`** — ejecuta los `insert` de las pruebas contra
+  el esquema de referencia, sin necesitar `vendor/`. Es la puerta que faltaba:
+  tres iteraciones seguidas se entregaron en rojo por lo mismo (`1054` en 3.6,
+  `1364` en 3.8, `4025` en 3.9), y las tres se habrían visto aquí en dos
+  segundos. Dice qué restricción se incumple y qué literal del fixture la
+  incumple; PHPUnit solo dice «14 failed».
+- Enganchada a `tools/pruebas/correr-todo.sh` y a CI, sobre Percona 5.7.
+- `T-13` — los fixtures siguen escritos a mano en 10 sitios; la puerta detecta
+  la contradicción pero no la evita.
+
+### Sobre la puerta misma
+- La primera versión acusaba al fixture de **todo** lo que la base rechazaba:
+  de 17 avisos, 12 eran suyos, no de los fixtures —valores de relleno que
+  incumplían un `CHECK`—. Un gate que grita sin razón se acaba ignorando, y
+  entonces no es un gate. Ahora un rechazo solo se atribuye al fixture si el
+  fixture puso un **literal** en alguna columna que esa restricción mira; el
+  resto sale como «sin veredicto», contado y visible con `-v`.
+- Se comprueba a sí misma: con los dos fallos reintroducidos los señala por
+  nombre; con el arreglo puesto, verde.
+
 ## [Fase 3 · 3.9 — Tarifas, disponibilidad y agenda] — 2026-08-24
 
 Lo que faltaba para poder invitar a un creador a una campaña.
