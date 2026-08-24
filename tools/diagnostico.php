@@ -15,9 +15,9 @@
  * y `NativeCommandError`, y si el comando sigue vivo el archivo se queda a
  * medias sin avisar. Nos costo dos rondas descubrirlo.
  *
- * Aqui la captura la hace PHP: `2>&1` a nivel del proceso hijo, se junta todo
- * en memoria y se escribe de una vez en UTF-8 plano. Lo que hay en el archivo
- * es exactamente lo que imprimieron las herramientas.
+ * Aqui la captura la hace PHP: el hijo escribe su stdout y su stderr en el
+ * mismo archivo, y nosotros lo volcamos en UTF-8 plano. Lo que hay en el
+ * archivo es exactamente lo que imprimieron las herramientas.
  */
 
 $raiz = dirname(__DIR__);
@@ -86,52 +86,89 @@ $volcar = static function (array $lineas) use ($destino): void {
  * trabaja sin dar senales es indistinguible de uno muerto, y quien mira acaba
  * cortandolo por si acaso.
  *
- * `2>&1` va en el comando y no en un descriptor aparte: asi los errores llegan
+ * stdout y stderr van al mismo sitio a proposito: asi los errores llegan
  * mezclados en su orden real, que es como hay que leerlos.
  *
  * @return array{0: list<string>, 1: int}
  */
 $ejecutar = static function (string $comando, ?callable $parcial = null): array {
-    $tuberias = [];
-    $proceso = proc_open($comando.' 2>&1', [1 => ['pipe', 'w']], $tuberias);
+    // La salida del hijo va a un ARCHIVO, no a una tuberia. Y esto es el tercer
+    // intento, asi que conviene dejar escrito por que.
+    //
+    // Intento 1: `fgets` bloqueante. El archivo solo se escribia al TERMINAR la
+    //   puerta, asi que un cuelgue en PHPUnit no dejaba ni una linea.
+    // Intento 2: `stream_select` con tiempo de espera. En Windows no funciona
+    //   sobre las tuberias de `proc_open` --solo sobre sockets-- y el bucle se
+    //   quedaba bloqueado ahi.
+    // Intento 3: `stream_set_blocking(false)` + `fread`. Tampoco: **PHP en
+    //   Windows no admite modo NO bloqueante en las tuberias de `proc_open`**.
+    //   `stream_set_blocking()` devuelve false y el flujo sigue bloqueando, asi
+    //   que `fread` espera a llenar el bufer o al final del proceso. El sintoma
+    //   era identico al del intento 2: una escritura a los dos segundos y nada
+    //   mas. En Linux los tres funcionaban, que es exactamente lo que hace tan
+    //   dificil de ver este fallo desde aqui.
+    //
+    // La salida es no usar tuberias. Un archivo se lee sin bloquear en los dos
+    // sistemas, y `proc_get_status()` dice cuando termino el hijo. Menos elegante
+    // y portable de verdad.
+    $bruto = tempnam(sys_get_temp_dir(), 'diag');
+
+    if ($bruto === false) {
+        return [['No pude crear el archivo temporal de salida.'], 127];
+    }
+
+    // UN SOLO manejador para stdout y stderr, no dos descriptores `['file', ...]`
+    // apuntando al mismo archivo.
+    //
+    // Con dos, cada uno lleva su propia posicion: el de stdout empieza en 0 y
+    // avanza, el de stderr escribe siempre al final. Se pisan. En la prueba de
+    // banco se perdieron dos lineas enteras y una tercera salio como mezcla de
+    // otras dos --y como no aparecia ninguna linea nueva, el contador de
+    // "segundos callado" tampoco se reiniciaba: parecia congelado cuando el
+    // proceso estaba hablando.
+    //
+    // Compartiendo el manejador comparten la posicion, y el orden que queda en
+    // el archivo es el real.
+    $escritor = fopen($bruto, 'w');
+
+    if ($escritor === false) {
+        @unlink($bruto);
+
+        return [['No pude abrir el archivo temporal de salida.'], 127];
+    }
+
+    $proceso = proc_open($comando, [
+        1 => $escritor,
+        2 => $escritor,
+    ], $tuberias);
 
     if (!is_resource($proceso)) {
+        fclose($escritor);
+        @unlink($bruto);
+
         return [['No se pudo lanzar: '.$comando], 127];
     }
 
+    $lector = fopen($bruto, 'r');
+
+    if ($lector === false) {
+        proc_close($proceso);
+        fclose($escritor);
+        @unlink($bruto);
+
+        return [['No pude leer el archivo temporal de salida.'], 127];
+    }
+
     $lineas = [];
-
-    // Lectura NO bloqueante, a base de `fread` + `usleep`.
-    //
-    // Antes esto era un `while (fgets(...))` a secas, y el volcado al archivo
-    // solo ocurria cuando la puerta TERMINABA. Consecuencia: si una puerta se
-    // queda colgada -que es justo cuando hace falta saber donde-, el archivo no
-    // contiene ni una linea de ella. Paso de verdad con PHPUnit: tres puertas
-    // en verde, la cuarta parada, y cero informacion sobre en que test.
-    //
-    // Ahora se vuelca cada dos segundos aunque el proceso no diga nada, y se
-    // anota cuanto tiempo lleva callado. Un silencio de tres minutos en un test
-    // concreto es un dato; un archivo vacio no lo es.
-    //
-    // Y NO con `stream_select`, que fue el primer intento: en Windows no
-    // funciona sobre las tuberias de `proc_open` --solo sobre sockets-- y se
-    // quedaba bloqueado ahi. El sintoma era exquisito: el archivo se escribia
-    // UNA vez, a los dos segundos, y despues nada. Aqui, en Linux, funcionaba
-    // perfectamente. Es la tercera divergencia de entorno de esta iteracion.
-    stream_set_blocking($tuberias[1], false);
-
+    $resto = '';
     $ultimoVolcado = 0.0;
     $ultimaLinea = microtime(true);
-    $resto = '';
+    $codigo = 0;
 
     while (true) {
-        $trozo = fread($tuberias[1], 65536);
+        $trozo = stream_get_contents($lector);
 
-        if ($trozo === false) {
-            break;
-        }
-
-        if ($trozo !== '') {
+        if (is_string($trozo) && $trozo !== '') {
             $resto .= $trozo;
 
             while (($corte = strpos($resto, "\n")) !== false) {
@@ -141,42 +178,47 @@ $ejecutar = static function (string $comando, ?callable $parcial = null): array 
                 $ultimaLinea = microtime(true);
                 echo '  | '.$linea.PHP_EOL;
             }
-        } else {
-            // Nada que leer ahora mismo. Si ademas el hijo ya termino y la
-            // tuberia esta vacia, se acabo.
-            $estado = proc_get_status($proceso);
 
-            if (feof($tuberias[1]) || ($estado !== false && $estado['running'] === false)) {
-                // Una ultima pasada por si quedaba algo en el buffer.
-                $ultimo = stream_get_contents($tuberias[1]);
+            continue;   // puede quedar mas; no dormir todavia
+        }
 
-                if (is_string($ultimo) && $ultimo !== '') {
-                    $resto .= $ultimo;
-                    continue;
-                }
+        $estado = proc_get_status($proceso);
 
-                break;
+        if ($estado === false || $estado['running'] === false) {
+            // Una ultima pasada: entre el ultimo `stream_get_contents` y el
+            // final del hijo pueden haber quedado bytes sin leer.
+            $ultimo = stream_get_contents($lector);
+
+            if (is_string($ultimo) && $ultimo !== '') {
+                $resto .= $ultimo;
+
+                continue;
             }
 
-            usleep(100000);
+            $codigo = $estado === false ? 1 : (int) $estado['exitcode'];
+            break;
         }
 
         $ahora = microtime(true);
 
         if ($parcial !== null && $ahora - $ultimoVolcado >= 2.0) {
-            $callado = (int) round($ahora - $ultimaLinea);
-            $parcial($lineas, $callado);
+            $parcial($lineas, (int) round($ahora - $ultimaLinea));
             $ultimoVolcado = $ahora;
         }
+
+        usleep(200000);
     }
 
     if ($resto !== '') {
         $lineas[] = rtrim($resto, "\r\n");
     }
 
-    fclose($tuberias[1]);
+    fclose($lector);
+    proc_close($proceso);
+    fclose($escritor);
+    @unlink($bruto);
 
-    return [$lineas, proc_close($proceso)];
+    return [$lineas, $codigo];
 };
 
 $informe = [];
