@@ -46,7 +46,21 @@ final class PerfilComercialTest extends TestCase
             'birth_date' => '1998-05-12', 'email' => 'ana@ejemplo.test',
             'country_id' => DB::table('countries')->where('iso2', 'PE')->value('id'),
             'document_country_code' => 'PE', 'document_type' => 'DNI', 'document_number' => '40000001',
-            'status' => 'active', 'payment_term_days' => 30, 'preferred_currency_code' => 'PEN',
+            // `pending`, no `active`. Y no es un detalle de fixture.
+            //
+            // `active` no es una palabra que se teclee: son TRES restricciones a
+            // la vez --`ck_creators_activation` exige `activated_at`,
+            // `ck_creators_active_identity` exige `identity_verified_at`, y
+            // `ck_creators_identity_evidence` exige ademas quien lo verifico y
+            // el archivo del documento--. Poner `active` aqui costaba una fila
+            // en `files` y cuatro columnas mas.
+            //
+            // Y lo peor: no hacia falta para nada. `PerfilComercialController`
+            // no mira el estado del creador en ninguna linea. Escribi `active`
+            // porque sonaba al estado correcto para un creador con tarifas, no
+            // porque algo lo pidiera: un valor por defecto que parece una
+            // respuesta, otra vez (DEC-048).
+            'status' => 'pending', 'payment_term_days' => 30, 'preferred_currency_code' => 'PEN',
             'created_at' => now(), 'updated_at' => now(),
         ]);
 
@@ -332,7 +346,12 @@ final class PerfilComercialTest extends TestCase
             'client_organization_id' => $orgId, 'client_brand_id' => $marcaId,
             'currency_code' => 'PEN',
             'starts_on' => $desde, 'ends_on' => $hasta,
-            'status' => 'in_progress',
+            // El mismo error que arriba, segunda vez en el mismo archivo:
+            // `in_progress` tampoco es una palabra que se teclee.
+            // `ck_camp_confirmed` exige `confirmed_at` para todo lo que no sea
+            // `draft`, `pending_approval` o `cancelled`, porque esa fecha es el
+            // instante a partir del cual la campana ya no se puede borrar.
+            'status' => 'in_progress', 'confirmed_at' => now(),
             'created_at' => now(), 'updated_at' => now(),
         ]);
 
