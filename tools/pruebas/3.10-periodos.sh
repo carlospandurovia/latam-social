@@ -108,6 +108,38 @@ probar "aprobar DESPUES uno que se solapa: ahi si estorba" \
   "UPDATE creator_tax_profiles SET status='approved', withholding_status='not_applicable', approved_by_user_id=$U2, approved_at=NOW(3) WHERE tax_id_number='20610008';" RECHAZO
 
 echo ""
+echo "--- El relevo TAL COMO LO HACE EL CONTROLADOR (esto es T-12 de verdad) ---"
+# Las aserciones de arriba meten dos perfiles `approved` a la vez, y eso el
+# controlador NO lo hace nunca: al aprobar, marca el anterior como `superseded`
+# en la MISMA transaccion. Con el filtro estrecho de la primera version --solo
+# `approved`-- no habia dos aprobados jamas, la regla no se disparaba, y el
+# defecto que esta iteracion viene a cerrar entraba igual.
+#
+# Estas cuatro reproducen la secuencia exacta del controlador.
+$CLIENTE $DB -e "INSERT INTO creators (uuid,first_name,last_name,display_name,birth_date,email,
+   country_id,document_country_code,document_type,document_number,status,payment_term_days,
+   preferred_currency_code,created_at,updated_at)
+ SELECT UUID(),'Iris','Paz','irispaz310','1994-07-02','iris310@ejemplo.test',c.id,'PE','DNI','43100311',
+   'pending',30,'PEN',NOW(3),NOW(3) FROM countries c WHERE c.iso2='PE'
+ ON DUPLICATE KEY UPDATE display_name=display_name;" 2>/dev/null
+IR="(SELECT id FROM (SELECT id FROM creators WHERE display_name='irispaz310') t)"
+
+probar "vigente: aprobado y abierto desde enero" \
+  "INSERT INTO creator_tax_profiles ($BASE,valid_from,$APR) VALUES ($IR,$PA,'RER','RUC','20630001','recibo_honorarios','2026-01-01',$APRV);" OK
+probar "se captura el siguiente, en pendiente, desde abril" \
+  "INSERT INTO creator_tax_profiles ($BASE,valid_from,created_by_user_id) VALUES ($IR,$PA,'RG','RUC','20630002','factura','2026-04-01',$U1);" OK
+probar "el controlador cierra el anterior EL MISMO DIA (como hace hoy)" \
+  "UPDATE creator_tax_profiles SET status='superseded', valid_to='2026-04-01' WHERE tax_id_number='20630001';" OK
+probar "...y al aprobar el nuevo, la base lo para: ese dia hay DOS regimenes" \
+  "UPDATE creator_tax_profiles SET status='approved', withholding_status='not_applicable', approved_by_user_id=$U2, approved_at=NOW(3) WHERE tax_id_number='20630002';" RECHAZO
+probar "cerrandolo el dia ANTES, el relevo pasa" \
+  "UPDATE creator_tax_profiles SET valid_to='2026-03-31' WHERE tax_id_number='20630001';" OK
+probar "y ahora si se aprueba" \
+  "UPDATE creator_tax_profiles SET status='approved', withholding_status='not_applicable', approved_by_user_id=$U2, approved_at=NOW(3) WHERE tax_id_number='20630002';" OK
+valor "el 2026-04-01 Iris tenia un solo regimen" \
+  "SELECT COUNT(*) FROM creator_tax_profiles WHERE creator_id=$IR AND country_id=$PA AND status IN ('approved','superseded') AND valid_from<='2026-04-01' AND IFNULL(valid_to,'9999-12-31')>='2026-04-01';" "1"
+
+echo ""
 echo "--- Un UPDATE tampoco puede abrir un solape ---"
 probar "estirar el primer periodo hasta pisar al segundo" \
   "UPDATE creator_tax_profiles SET valid_to='2026-05-01' WHERE tax_id_number='20610001';" RECHAZO
@@ -178,9 +210,9 @@ fi
 echo ""
 echo "--- Lo que quedo en la base es un historico sin ambiguedad ---"
 valor "el 2026-02-15 el creador tenia un solo regimen en PE" \
-  "SELECT COUNT(*) FROM creator_tax_profiles WHERE creator_id=$CR AND country_id=$PA AND status='approved' AND valid_from<='2026-02-15' AND IFNULL(valid_to,'9999-12-31')>='2026-02-15';" "1"
+  "SELECT COUNT(*) FROM creator_tax_profiles WHERE creator_id=$CR AND country_id=$PA AND status IN ('approved','superseded') AND valid_from<='2026-02-15' AND IFNULL(valid_to,'9999-12-31')>='2026-02-15';" "1"
 valor "y el 2026-05-15 tambien uno solo" \
-  "SELECT COUNT(*) FROM creator_tax_profiles WHERE creator_id=$CR AND country_id=$PA AND status='approved' AND valid_from<='2026-05-15' AND IFNULL(valid_to,'9999-12-31')>='2026-05-15';" "1"
+  "SELECT COUNT(*) FROM creator_tax_profiles WHERE creator_id=$CR AND country_id=$PA AND status IN ('approved','superseded') AND valid_from<='2026-05-15' AND IFNULL(valid_to,'9999-12-31')>='2026-05-15';" "1"
 
 echo ""
 echo "==================================================================================="

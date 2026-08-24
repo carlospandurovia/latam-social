@@ -23,11 +23,26 @@ use Illuminate\Database\Migrations\Migration;
  * fiscal se paga en una declaración: la retención que se aplicó ese día sale de
  * un régimen que, según la base, podía ser cualquiera de los dos.
  *
- * **La regla solo mira los perfiles aprobados.** Un perfil `pending` o
- * `rejected` nunca estuvo vigente; si ocupara periodo, un error de captura
- * bloquearía el histórico del creador para siempre. Y al revés: aprobar más
- * tarde uno que se solapa sí se rechaza, porque en ese momento sí pasa a
- * ocupar. El `UPDATE` lo cubre igual que el `INSERT`.
+ * **Qué cuenta como «ocupar periodo».** `approved` y `superseded`, no solo
+ * `approved`. Y esto no es un detalle: la primera versión de esta migración
+ * filtraba solo por `approved` y **no habría cazado el defecto que viene a
+ * arreglar**.
+ *
+ * El motivo es que `PerfilFiscalController` marca el perfil anterior como
+ * `superseded` **en la misma transacción** en la que aprueba el nuevo. Con el
+ * filtro estrecho nunca hay dos `approved` a la vez, la regla no se dispara
+ * jamás, y el solape de un día entra igual que antes. Se vio al abrir el
+ * controlador para arreglarlo, no al escribir la regla.
+ *
+ * Y es lo correcto además de lo que funciona: `superseded` quiere decir
+ * **reemplazado**, no anulado. Ese perfil sí estuvo vigente durante su ventana,
+ * y de él salió la retención que se practicó esos meses. La pantalla lo enseña
+ * en el histórico precisamente por eso.
+ *
+ * `pending` y `rejected` no ocupan: nunca estuvieron vigentes, y si estorbaran,
+ * un error de captura bloquearía el histórico del creador para siempre. Al
+ * revés sí: aprobar más tarde uno que se solapa se rechaza, porque en ese
+ * momento pasa a ocupar. El `UPDATE` lo cubre igual que el `INSERT`.
  *
  * La base impone que no haya solape; **cerrar el anterior el día antes es cosa
  * del controlador**, y va en la segunda mitad de esta iteración.
@@ -39,7 +54,7 @@ return new class extends Migration
         Periodo::exigirSinSolapePrevio(
             tabla: 'creator_tax_profiles',
             serie: ['creator_id', 'country_id'],
-            donde: "status = 'approved'",
+            donde: "status IN ('approved', 'superseded')",
             queSignifica: 'Cada uno significa que para alguna fecha hay DOS regimenes fiscales '
                 .'aplicables, y de ahi sale la retencion que se le practico al creador.',
             comoSeArregla: 'Cierre el anterior el dia ANTES de que empiece el siguiente '
@@ -52,7 +67,7 @@ return new class extends Migration
             nombre: 'ctp_sin_solape',
             serie: ['creator_id', 'country_id'],
             mensaje: 'Ya hay un perfil fiscal aprobado para ese pais en esas fechas: cierre el anterior el dia antes.',
-            donde: "status = 'approved'",
+            donde: "status IN ('approved', 'superseded')",
             columnasDonde: ['status'],
         );
     }

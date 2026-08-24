@@ -80,8 +80,13 @@ echo ""
 echo "--- Un solo perfil vigente por creador y pais (BR-CREATOR-007) ---"
 probar "segundo perfil vigente en el MISMO pais" \
  "INSERT INTO creator_tax_profiles ($BASE,withholding_status,status,approved_by_user_id,approved_at) VALUES ($CR,$PA,'GENERAL','RUC','20600009','factura','2026-06-01',$U1,'not_applicable','approved',$U2,NOW(3));" RECHAZO
-probar "cerrar el anterior y abrir el nuevo" \
- "UPDATE creator_tax_profiles SET status='superseded', valid_to='2026-06-01' WHERE tax_id_number='20600008';" OK
+# EL DIA ANTES, no el mismo dia. Esta linea decia `2026-06-01` --el mismo dia en
+# que empieza el nuevo-- y con eso esta suite llevaba desde 3.6 dando por buena
+# la ambiguedad de `T-12`: `valid_to` es INCLUSIVO, asi que ese dia habia dos
+# regimenes aplicables. Tres sitios distintos tenian el defecto escrito como si
+# fuera lo correcto: el controlador, la prueba de PHPUnit y esta suite.
+probar "cerrar el anterior EL DIA ANTES y abrir el nuevo (T-12)" \
+ "UPDATE creator_tax_profiles SET status='superseded', valid_to='2026-05-31' WHERE tax_id_number='20600008';" OK
 probar "ahora si entra el nuevo vigente" \
  "INSERT INTO creator_tax_profiles ($BASE,withholding_status,status,approved_by_user_id,approved_at) VALUES ($CR,$PA,'GENERAL','RUC','20600009','factura','2026-06-01',$U1,'not_applicable','approved',$U2,NOW(3));" OK
 probar "vigencia que termina antes de empezar" \

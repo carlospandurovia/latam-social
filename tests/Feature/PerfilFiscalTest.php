@@ -242,16 +242,129 @@ final class PerfilFiscalTest extends TestCase
 
         $this->assertSame('superseded', $viejo->status);
         $this->assertNotNull($viejo->valid_to, 'Un perfil cerrado sin fecha de cierre no se puede explicar.');
-        // El anterior se cierra CUANDO EMPIEZA EL NUEVO. Cerrarlo «hoy» dejaba
-        // los dos periodos solapados, y entonces «que regimen aplicaba el 1 de
-        // mayo» tiene dos respuestas.
-        $this->assertSame('2026-07-01', substr((string) $viejo->valid_to, 0, 10));
+
+        // EL DÍA ANTES, no el mismo día (`T-12`).
+        //
+        // Esta línea decía `2026-07-01`, y con eso esta prueba llevaba desde
+        // 3.6 dando por buena la ambigüedad: `valid_to` es INCLUSIVO, así que
+        // cerrar el anterior el día que empieza el nuevo deja los dos vigentes
+        // ese día. Una prueba puede fijar un defecto igual de bien que fija un
+        // acierto, y ésta lo fijó.
+        $this->assertSame('2026-06-30', substr((string) $viejo->valid_to, 0, 10));
         $this->assertSame('approved', $nuevo->status);
         $this->assertNull($nuevo->valid_to);
 
         // `uq_ctp_current`: uno y solo uno vigente por creador y pais.
         $this->assertSame(1, DB::table('creator_tax_profiles')
             ->where('creator_id', $this->creadorId)->where('status', 'approved')->whereNull('valid_to')->count());
+    }
+
+    /**
+     * La propiedad que de verdad importa, dicha como pregunta.
+     *
+     * Las aserciones de fecha de arriba comprueban el mecanismo; ésta comprueba
+     * lo que el mecanismo existe para conseguir, que es que «¿qué régimen
+     * aplicaba el día del relevo?» tenga UNA respuesta. De esa respuesta sale
+     * la retención que se le practicó al creador.
+     */
+    public function test_el_dia_del_relevo_hay_un_solo_regimen_aplicable(): void
+    {
+        $capturador = $this->usuarioCon('finance');
+        $aprobador = $this->usuarioCon('finance');
+
+        $primero = $this->capturar($capturador);
+        $this->actingAs($aprobador)->post("/creadores/{$this->uuid}/fiscal/{$primero}/aprobar", [
+            'withholding_status' => 'not_applicable', 'confirma_revision' => '1',
+        ]);
+
+        $segundo = $this->capturar($capturador, [
+            'tax_regime_code' => 'GENERAL', 'tax_id_number' => '10400000099',
+            'valid_from' => '2026-07-01',
+        ]);
+        $this->actingAs($aprobador)->post("/creadores/{$this->uuid}/fiscal/{$segundo}/aprobar", [
+            'withholding_status' => 'not_applicable', 'confirma_revision' => '1',
+        ]);
+
+        // `superseded` cuenta: quiere decir REEMPLAZADO, no anulado. Ese perfil
+        // sí estuvo vigente su ventana, y es de donde salió la retención de
+        // aquellos meses.
+        $vigentesEl = fn (string $dia): int => DB::table('creator_tax_profiles')
+            ->where('creator_id', $this->creadorId)
+            ->whereIn('status', ['approved', 'superseded'])
+            ->whereDate('valid_from', '<=', $dia)
+            ->where(fn ($q) => $q->whereNull('valid_to')->orWhereDate('valid_to', '>=', $dia))
+            ->count();
+
+        $this->assertSame(1, $vigentesEl('2026-06-30'), 'La víspera del relevo.');
+        $this->assertSame(1, $vigentesEl('2026-07-01'), 'El día del relevo: aquí estaba T-12.');
+        $this->assertSame(1, $vigentesEl('2026-07-02'), 'El día siguiente.');
+    }
+
+    /**
+     * `DEC-071`: hacia atrás no, y se dice con palabras.
+     *
+     * La base lo rechazaría de todos modos --`ck_ctp_dates` no admite un
+     * `valid_to` anterior al `valid_from`--, pero un error 45000 en pantalla no
+     * le explica al operador qué hizo mal ni qué puede hacer en su lugar.
+     */
+    public function test_un_perfil_que_empieza_antes_que_el_vigente_se_rechaza_con_palabras(): void
+    {
+        $capturador = $this->usuarioCon('finance');
+        $aprobador = $this->usuarioCon('finance');
+
+        $primero = $this->capturar($capturador, ['valid_from' => '2026-06-01']);
+        $this->actingAs($aprobador)->post("/creadores/{$this->uuid}/fiscal/{$primero}/aprobar", [
+            'withholding_status' => 'not_applicable', 'confirma_revision' => '1',
+        ]);
+
+        $retroactivo = $this->capturar($capturador, [
+            'tax_regime_code' => 'GENERAL', 'tax_id_number' => '10400000077',
+            'valid_from' => '2026-03-01',
+        ]);
+
+        $this->actingAs($aprobador)
+            ->post("/creadores/{$this->uuid}/fiscal/{$retroactivo}/aprobar", [
+                'withholding_status' => 'not_applicable', 'confirma_revision' => '1',
+            ])
+            ->assertSessionHas('aviso');
+
+        // Y no cambió nada: ni se aprobó el nuevo ni se tocó el vigente.
+        $this->assertSame('pending', DB::table('creator_tax_profiles')->where('id', $retroactivo)->value('status'));
+        $this->assertSame('approved', DB::table('creator_tax_profiles')->where('id', $primero)->value('status'));
+        $this->assertNull(DB::table('creator_tax_profiles')->where('id', $primero)->value('valid_to'));
+    }
+
+    /**
+     * El mismo día tampoco, y por una razón distinta que merece decirse.
+     *
+     * Si el nuevo empieza el mismo día que el vigente, cerrar el anterior «el
+     * día antes» le pondría un `valid_to` anterior a su propio `valid_from`. Lo
+     * que ese caso significa de verdad es que el perfil vigente no estuvo
+     * vigente NUNCA, y eso no es cerrarlo, es anularlo. Son dos actos distintos
+     * y esta pantalla solo hace el primero.
+     */
+    public function test_empezar_el_mismo_dia_que_el_vigente_tampoco_vale(): void
+    {
+        $capturador = $this->usuarioCon('finance');
+        $aprobador = $this->usuarioCon('finance');
+
+        $primero = $this->capturar($capturador, ['valid_from' => '2026-06-01']);
+        $this->actingAs($aprobador)->post("/creadores/{$this->uuid}/fiscal/{$primero}/aprobar", [
+            'withholding_status' => 'not_applicable', 'confirma_revision' => '1',
+        ]);
+
+        $mismoDia = $this->capturar($capturador, [
+            'tax_regime_code' => 'GENERAL', 'tax_id_number' => '10400000078',
+            'valid_from' => '2026-06-01',
+        ]);
+
+        $this->actingAs($aprobador)
+            ->post("/creadores/{$this->uuid}/fiscal/{$mismoDia}/aprobar", [
+                'withholding_status' => 'not_applicable', 'confirma_revision' => '1',
+            ])
+            ->assertSessionHas('aviso');
+
+        $this->assertSame('pending', DB::table('creator_tax_profiles')->where('id', $mismoDia)->value('status'));
     }
 
     public function test_rechazar_exige_un_motivo(): void

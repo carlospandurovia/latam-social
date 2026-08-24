@@ -2,6 +2,34 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 
+## [Fase 3 · 3.10 (2/2) — El relevo de perfil fiscal] — 2026-08-24
+
+### Corregido
+- **`T-12` cerrado del todo.** `PerfilFiscalController` cierra ahora el perfil
+  anterior **el día antes** de que empiece el nuevo, no el mismo día.
+- **El filtro de la regla estaba mal en 3.10 (1/2), y la regla no habría servido
+  de nada.** Filtraba `status = 'approved'`, y el controlador marca el anterior
+  como `superseded` en la misma transacción en que aprueba el nuevo: nunca hay
+  dos `approved` a la vez, así que la regla no se disparaba jamás. Restricción
+  puesta, 24 aserciones en verde, y el defecto intacto. Ahora es
+  `status IN ('approved', 'superseded')` — que además de funcionar es lo
+  correcto: `superseded` quiere decir **reemplazado**, no anulado.
+- **El defecto estaba escrito en tres sitios como si fuera lo correcto**: el
+  controlador, `PerfilFiscalTest` (`assertSame('2026-07-01', ...)`) y
+  `tools/pruebas/3.6-fiscal.sh`. Una prueba puede fijar un defecto igual de bien
+  que fija un acierto.
+
+### Añadido
+- `DEC-071` en la pantalla: un perfil que entra en vigor antes —o el mismo día—
+  que el vigente se rechaza **con palabras**, no con un 45000.
+- `test_el_dia_del_relevo_hay_un_solo_regimen_aplicable` — la propiedad dicha
+  como pregunta («¿qué régimen aplicaba ese día?»), no como fecha esperada.
+- Sección nueva en la suite 3.10 que reproduce **la secuencia exacta del
+  controlador** en vez de llegar al mismo estado por un camino que la aplicación
+  no recorre nunca. Es lo que faltaba para que la regla probara algo real.
+
+560 aserciones en verde sobre los dos motores.
+
 ## [Fase 3 · 3.10 (1/2) — El histórico no se solapa] — 2026-08-24
 
 Siete tablas del esquema llevan `valid_from` / `valid_to`, y las siete

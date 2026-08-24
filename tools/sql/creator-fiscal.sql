@@ -409,9 +409,18 @@ DELIMITER ;
 --
 -- En un historial fiscal esa ambiguedad se paga en una declaracion: `T-12`.
 --
--- La regla solo mira los perfiles APROBADOS. Uno `pending` o `rejected` nunca
--- estuvo vigente, y si ocupara periodo un error de captura bloquearia el
--- historico del creador para siempre.
+-- Ocupan periodo `approved` Y `superseded`. La primera version filtraba solo
+-- por `approved` y NO habria cazado el defecto que viene a arreglar: el
+-- controlador marca el anterior como `superseded` en la misma transaccion en
+-- que aprueba el nuevo, asi que nunca hay dos `approved` a la vez y la regla no
+-- se disparaba jamas.
+--
+-- Ademas de funcionar, es lo correcto: `superseded` quiere decir REEMPLAZADO,
+-- no anulado. Ese perfil estuvo vigente su ventana, y de el salio la retencion
+-- que se practico esos meses.
+--
+-- `pending` y `rejected` no ocupan: nunca estuvieron vigentes, y si estorbaran,
+-- un error de captura bloquearia el historico del creador para siempre.
 --
 -- Generados por App\Shared\Database\Periodo, no escritos a mano: la migracion
 -- usa esa misma clase, asi que esquema de referencia y produccion no pueden
@@ -425,14 +434,14 @@ CREATE TRIGGER `tg_ctp_sin_solape_ins`
 BEFORE INSERT ON `creator_tax_profiles`
 FOR EACH ROW
 BEGIN
-    IF (NEW.`status` = 'approved')
+    IF (NEW.`status` IN ('approved', 'superseded'))
        AND EXISTS (
         SELECT 1 FROM `creator_tax_profiles`
          WHERE `creator_id` <=> NEW.`creator_id`
            AND `country_id` <=> NEW.`country_id`
            AND NEW.`valid_from` <= IFNULL(`valid_to`, '9999-12-31')
            AND `valid_from` <= IFNULL(NEW.`valid_to`, '9999-12-31')
-           AND (status = 'approved')
+           AND (status IN ('approved', 'superseded'))
     ) THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Ya hay un perfil fiscal aprobado para ese pais en esas fechas: cierre el anterior el dia antes.';
     END IF;
@@ -442,7 +451,7 @@ CREATE TRIGGER `tg_ctp_sin_solape_upd`
 BEFORE UPDATE ON `creator_tax_profiles`
 FOR EACH ROW
 BEGIN
-    IF (NEW.`status` = 'approved')
+    IF (NEW.`status` IN ('approved', 'superseded'))
        AND EXISTS (
         SELECT 1 FROM `creator_tax_profiles`
          WHERE `id` <> NEW.`id`
@@ -450,7 +459,7 @@ BEGIN
            AND `country_id` <=> NEW.`country_id`
            AND NEW.`valid_from` <= IFNULL(`valid_to`, '9999-12-31')
            AND `valid_from` <= IFNULL(NEW.`valid_to`, '9999-12-31')
-           AND (status = 'approved')
+           AND (status IN ('approved', 'superseded'))
     ) THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Ya hay un perfil fiscal aprobado para ese pais en esas fechas: cierre el anterior el dia antes.';
     END IF;

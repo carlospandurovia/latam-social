@@ -161,34 +161,60 @@ final class PerfilFiscalController
                 .'Tiene que revisarlo otra persona (BR-CREATOR-007).');
         }
 
+        $vigente = DB::table('creator_tax_profiles')
+            ->where('creator_id', $creador->id)
+            ->where('country_id', $perfil->country_id)
+            ->where('status', 'approved')
+            ->whereNull('valid_to')
+            ->first(['id', 'valid_from', 'tax_regime_code']);
+
+        // El perfil nuevo tiene que empezar DESPUÉS que el vigente (`DEC-071`).
+        //
+        // Si empezara el mismo día o antes, cerrar el anterior «el día antes»
+        // le pondría un `valid_to` anterior a su propio `valid_from`, que es lo
+        // que prohíbe `ck_ctp_dates`. Y no se arregla recortando la fecha: lo
+        // que ese caso significa de verdad es que el perfil vigente **no
+        // estuvo vigente nunca**, y eso no es cerrarlo, es anularlo.
+        //
+        // Un cambio de régimen ante SUNAT sí puede ser retroactivo, y ahí esta
+        // pantalla se queda corta a propósito: reescribir un histórico del que
+        // sale la retención practicada necesita rastro de quién y por qué. Está
+        // anotado como `Q-48`.
+        if ($vigente !== null && (string) $perfil->valid_from <= (string) $vigente->valid_from) {
+            return back()->with('aviso', sprintf(
+                'Este perfil entra en vigor el %s, y el vigente (%s) empezó el %s. '
+                .'El nuevo tiene que empezar después, porque si no habría dos regímenes '
+                .'aplicables el mismo día y de ahí sale la retención. Si de verdad hay que '
+                .'corregir el histórico hacia atrás, hoy eso se hace en base de datos (DEC-071).',
+                $perfil->valid_from,
+                $vigente->tax_regime_code,
+                $vigente->valid_from,
+            ));
+        }
+
         /** @var array<string, mixed> $datos */
         $datos = $request->validated();
 
         $aplica = $datos['withholding_status'] === 'applies';
 
-        DB::transaction(function () use ($creador, $perfil, $datos, $aplica, $usuarioId): void {
-            // Cerrar el vigente ANTES de abrir el nuevo: `uq_ctp_current` solo
-            // admite uno por creador y país. Al revés, la base lo rechaza.
-            $anterior = DB::table('creator_tax_profiles')
-                ->where('creator_id', $creador->id)
-                ->where('country_id', $perfil->country_id)
-                ->where('status', 'approved')
-                ->whereNull('valid_to')
-                ->first(['id', 'valid_from']);
-
-            if ($anterior !== null) {
-                // El anterior se cierra CUANDO EMPIEZA EL NUEVO, no hoy.
+        DB::transaction(function () use ($perfil, $datos, $aplica, $usuarioId, $vigente): void {
+            if ($vigente !== null) {
+                // El anterior se cierra EL DÍA ANTES de que empiece el nuevo.
                 //
-                // Cerrarlo hoy dejaba los dos periodos solapados si el nuevo
-                // entra en vigor en otra fecha, y entonces la pregunta «¿qué
-                // régimen aplicaba el 1 de mayo?» tiene dos respuestas. En un
-                // historial fiscal eso no es un detalle estético.
+                // Aquí estaba `T-12`. Antes se cerraba con `valid_to` = el
+                // `valid_from` del nuevo, y `valid_to` es INCLUSIVO en todo el
+                // esquema: el día del relevo los dos estaban vigentes. La
+                // pregunta «¿qué régimen aplicaba el 1 de abril?» tenía dos
+                // respuestas, y de esa respuesta sale la retención que se le
+                // practicó al creador.
                 //
-                // Se acota para que nunca quede antes de su propio inicio, que
-                // es lo que exige `ck_ctp_dates`.
-                $cierre = max((string) $anterior->valid_from, (string) $perfil->valid_from);
+                // Es el mismo defecto que `H-16` cerró en tarifas. Allí se paga
+                // explicando una factura; aquí, en una declaración.
+                $cierre = CarbonImmutable::parse((string) $perfil->valid_from)
+                    ->subDay()
+                    ->toDateString();
 
-                DB::table('creator_tax_profiles')->where('id', $anterior->id)->update([
+                DB::table('creator_tax_profiles')->where('id', $vigente->id)->update([
                     'status' => 'superseded',
                     'valid_to' => $cierre,
                     'updated_at' => now(),
