@@ -193,71 +193,77 @@ CREATE TABLE creator_blackouts (
 -- controlador; aqui solo se impide el solape.
 --
 -- Va en disparadores porque mira OTRAS FILAS, y eso ningun CHECK lo puede hacer.
+--
+-- T-14: escritos a mano en 3.9 porque `App\Shared\Database\Periodo` aun no
+-- existia --nacio en 3.10, al ver que el mismo defecto seguia abierto en otras
+-- cinco tablas--. Ahora los genera esa clase, con los mismos nombres. Tener dos
+-- formas de imponer la misma regla en el mismo repositorio significa que un
+-- arreglo futuro hay que aplicarlo en dos sitios, y el segundo es el que se
+-- olvida.
 -- ===========================================================================
 
 DELIMITER //
 
-CREATE TRIGGER tg_crate_sin_solape_ins BEFORE INSERT ON creator_rates
+CREATE TRIGGER `tg_crate_sin_solape_ins`
+BEFORE INSERT ON `creator_rates`
 FOR EACH ROW
 BEGIN
-  IF EXISTS (
-    SELECT 1 FROM creator_rates
-     WHERE creator_id = NEW.creator_id
-       AND content_format_id = NEW.content_format_id
-       AND currency_code = NEW.currency_code
-       AND NEW.valid_from <= IFNULL(valid_to, '9999-12-31')
-       AND valid_from <= IFNULL(NEW.valid_to, '9999-12-31')
-  ) THEN
-    SIGNAL SQLSTATE '45000'
-      SET MESSAGE_TEXT = 'Ya hay una tarifa para ese formato y moneda en esas fechas: cierre la anterior el dia antes.';
-  END IF;
+    IF EXISTS (
+        SELECT 1 FROM `creator_rates`
+         WHERE `creator_id` <=> NEW.`creator_id`
+           AND `content_format_id` <=> NEW.`content_format_id`
+           AND `currency_code` <=> NEW.`currency_code`
+           AND NEW.`valid_from` <= IFNULL(`valid_to`, '9999-12-31')
+           AND `valid_from` <= IFNULL(NEW.`valid_to`, '9999-12-31')
+    ) THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Ese periodo se solapa con otra tarifa del mismo formato y moneda: cierre la anterior el dia antes.';
+    END IF;
 END//
 
-CREATE TRIGGER tg_crate_sin_solape_upd BEFORE UPDATE ON creator_rates
+CREATE TRIGGER `tg_crate_sin_solape_upd`
+BEFORE UPDATE ON `creator_rates`
 FOR EACH ROW
 BEGIN
-  IF EXISTS (
-    SELECT 1 FROM creator_rates
-     WHERE id <> NEW.id
-       AND creator_id = NEW.creator_id
-       AND content_format_id = NEW.content_format_id
-       AND currency_code = NEW.currency_code
-       AND NEW.valid_from <= IFNULL(valid_to, '9999-12-31')
-       AND valid_from <= IFNULL(NEW.valid_to, '9999-12-31')
-  ) THEN
-    SIGNAL SQLSTATE '45000'
-      SET MESSAGE_TEXT = 'El cambio dejaria dos tarifas solapadas para el mismo formato y moneda.';
-  END IF;
+    IF EXISTS (
+        SELECT 1 FROM `creator_rates`
+         WHERE `id` <> NEW.`id`
+           AND `creator_id` <=> NEW.`creator_id`
+           AND `content_format_id` <=> NEW.`content_format_id`
+           AND `currency_code` <=> NEW.`currency_code`
+           AND NEW.`valid_from` <= IFNULL(`valid_to`, '9999-12-31')
+           AND `valid_from` <= IFNULL(NEW.`valid_to`, '9999-12-31')
+    ) THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Ese periodo se solapa con otra tarifa del mismo formato y moneda: cierre la anterior el dia antes.';
+    END IF;
 END//
 
--- La disponibilidad tiene el mismo modelo de vigencia y el mismo hueco.
-CREATE TRIGGER tg_cav_sin_solape_ins BEFORE INSERT ON creator_availability
+CREATE TRIGGER `tg_cav_sin_solape_ins`
+BEFORE INSERT ON `creator_availability`
 FOR EACH ROW
 BEGIN
-  IF EXISTS (
-    SELECT 1 FROM creator_availability
-     WHERE creator_id = NEW.creator_id
-       AND NEW.valid_from <= IFNULL(valid_to, '9999-12-31')
-       AND valid_from <= IFNULL(NEW.valid_to, '9999-12-31')
-  ) THEN
-    SIGNAL SQLSTATE '45000'
-      SET MESSAGE_TEXT = 'Ya hay una disponibilidad declarada en esas fechas: cierre la anterior el dia antes.';
-  END IF;
+    IF EXISTS (
+        SELECT 1 FROM `creator_availability`
+         WHERE `creator_id` <=> NEW.`creator_id`
+           AND NEW.`valid_from` <= IFNULL(`valid_to`, '9999-12-31')
+           AND `valid_from` <= IFNULL(NEW.`valid_to`, '9999-12-31')
+    ) THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Ese periodo se solapa con otra disponibilidad declarada: cierre la anterior el dia antes.';
+    END IF;
 END//
 
-CREATE TRIGGER tg_cav_sin_solape_upd BEFORE UPDATE ON creator_availability
+CREATE TRIGGER `tg_cav_sin_solape_upd`
+BEFORE UPDATE ON `creator_availability`
 FOR EACH ROW
 BEGIN
-  IF EXISTS (
-    SELECT 1 FROM creator_availability
-     WHERE id <> NEW.id
-       AND creator_id = NEW.creator_id
-       AND NEW.valid_from <= IFNULL(valid_to, '9999-12-31')
-       AND valid_from <= IFNULL(NEW.valid_to, '9999-12-31')
-  ) THEN
-    SIGNAL SQLSTATE '45000'
-      SET MESSAGE_TEXT = 'El cambio dejaria dos disponibilidades solapadas.';
-  END IF;
+    IF EXISTS (
+        SELECT 1 FROM `creator_availability`
+         WHERE `id` <> NEW.`id`
+           AND `creator_id` <=> NEW.`creator_id`
+           AND NEW.`valid_from` <= IFNULL(`valid_to`, '9999-12-31')
+           AND `valid_from` <= IFNULL(NEW.`valid_to`, '9999-12-31')
+    ) THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Ese periodo se solapa con otra disponibilidad declarada: cierre la anterior el dia antes.';
+    END IF;
 END//
 
 DELIMITER ;

@@ -2,6 +2,28 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 
+## [T-14 — Un solo generador de periodos] — 2026-08-24
+
+### Cambiado
+- **Los cuatro disparadores de 3.9 ahora los genera `Periodo`.** Se escribieron a
+  mano en `000495` porque la clase no existía todavía; desde 3.10 había dos
+  formas de imponer la misma regla en el mismo repositorio, y un arreglo futuro
+  habría que aplicarlo en dos sitios —el segundo es el que se olvida—.
+- Los nombres de disparador son los mismos, así que es cambiar el generador sin
+  cambiar el resultado. **Verificado sin PHPUnit**: las 23 aserciones de
+  `3.9-tarifas.sh` cubren exactamente esos cuatro disparadores y pasan igual
+  antes y después, que es la definición de que el cambio no cambia nada.
+
+### Anotado, no arreglado
+- `verificar-ddl-crudo.py` solo ejecuta sentencias con inverso en `down()`, así
+  que los cuatro `DROP TRIGGER` de `000630` no pasan por ahí. El script los
+  lista en su sección «sin vuelta» — no lo esconde. La cobertura real viene de
+  `verificar-periodos.py` más el esquema de referencia, que sí se carga en los
+  dos motores y en Percona 5.7. `Restriccion::quitar` tiene el mismo hueco desde
+  siempre; merece su propia iteración, no un parche al final de ésta.
+
+560 aserciones en verde sobre los dos motores.
+
 ## [Fase 3 · 3.10 (2/2) — El relevo de perfil fiscal] — 2026-08-24
 
 ### Corregido
