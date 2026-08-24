@@ -2,6 +2,36 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 
+## [3.13 en PHPUnit: dos fallos míos, y el gate que no los vio] — 2026-08-24
+
+La cadena completa dejó `2 failed, 148 passed`. Los dos eran de `terms_versions`
+y los dos eran míos.
+
+### Corregido
+- **`publicarTerminos()` tenía los dos defectos que 3.13 vino a cerrar**, y por
+  eso se saltaba la regla nueva: cerraba la anterior con `effective_to = hoy` en
+  vez de la víspera del inicio de la nueva —**sexta copia** del defecto de
+  `H-16`—, y la versión nueva empezaba **siempre** el `2026-01-01`, así que dos
+  llamadas producían dos periodos que arrancaban el mismo día. Ahora la fecha es
+  un parámetro y el cierre se deriva de ella, como hace el comando de verdad.
+- **`publicarTerminosNuevos()`, el helper que escribí en 3.12, se dejaba
+  `title`** —columna obligatoria— y reventaba con un `1364`. No hacía falta
+  ninguno: para eso ya estaba `publicarTerminos()`, que además es el camino que
+  las otras pruebas ejercitan. Se borra y se delega.
+
+### Y lo que importa: el gate lo tapaba
+`verificar-fixturas.py` **rellenaba** las columnas obligatorias que el fixture no
+daba, para que el fallo que saliera fuese de restricción y no un `1364` que
+tapara lo demás. El efecto secundario era que «el fixture se dejó una columna
+obligatoria» resultaba **invisible** — y eso siempre revienta en PHPUnit.
+
+Ahora se rellenan **y se denuncian**. Probado al revés sobre una copia: con el
+`title` quitado otra vez, el gate lo señala por su nombre y dice qué error dará
+en PHPUnit.
+
+**654 aserciones** en verde, y Pint, PHPStan y Deptrac ya estaban OK en la
+ejecución que destapó esto.
+
 ## [Fase 3 · 3.14 — Rotar la clave sin apagar un control] — 2026-08-24
 
 Cierra `T-11`. El número de cuenta lleva una **huella** HMAC-SHA256 que permite

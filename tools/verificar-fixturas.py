@@ -545,9 +545,16 @@ def main():
                 columnas.append(f'`{col}`')
                 valores.append(escapar(val))
 
-            # Las que la base exige y el fixture no menciona: las rellenamos
-            # tambien, para que el fallo que salga sea de RESTRICCION y no un
-            # 1364 por una columna que el fixture nunca tuvo que poner.
+            # Las que la base exige y el fixture no menciona.
+            #
+            # Se rellenan para que el fallo que salga despues sea de RESTRICCION
+            # y no un 1364 que tape lo demas... pero rellenarlas y callarse era
+            # un agujero: una columna obligatoria que el fixture se deja SIEMPRE
+            # revienta en PHPUnit con `1364`, y este gate la tapaba.
+            #
+            # Paso de verdad: un fixture de `terms_versions` se dejo `title`,
+            # el gate lo relleno, dijo verde, y PHPUnit fallo. Asi que ahora se
+            # rellenan Y se denuncian.
             faltan_obligatorias = []
             for col, info in cols[tabla].items():
                 if col in nombres or info['nulo'] or info['defecto'] is not None:
@@ -560,6 +567,12 @@ def main():
 
             sql = (f'INSERT INTO `{tabla}` (' + ', '.join(columnas) + ') VALUES ('
                    + ', '.join(valores) + ');')
+
+            if faltan_obligatorias:
+                problemas.append((donde,
+                    'el fixture no da columnas OBLIGATORIAS sin valor por defecto: '
+                    + ', '.join(faltan_obligatorias)
+                    + '\n      En PHPUnit esto es un `1364 Field ... doesn\'t have a default value`.'))
 
             p = subprocess.run(ORDEN + [BASE, '-e', 'START TRANSACTION;\n' + sql + '\nROLLBACK;'],
                                capture_output=True, text=True)

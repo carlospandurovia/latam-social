@@ -7,6 +7,7 @@ namespace Tests\Feature;
 use App\Models\User;
 use App\Modules\Creator\Services\CompletitudOperativa;
 use App\Shared\Auth\Permisos;
+use Carbon\CarbonImmutable;
 use Database\Seeders\CimientosSeeder;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -72,31 +73,16 @@ final class ActivacionCreadorTest extends TestCase
     // --------------------------------------------------------------- utilería
 
     /**
-     * Cierra la versión vigente de los términos y publica otra.
+     * Publica unos términos nuevos para que la aceptación anterior deje de valer.
      *
-     * La aceptación del creador se queda apuntando a la anterior, que es
-     * exactamente lo que pasa cuando se actualizan los términos: hay que volver
-     * a aceptar.
+     * Antes tenía su propio `insert`, que **se dejaba `title`** —columna
+     * obligatoria— y reventaba con un `1364`. No hacía falta ninguno: para esto
+     * ya estaba `publicarTerminos()`, que es además el camino que las otras
+     * pruebas ejercitan.
      */
     private function publicarTerminosNuevos(): void
     {
-        $codigo = (string) config('latam.terminos.creador', 'creator_terms');
-
-        DB::table('terms_versions')
-            ->where('audience', 'creator')->where('code', $codigo)->whereNull('effective_to')
-            ->update(['effective_to' => now()->subDay()->toDateString(), 'updated_at' => now()]);
-
-        DB::table('terms_versions')->insert([
-            'uuid' => (string) Str::uuid(),
-            'audience' => 'creator',
-            'code' => $codigo,
-            'version' => 'v2-prueba',
-            'body' => 'Texto nuevo que nadie ha aceptado todavia.',
-            'content_sha256' => hash('sha256', 'Texto nuevo que nadie ha aceptado todavia.'),
-            'effective_from' => now()->toDateString(),
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
+        $this->publicarTerminos('v2-prueba', '2026-07-01');
     }
 
     private function crearCreador(string $nacimiento): int
@@ -225,18 +211,33 @@ final class ActivacionCreadorTest extends TestCase
         ]);
     }
 
-    private function publicarTerminos(string $version = '2026.1'): int
+    /**
+     * Publica una versión de los términos, cerrando la anterior **el día antes**.
+     *
+     * Tenía los dos defectos que 3.13 vino a cerrar, y por eso se saltaba la
+     * regla nueva:
+     *
+     * 1. Cerraba la anterior con `effective_to = hoy`, no con la víspera del
+     *    inicio de la nueva. Sexta copia del defecto de `H-16`.
+     * 2. La versión nueva empezaba **siempre** el `2026-01-01`, la misma fecha
+     *    que la anterior, así que dos llamadas producían dos periodos que
+     *    arrancaban el mismo día.
+     *
+     * Ahora la fecha es un parámetro y el cierre se deriva de ella, que es lo
+     * que hace `PublicarTerminosCommand` de verdad.
+     */
+    private function publicarTerminos(string $version = '2026.1', string $desde = '2026-01-01'): int
     {
         DB::table('terms_versions')
             ->where('code', 'creator_terms')
             ->whereNull('effective_to')
-            ->update(['effective_to' => now()->toDateString()]);
+            ->update(['effective_to' => CarbonImmutable::parse($desde)->subDay()->toDateString()]);
 
         return (int) DB::table('terms_versions')->insertGetId([
             'uuid' => (string) Str::uuid(), 'audience' => 'creator', 'code' => 'creator_terms',
             'version' => $version, 'title' => 'Términos del creador '.$version,
             'body' => 'Texto de prueba.', 'content_sha256' => hash('sha256', 'Texto de prueba.'.$version),
-            'effective_from' => '2026-01-01', 'created_at' => now(), 'updated_at' => now(),
+            'effective_from' => $desde, 'created_at' => now(), 'updated_at' => now(),
         ]);
     }
 
@@ -529,7 +530,9 @@ final class ActivacionCreadorTest extends TestCase
         $requisitos = CompletitudOperativa::revisar($this->creadorId);
         $this->assertTrue(CompletitudOperativa::completa($requisitos));
 
-        $this->publicarTerminos('2026.2');
+        // Desde julio, no desde enero: la 2026.1 ya cubre desde el 1 de enero,
+        // y dos versiones no pueden arrancar el mismo dia (3.13).
+        $this->publicarTerminos('2026.2', '2026-07-01');
 
         $requisitos = CompletitudOperativa::revisar($this->creadorId);
         $this->assertFalse(CompletitudOperativa::completa($requisitos));
