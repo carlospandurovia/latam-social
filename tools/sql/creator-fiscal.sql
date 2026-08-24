@@ -373,7 +373,6 @@ BEGIN
      OR NOT (NEW.owner_guardian_id <=> OLD.owner_guardian_id)
      OR NEW.account_number_encrypted <> OLD.account_number_encrypted
      OR NEW.account_number_masked <> OLD.account_number_masked
-     OR NEW.account_number_fingerprint <> OLD.account_number_fingerprint
      OR NEW.holder_name <> OLD.holder_name
      OR NEW.holder_document_type <> OLD.holder_document_type
      OR NEW.holder_document_number <> OLD.holder_document_number
@@ -382,6 +381,21 @@ BEGIN
     SIGNAL SQLSTATE '45000'
       SET MESSAGE_TEXT = 'La cuenta de un medio de pago es inmutable (H-12): de alta una nueva y desactive esta.';
   END IF;
+
+  -- 3.14 / T-11: la HUELLA si se puede recalcular, y solo ella.
+  --
+  -- La huella es un INDICE DERIVADO del numero, no el numero. Es un HMAC con la
+  -- clave de la aplicacion, asi que el dia que se rote `APP_KEY` deja de casar y
+  -- la deteccion de cuentas repetidas (DEC-065) se apaga en silencio sobre las
+  -- filas viejas. Hay que poder recalcularla sin dar de alta la cuenta otra vez.
+  --
+  -- Que esto no abre la puerta a editar la cuenta lo garantiza la comprobacion
+  -- de arriba: `account_number_encrypted` sigue siendo inmutable, asi que la
+  -- huella solo puede cambiar mientras el cifrado se queda donde estaba. Si el
+  -- cifrado es el mismo, la cuenta es la misma, y volver a derivar su indice no
+  -- es editarla.
+  --
+  -- Lo hace `php artisan pagos:recalcular-huellas`.
 
   -- Una verificacion no se reescribe. Si se pudiera, "verificado por Ana el
   -- martes" seria un dato editable, y es la prueba de que alguien miro.

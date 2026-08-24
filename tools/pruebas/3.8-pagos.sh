@@ -204,6 +204,27 @@ probar "cambiar el destino de un pago ya emitido" \
  "UPDATE payouts SET payment_method_id=$AJENO WHERE payout_batch_id=$B;" RECHAZO
 
 echo ""
+echo "--- 3.14 / T-11: la HUELLA se recalcula, la cuenta no ---"
+# Rotar APP_KEY invalida todas las huellas --son un HMAC con esa clave-- y la
+# deteccion de cuentas repetidas (DEC-065) se apaga EN SILENCIO sobre las filas
+# viejas. Para poder arreglarlo hay que poder reescribir la huella sin dar de
+# alta la cuenta otra vez.
+#
+# La huella no es la cuenta: es un indice derivado de ella. Por eso puede
+# cambiar mientras el CIFRADO se quede donde estaba.
+MP="(SELECT id FROM (SELECT id FROM creator_payment_methods ORDER BY id LIMIT 1) t)"
+probar "recalcular solo la huella: es un indice derivado" \
+  "UPDATE creator_payment_methods SET account_number_fingerprint=REPEAT('9',64) WHERE id=$MP;" OK
+probar "pero cambiar el numero cifrado sigue prohibido (H-12)" \
+  "UPDATE creator_payment_methods SET account_number_encrypted='enc:otra-cuenta' WHERE id=$MP;" RECHAZO
+probar "y cambiarlos los dos a la vez tambien" \
+  "UPDATE creator_payment_methods SET account_number_encrypted='enc:otra', account_number_fingerprint=REPEAT('8',64) WHERE id=$MP;" RECHAZO
+probar "ni la mascara, que es lo que ve el operador" \
+  "UPDATE creator_payment_methods SET account_number_masked='****0000' WHERE id=$MP;" RECHAZO
+probar "una huella que no mide 64 se rechaza igual" \
+  "UPDATE creator_payment_methods SET account_number_fingerprint='corta' WHERE id=$MP;" RECHAZO
+
+echo ""
 echo "==================================================================================="
 printf "  \033[32m%d correctas\033[0m, \033[31m%d fallidas\033[0m\n" $ok $fail
 echo "==================================================================================="

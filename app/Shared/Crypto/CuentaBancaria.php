@@ -25,12 +25,18 @@ use Illuminate\Support\Facades\Crypt;
  * la huella —que está en un índice, sin cifrar— sería el número de cuenta.
  * Con HMAC hace falta además la clave de la aplicación.
  *
- * **Limitación conocida:** rotar `APP_KEY` invalida todas las huellas y la
- * detección de cuentas repetidas deja de funcionar sobre las filas viejas. Los
- * números siguen siendo recuperables (`Crypt` mantiene las claves anteriores en
- * `APP_PREVIOUS_KEYS`), pero las huellas habría que recalcularlas. No es un
- * problema hoy y sí lo será el día de la primera rotación: queda escrito aquí
- * para que ese día no sea una sorpresa. Ver `T-11`.
+ * ### Rotar `APP_KEY` (`T-11`, resuelto en 3.14)
+ *
+ * Rotar la clave invalida todas las huellas: las filas viejas llevan huellas de
+ * la clave vieja y las nuevas de la nueva, así que dos cuentas idénticas dejan
+ * de parecerse. Los números siguen recuperándose —`Crypt` prueba también
+ * `APP_PREVIOUS_KEYS`—, pero la detección de cuentas repetidas se apaga **en
+ * silencio** sobre lo viejo: no falla nada, simplemente deja de detectar.
+ *
+ * Para eso está `php artisan pagos:recalcular-huellas`, que descifra, vuelve a
+ * derivar y escribe. Y `tg_cpm_inmutable` lo permite **solo** mientras el
+ * cifrado no cambie: si el cifrado es el mismo, la cuenta es la misma, y volver
+ * a derivar su índice no es editarla.
  */
 final class CuentaBancaria
 {

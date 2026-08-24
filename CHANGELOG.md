@@ -2,6 +2,43 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 
+## [Fase 3 · 3.14 — Rotar la clave sin apagar un control] — 2026-08-24
+
+Cierra `T-11`. El número de cuenta lleva una **huella** HMAC-SHA256 que permite
+comparar dos cuentas sin descifrar ninguna: es lo que detecta que dos creadores
+declararon la misma cuenta (`DEC-065`).
+
+El HMAC usa `APP_KEY`. **El día que se rote, las huellas dejan de casar** — y no
+falla nada. No hay error, ni excepción, ni fila rechazada: el control
+simplemente deja de detectar, y nadie se entera hasta que hay dos creadores
+cobrando en la misma cuenta.
+
+### Añadido
+- `php artisan pagos:recalcular-huellas`. Sin `--aplicar` solo informa;
+  idempotente.
+- **No escribe nada si una sola fila no se puede descifrar.** Un recálculo a
+  medias deja media tabla con huellas de una clave y media de otra: el mismo
+  apagón silencioso, pero ya imposible de sospechar porque «el comando ya se
+  ejecutó». El error dice qué poner en `APP_PREVIOUS_KEYS`.
+
+### Cambiado
+- `tg_cpm_inmutable` trataba la huella como parte de la cuenta y bloqueaba
+  cualquier cambio, lo que hacía `T-11` **imposible de cumplir**. La regla se
+  afina en vez de relajarse: **la huella no es la cuenta, es un índice derivado
+  de ella**, así que puede cambiar *solo mientras el cifrado se quede donde
+  estaba*. Lo garantiza la comprobación que ya existía — quien intente cambiar
+  el número cambia el cifrado, y eso se rechaza igual que siempre.
+- Cinco aserciones nuevas en `3.8-pagos.sh` que fijan el límite por los dos
+  lados: la huella sola se puede, el cifrado no, los dos a la vez tampoco, la
+  máscara tampoco, y una huella de largo inválido sigue rechazándose.
+
+### Verificado de paso
+`shared_account_status` **no** queda obsoleto tras el recálculo, y el comando lo
+dice: al recalcularse todas las filas con la misma clave, dos cuentas iguales
+siguen dando la misma huella. Cambia el valor, no la relación entre valores.
+
+**654 aserciones** en verde sobre los dos motores.
+
 ## [Fase 3 · 3.13 — Los términos tampoco se solapan] — 2026-08-24
 
 **Cuarta reaparición del defecto de `H-16`, y en la peor tabla: la que guarda el
