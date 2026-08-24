@@ -2,6 +2,53 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 
+## [Fase 3 · 3.9 — Tarifas, disponibilidad y agenda] — 2026-08-24
+
+Lo que faltaba para poder invitar a un creador a una campaña.
+`campaign_creators.agreed_amount` congela lo pactado; esta iteración es **de
+dónde sale ese número**.
+
+### Corregido
+- **`H-16`: el histórico de precios admitía periodos solapados.**
+  `uq_creator_rates_current` garantiza una tarifa *vigente* por creador, formato
+  y moneda, no un histórico coherente. Reproducido:
+  `el 2026-05-01 la tarifa era: 1000.0000, 2500.0000`. Un histórico con dos
+  respuestas para una fecha no sirve para lo único para lo que existe.
+- **`H-17`: `source` llevaba `DEFAULT 'self_declared'`.** El silencio se
+  convertía en «el creador declaró este precio». La diferencia con `estimated`
+  es si el creador sostiene el número o nos lo inventamos nosotros.
+- **`H-18`: nadie firmaba el precio.** No existía `created_by_user_id`.
+
+### Añadido
+- Pantalla `/creadores/{uuid}/comercial`: tarifas, disponibilidad y bloqueos.
+- Cuatro disparadores que impiden el solape en `creator_rates` y
+  `creator_availability`, en INSERT y en UPDATE.
+- `DEC-068` cero es un precio pero hay que declararlo · `DEC-069` permiso propio
+  `creator.rate.manage` · `DEC-070` el bloqueo se registra aunque pise una
+  campaña aceptada, y se avisa.
+- `T-12` — `creator_tax_profiles` tiene el mismo defecto de solape que `H-16`
+  cerró aquí, un día por perfil. Encontrado al escribir 3.9; merece iteración
+  propia y **no** se coló en esta.
+- `tools/pruebas/3.9-tarifas.sh` (23 aserciones) y
+  `tests/Feature/PerfilComercialTest.php` (14 pruebas).
+
+### Decisión con consecuencias
+`valid_to` es **inclusivo**, así que cerrar una tarifa es ponerle el día
+**anterior** al inicio de la siguiente, no el mismo día. De eso se encarga el
+controlador; la base solo impide el solape.
+
+### Verificación
+- 498 aserciones de restricción × 2 variantes, en verde.
+- 70 sentencias de migración ejecutadas de verdad en MariaDB y MySQL 8.
+- 773 columnas sin discrepancias; 174 restricciones equivalentes entre motores.
+- Pint pasa el proyecto entero.
+
+### Nota de proceso
+Dos aserciones de RECHAZO de la disponibilidad **pasaban por el motivo
+equivocado** —el disparador de solape, no la regla que decían comprobar— y solo
+se vio porque la tercera, la que espera OK, falló. Tercera vez en esta fase que
+la aserción de lo permitido descubre que las de rechazo mentían.
+
 ## [Fase 3 · 3.8 — se cae MariaDB, entra Percona 5.7 de verdad] — 2026-08-23
 
 ### Corregido

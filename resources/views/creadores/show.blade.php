@@ -40,6 +40,14 @@
     </a>
   @endcan
 
+  {{-- 3.9: tarifas, disponibilidad y agenda. Basta `creator.view` para
+       mirarlo; fijarlo pide `creator.rate.manage` y el formulario se oculta
+       solo. La tarifa es el costo del creador, no el margen. --}}
+  <a href="{{ route('creadores.comercial', $creador->uuid) }}"
+     class="inline-block px-4 py-2 rounded-xl border border-slate-300 text-slate-700 text-sm font-medium hover:bg-slate-50">
+    Tarifas y agenda
+  </a>
+
   {{-- 3.8: medios de pago. Misma puerta que los datos fiscales: es la fila
        que dice a dónde va el dinero. --}}
   @can('creator.view_sensitive')

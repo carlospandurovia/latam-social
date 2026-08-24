@@ -830,6 +830,41 @@ impecable. Simplemente **la mitad de las reglas que declara no existen en ese se
 
 ---
 
+### DEC-068 — Cero es un precio válido, pero hay que declararlo
+
+| | |
+|---|---|
+| **Decisión** | `amount = 0` solo se admite con `is_gratis = 1`, y `is_gratis = 1` solo con `amount = 0`. Las dos direcciones. |
+| **Por qué** | El canje por producto y la primera colaboración existen, así que cero es un precio real. Pero con `amount >= 0` a secas, «trabaja gratis» y «nadie le preguntó su tarifa» eran **el mismo cero**, y esas dos cosas se responden distinto delante de un cliente. Es `DEC-048` aplicado al precio. |
+| **Dónde vive** | `ck_creator_rates_amount`, en la base. El formulario ni siquiera pide el importe cuando se marca gratuita. |
+| **Estado** | ADOPTADA e implementada (2026-08-24, iteración 3.9) |
+
+---
+
+### DEC-069 — Las tarifas tienen permiso propio: `creator.rate.manage`
+
+| | |
+|---|---|
+| **Decisión** | Fijar tarifas, disponibilidad y bloqueos pide `creator.rate.manage`. Verlos basta con `creator.view`. Va a `campaign_manager` y a `finance`. |
+| **Por qué no `creator.manage`** | Habría bastado, pero la tarifa es el **costo del creador** y alimenta el margen que `BR-FIN-007` protege. Un permiso propio permite dárselo a campañas sin abrir además los datos fiscales y la cuenta bancaria, que siguen detrás de `creator.view_sensitive` (`DEC-053`). |
+| **Por qué ver es más barato que fijar** | Para armar una campaña hay que saber cuánto cuesta un creador. Cerrar la lectura obligaría a dar el permiso de escritura a quien solo necesita mirar. |
+| **Estado** | ADOPTADA e implementada (2026-08-24, iteración 3.9) |
+
+---
+
+### DEC-070 — Un bloqueo de agenda se registra aunque pise una campaña aceptada
+
+| | |
+|---|---|
+| **Decisión** | El bloqueo entra siempre. La pantalla dice qué campañas **ya aceptadas** quedan dentro, con su código y su estado. |
+| **Por qué no rechazarlo** | Si el creador se opera o viaja, el bloqueo es un hecho y el sistema no lo va a cambiar discutiendo. Rechazarlo obligaría al operador a pelearse con la aplicación justo cuando hay una urgencia, y el resultado sería que apunta la ausencia en otro sitio — que es peor que no tenerlo. |
+| **Por qué no callarlo** | Es un choque con un compromiso con un cliente. Alguien tiene que hablar con el creador **hoy**, no cuando no llegue el entregable. |
+| **Qué cuenta como compromiso** | Desde `accepted` en adelante, incluidos los estados de producción. `shortlisted` e `invited` no: invitar no es aceptar. |
+| **Precedente** | Tercera vez que se aplica el mismo criterio: `DEC-063` con las métricas, `DEC-065` con la cuenta compartida, y esta. Marcar para revisión humana en vez de rechazar automáticamente. |
+| **Estado** | ADOPTADA e implementada (2026-08-24, iteración 3.9) |
+
+---
+
 ## Decisiones pendientes de información del negocio
 
 | # | Pregunta | Bloquea |
@@ -875,6 +910,7 @@ impecable. Simplemente **la mitad de las reglas que declara no existen en ese se
 | ~~Q-45~~ | ✅ **RESUELTA (2026-08-22):** opción **B** — sin datos fiscales no hay alta, pero se acompaña al creador a formalizarse. Ver `DEC-049`. El pago a un tercero **no se implementa**; el análisis queda en `docs/fase-2/2.14-PAGO-A-TERCEROS.md` | — |
 | **Q-46** | ⚠️ **§56 — nuevo, abierto por `DEC-059`.** Cuando se publique una **versión nueva de los términos**, ¿qué pasa con los creadores **ya activos**? Hoy el sistema **no los desactiva**: siguen activos con la aceptación de la versión anterior. Las opciones son (a) dejarlo así y pedir la nueva aceptación solo la próxima vez que hagan algo relevante, (b) bloquear invitaciones hasta que re-acepten, (c) suspenderlos. Tiene consecuencias legales y operativas, y **no lo decido yo** | Antes de publicar la segunda versión de los términos |
 | **Q-47** | ⚠️ **Abierto por la iteración 3.6.** `BR-CREATOR-014` fija un **periodo de gracia de 30 días** antes de rechazar a un creador por falta de datos fiscales, y dice «configurable». ¿Configurable **globalmente** (una constante de despliegue) o **por creador**, como `payment_term_days`? No lo invento: son dos modelos de datos distintos. Hasta que se responda, el periodo de gracia no está implementado | Iteración de rechazo de creadores |
+| **T-12** | 📋 **`creator_tax_profiles` cierra el perfil anterior con `valid_to = valid_from` del nuevo**, o sea que se solapan un día. `uq_ctp_current` garantiza un solo perfil *vigente*, pero el histórico fiscal tiene el mismo defecto que `H-16` cerró en tarifas: «qué régimen aplicaba el 1 de mayo» puede tener dos respuestas. En un historial fiscal eso se paga en una declaración. Encontrado al escribir 3.9; merece iteración propia, no colarlo aquí | Antes de la primera declaración con dos regímenes |
 | **T-11** | 📋 **Rotar `APP_KEY` invalida las huellas de las cuentas bancarias.** Los números siguen siendo recuperables (`Crypt` conserva `APP_PREVIOUS_KEYS`), pero la huella es un HMAC con esa clave: tras una rotación, la detección de cuentas repetidas (`DEC-065`) deja de funcionar sobre las filas viejas. Hace falta un comando que las recalcule. No es un problema hoy y sí lo será el día de la primera rotación | Antes de la primera rotación de clave |
 | **T-10** | 📋 **Aviso al creador cuando cambian sus datos fiscales.** `BR-CREATOR-007` lo exige y el módulo Communication no existe. Hoy la pantalla se lo recuerda al operador para que lo haga a mano; queda pendiente automatizarlo | Fase de Communication |
 | **T-09** | 📋 **Publicar la primera versión real de los términos del creador**, revisada legalmente, con `php artisan terminos:publicar`. **Ningún creador puede activarse hasta entonces** — la pantalla lo dice explícitamente | Bloquea toda activación |

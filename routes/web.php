@@ -8,6 +8,7 @@ use App\Modules\Core\Http\Controllers\PanelController;
 use App\Modules\Creator\Http\Controllers\ActivacionController;
 use App\Modules\Creator\Http\Controllers\CreadoresController;
 use App\Modules\Creator\Http\Controllers\MediosPagoController;
+use App\Modules\Creator\Http\Controllers\PerfilComercialController;
 use App\Modules\Creator\Http\Controllers\PerfilFiscalController;
 use App\Modules\Creator\Http\Controllers\RedesSocialesController;
 use App\Modules\Creator\Http\Controllers\SolicitudesController;
@@ -196,4 +197,38 @@ Route::middleware('auth')->group(function (): void {
         ->middleware('permiso:creator.payment.verify')
         ->whereUuid('uuid')->whereNumber('id')
         ->name('creadores.pagos.compartida');
+
+    // ---- Perfil comercial (iteración 3.9) --------------------------------
+    //
+    // Cuánto cuesta el creador y cuándo puede trabajar: lo que hace falta para
+    // invitarlo a una campaña. Detrás de `creator.rate.manage` (`DEC-069`), un
+    // permiso propio que NO abre sus datos fiscales ni su cuenta bancaria.
+    //
+    // Ver basta con `creator.view`: la tarifa es el costo del creador, no el
+    // margen, y el margen sigue reservado a `campaign.view_margin`
+    // (`BR-FIN-007`).
+    Route::get('/creadores/{uuid}/comercial', [PerfilComercialController::class, 'index'])
+        ->middleware('permiso:creator.view')
+        ->whereUuid('uuid')
+        ->name('creadores.comercial');
+
+    Route::post('/creadores/{uuid}/comercial/tarifa', [PerfilComercialController::class, 'guardarTarifa'])
+        ->middleware('permiso:creator.rate.manage')
+        ->whereUuid('uuid')
+        ->name('creadores.comercial.tarifa');
+
+    Route::post('/creadores/{uuid}/comercial/disponibilidad', [PerfilComercialController::class, 'guardarDisponibilidad'])
+        ->middleware('permiso:creator.rate.manage')
+        ->whereUuid('uuid')
+        ->name('creadores.comercial.disponibilidad');
+
+    Route::post('/creadores/{uuid}/comercial/bloqueo', [PerfilComercialController::class, 'guardarBloqueo'])
+        ->middleware('permiso:creator.rate.manage')
+        ->whereUuid('uuid')
+        ->name('creadores.comercial.bloqueo');
+
+    Route::delete('/creadores/{uuid}/comercial/bloqueo/{id}', [PerfilComercialController::class, 'eliminarBloqueo'])
+        ->middleware('permiso:creator.rate.manage')
+        ->whereUuid('uuid')->whereNumber('id')
+        ->name('creadores.comercial.bloqueo.eliminar');
 });
