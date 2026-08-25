@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
-use App\Models\User;
 use App\Shared\Audit\Bitacora;
 use App\Shared\Auth\Permisos;
 use Database\Seeders\CimientosSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\DataProvider;
+use Tests\Apoyo\ConFixturas;
 use Tests\TestCase;
 
 /**
@@ -18,6 +18,7 @@ use Tests\TestCase;
  */
 final class BitacoraTest extends TestCase
 {
+    use ConFixturas;
     use RefreshDatabase;
 
     protected function setUp(): void
@@ -26,19 +27,6 @@ final class BitacoraTest extends TestCase
         $this->withoutVite();
         $this->seed(CimientosSeeder::class);
         Permisos::olvidar();
-    }
-
-    private function usuarioCon(string $rol): User
-    {
-        $usuario = User::factory()->create();
-        DB::table('role_user')->insert([
-            'user_id' => $usuario->id,
-            'role_id' => DB::table('roles')->where('code', $rol)->value('id'),
-            'assigned_at' => now(),
-        ]);
-        Permisos::olvidar((int) $usuario->id);
-
-        return $usuario;
     }
 
     // ------------------------------------------------------------ autorización

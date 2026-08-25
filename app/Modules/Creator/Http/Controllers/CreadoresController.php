@@ -6,6 +6,7 @@ namespace App\Modules\Creator\Http\Controllers;
 
 use App\Modules\Creator\Http\Requests\ActualizarCreadorRequest;
 use App\Shared\Audit\Bitacora;
+use App\Shared\Auth\Confidencial;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -28,19 +29,40 @@ final class CreadoresController
             ])
             ->orderBy('cr.display_name');
 
+        // Buscar por documento SOLO con `creator.view_sensitive`.
+        //
+        // Ver un DNI y poder preguntar por uno concreto no son lo mismo:
+        // `LIKE '%40000001%'` contesta «¿esta esta persona en el sistema y quien
+        // es?». Quien no puede ver documentos tampoco debe poder interrogarlos.
+        $porDocumento = Confidencial::puedeVerDocumentos();
+
         if ($q !== '') {
             // Parámetros ligados, nunca concatenación (docs/08).
-            $consulta->where(function ($w) use ($q): void {
+            $consulta->where(function ($w) use ($q, $porDocumento): void {
                 $like = '%'.$q.'%';
                 $w->where('cr.display_name', 'like', $like)
-                    ->orWhere('cr.email', 'like', $like)
-                    ->orWhere('cr.document_number', 'like', $like);
+                    ->orWhere('cr.email', 'like', $like);
+
+                if ($porDocumento) {
+                    $w->orWhere('cr.document_number', 'like', $like);
+                }
             });
         }
 
+        $pagina = $consulta->paginate(25);
+
+        // El numero se enmascara AQUI, no en la plantilla: asi el valor entero
+        // ni siquiera llega a la vista de quien no puede verlo.
+        $pagina->getCollection()->transform(function (object $c): object {
+            $c->document_number = Confidencial::documento($c->document_number);
+
+            return $c;
+        });
+
         return view('creadores.index', [
-            'creadores' => $consulta->paginate(25),
+            'creadores' => $pagina,
             'q' => $q,
+            'buscaPorDocumento' => $porDocumento,
         ]);
     }
 
@@ -59,12 +81,22 @@ final class CreadoresController
             throw new NotFoundHttpException('Creador no encontrado.');
         }
 
+        // El documento del creador y el de sus tutores se enmascaran salvo con
+        // `creator.view_sensitive`. El del TUTOR importa igual o mas: es el
+        // documento de un tercero que ni siquiera es usuario del sistema.
+        $creador->document_number = Confidencial::documento($creador->document_number);
+
         return view('creadores.show', [
             'creador' => $creador,
             'tutores' => DB::table('creator_guardians')
                 ->where('creator_id', $creador->id)
                 ->orderByDesc('status')
-                ->get(),
+                ->get()
+                ->map(function (object $t): object {
+                    $t->document_number = Confidencial::documento($t->document_number ?? null);
+
+                    return $t;
+                }),
             // Los seguidores salen del ÚLTIMO snapshot, nunca de una columna:
             // BR-CREATOR-005 prohíbe que un valor nuevo sobrescriba al anterior,
             // y por eso `creators` no tiene followers_count (docs 2.3 §4).

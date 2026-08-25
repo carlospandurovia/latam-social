@@ -161,6 +161,12 @@ final class CimientosSeeder extends Seeder
             ['campaign.view',          'Campaign', 'Ver campañas'],
             ['campaign.manage',        'Campaign', 'Crear y editar campañas'],
             ['campaign.view_margin',   'Campaign', 'Ver el margen interno de la campaña (BR-FIN-007)'],
+            // Aprobar una campaña fija el ingreso comprometido y **congela la
+            // sociedad que la factura** (`BR-LE-002`). Es una decisión de
+            // dinero, así que no la firma quien negoció el precio: misma
+            // separación que `DEC-044` impone en la base para los perfiles
+            // fiscales y los medios de pago.
+            ['campaign.approve',       'Campaign', 'Aprobar una campaña: fija el ingreso y congela la sociedad emisora'],
             ['creator.view',           'Creator',  'Ver creadores'],
             ['creator.approve',        'Creator',  'Aprobar o rechazar solicitudes de creador'],
             ['creator.manage',         'Creator',  'Editar los datos de contacto y comerciales del creador'],
@@ -192,11 +198,29 @@ final class CimientosSeeder extends Seeder
             ['creator.rate.manage',    'Creator',  'Fijar tarifas, disponibilidad y bloqueos de agenda del creador'],
             ['client.view',            'Client',   'Ver clientes y marcas'],
             ['client.manage',          'Client',   'Crear y editar clientes'],
+            // 4.4: la identidad fiscal del cliente va en permiso propio, no en
+            // `client.manage`. De ella salen la razon social y el RUC que se
+            // imprimen en la factura, y un permiso que se pueda quitar aparte
+            // permite que alguien edite la ficha comercial sin poder tocar eso.
+            //
+            // NO sigue la simetria de `creator.tax.manage`, que vive solo en
+            // `finance`. El RUC de un creador es dato PERSONAL sensible; el de
+            // una empresa es publico —se consulta en SUNAT—. Aqui el riesgo no
+            // es fuga, es ERROR, asi que el permiso lo tienen tambien las
+            // campanas, que son quienes hablan con el cliente y tienen el dato.
+            ['client.tax.manage',      'Client',   'Registrar y editar la identidad fiscal del cliente'],
             ['finance.view',           'Finance',  'Ver el ledger y los saldos'],
             ['finance.payout.create',  'Finance',  'Crear lotes de pago'],
             ['finance.payout.approve', 'Finance',  'Aprobar lotes de pago (BR-FIN-005: distinto del creador)'],
             ['finance.invoice.issue',  'Finance',  'Emitir comprobantes'],
             ['content.review',         'Content',  'Revisar y aprobar contenido'],
+            // 4.5: dar de alta una sociedad es constituir una empresa en el
+            // sistema. De ella salen la numeracion de comprobantes
+            // (`BR-LE-007`), el emisor de cada factura (`BR-LE-005`) y las
+            // cuentas de cobro (`BR-LE-006`). Se toca dos o tres veces al anio.
+            // Decision de negocio (2026-08-25): SOLO `admin`. Finanzas emite
+            // desde ellas, no necesita crearlas.
+            ['legal_entity.manage',    'Core',     'Dar de alta sociedades del grupo y su cobertura de facturacion'],
             ['integration.manage',     'Core',     'Configurar integraciones y credenciales'],
             ['audit.view',             'Core',     'Consultar la bitácora de auditoría'],
             ['catalog.view',           'Core',     'Consultar los catálogos de referencia'],
@@ -251,10 +275,13 @@ final class CimientosSeeder extends Seeder
                 // lo tenia NINGUN rol, asi que el permiso existia y nadie podia
                 // crear un cliente.
                 'client.view', 'client.manage', 'content.review', 'catalog.view',
+                // 4.4: quien habla con el cliente es quien tiene su RUC.
+                'client.tax.manage',
             ],
             'finance' => [
                 'finance.view', 'finance.payout.create', 'finance.payout.approve',
                 'finance.invoice.issue', 'campaign.view', 'campaign.view_margin',
+                'campaign.approve',
                 // Para pagar hace falta ver la cuenta bancaria. Es el único rol
                 // no administrador con acceso a datos fiscales del creador.
                 'creator.view', 'creator.view_sensitive',
@@ -267,6 +294,9 @@ final class CimientosSeeder extends Seeder
                 'creator.payment.manage', 'creator.payment.verify',
                 'creator.rate.manage',
                 'client.view', 'catalog.view',
+                // 4.4: finanzas emite la factura, asi que tiene que poder
+                // corregir la identidad fiscal con la que se emite.
+                'client.tax.manage',
             ],
             'content_reviewer' => [
                 'content.review', 'campaign.view', 'creator.view', 'catalog.view',

@@ -6,6 +6,7 @@ namespace App\Modules\Creator\Http\Controllers;
 
 use App\Modules\Creator\Http\Requests\GuardarMedioPagoRequest;
 use App\Modules\Creator\Http\Requests\RetirarMedioPagoRequest;
+use App\Modules\Creator\Services\CuentasCompartidas;
 use App\Shared\Audit\Bitacora;
 use App\Shared\Crypto\CuentaBancaria;
 use Carbon\CarbonImmutable;
@@ -56,7 +57,10 @@ final class MediosPagoController
 
         return view('creadores.pagos', [
             'creador' => $creador,
-            'medios' => DB::table('creator_payment_methods as m')
+            // Se anota al LEER, no se guarda: un disparador no puede actualizar
+            // su propia tabla (`1442`), asi que la fila anterior se quedaba
+            // diciendo `unique` mientras la cuenta estaba duplicada.
+            'medios' => CuentasCompartidas::anotar(DB::table('creator_payment_methods as m')
                 ->join('countries as c', 'c.id', '=', 'm.country_id')
                 ->leftJoin('users as cap', 'cap.id', '=', 'm.created_by_user_id')
                 ->leftJoin('users as ver', 'ver.id', '=', 'm.verified_by_user_id')
@@ -72,9 +76,13 @@ final class MediosPagoController
                     'm.holder_document_number', 'm.owner_type', 'm.status', 'm.currency_code',
                     'm.verified_at', 'm.eligible_from', 'm.closed_at', 'm.is_default',
                     'm.shared_account_status', 'm.created_by_user_id',
+                    // La huella entra para poder resolver «compartida» al leer
+                    // (`T-19`); `CuentasCompartidas::anotar()` la quita antes de
+                    // que llegue a la plantilla.
+                    'm.account_number_fingerprint', 'm.creator_id',
                     'c.name as pais', 'cap.name as capturado_por', 'ver.name as verificado_por',
                     'cer.name as retirado_por', 'g.full_name as tutor',
-                ]),
+                ])),
             'paises' => DB::table('countries')->where('is_active', 1)->orderBy('name')->get(['id', 'name']),
             'monedas' => DB::table('currencies')->where('is_active', 1)->orderBy('code')->get(['code', 'name']),
             'tutores' => DB::table('creator_guardians')
@@ -313,8 +321,15 @@ final class MediosPagoController
         $creador = $this->porUuid($uuid);
         $medio = $this->medioDe($creador, $id);
 
-        if ($medio->shared_account_status !== 'pending_review') {
-            return back()->with('aviso', 'Esta cuenta no está marcada para revisión.');
+        // La condicion se CALCULA. Antes se leia `shared_account_status`, y la
+        // fila del primer creador nunca decia `pending_review` aunque su cuenta
+        // estuviera duplicada: no se podia revisar desde su pantalla.
+        if (!CuentasCompartidas::estaCompartida((string) $medio->account_number_fingerprint, (int) $creador->id)) {
+            return back()->with('aviso', 'Esta cuenta no la comparte ningun otro creador.');
+        }
+
+        if ($medio->shared_account_status === 'cleared') {
+            return back()->with('aviso', 'Esta cuenta ya se reviso.');
         }
 
         /** @var array<string, mixed> $datos */

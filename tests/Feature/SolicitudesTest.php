@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
-use App\Models\User;
 use App\Shared\Auth\Permisos;
 use Database\Seeders\CimientosSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Tests\Apoyo\ConFixturas;
 use Tests\TestCase;
 
 /**
@@ -17,6 +17,7 @@ use Tests\TestCase;
  */
 final class SolicitudesTest extends TestCase
 {
+    use ConFixturas;
     use RefreshDatabase;
 
     private string $uuid;
@@ -36,19 +37,6 @@ final class SolicitudesTest extends TestCase
             'source' => 'landing', 'status' => 'submitted',
             'submitted_at' => now(), 'created_at' => now(), 'updated_at' => now(),
         ]);
-    }
-
-    private function usuarioCon(string $rol): User
-    {
-        $usuario = User::factory()->create();
-        DB::table('role_user')->insert([
-            'user_id' => $usuario->id,
-            'role_id' => DB::table('roles')->where('code', $rol)->value('id'),
-            'assigned_at' => now(),
-        ]);
-        Permisos::olvidar((int) $usuario->id);
-
-        return $usuario;
     }
 
     /** @return array<string, mixed> */
@@ -111,19 +99,7 @@ final class SolicitudesTest extends TestCase
     /** BR-CREATOR-003: no pueden coexistir dos creadores con el mismo documento. */
     public function test_no_aprueba_si_el_documento_ya_existe(): void
     {
-        DB::table('creators')->insert([
-            'uuid' => (string) Str::uuid(),
-            'first_name' => 'Otra', 'last_name' => 'Persona', 'display_name' => 'otra',
-            'birth_date' => '1990-01-01', 'email' => 'otra@ejemplo.test',
-            'country_id' => DB::table('countries')->where('iso2', 'PE')->value('id'),
-            'document_country_code' => 'PE', 'document_type' => 'DNI', 'document_number' => '40000001',
-            // 'pending' basta: la comprobacion de duplicados de
-            // `SolicitudesController` mira `pending`, `active` y `suspended` por
-            // igual. Poner 'active' obligaria a inventar fecha de activacion e
-            // identidad verificada para algo que esta prueba no comprueba.
-            'preferred_currency_code' => 'PEN', 'status' => 'pending',
-            'created_at' => now(), 'updated_at' => now(),
-        ]);
+        $this->creadorPendiente(['uuid' => (string) Str::uuid(), 'first_name' => 'Otra', 'last_name' => 'Persona', 'display_name' => 'otra', 'birth_date' => '1990-01-01', 'email' => 'otra@ejemplo.test']);
 
         $this->actingAs($this->usuarioCon('admin'))
             ->post("/solicitudes/{$this->uuid}/aprobar", $this->alta())
@@ -139,15 +115,7 @@ final class SolicitudesTest extends TestCase
      */
     public function test_la_casilla_de_confirmacion_no_salta_la_comprobacion(): void
     {
-        DB::table('creators')->insert([
-            'uuid' => (string) Str::uuid(),
-            'first_name' => 'Ana', 'last_name' => 'Torres', 'display_name' => 'ana2',
-            'birth_date' => '1998-05-12', 'email' => 'ana@ejemplo.test',
-            'country_id' => DB::table('countries')->where('iso2', 'PE')->value('id'),
-            'document_country_code' => 'PE', 'document_type' => 'CE', 'document_number' => '999',
-            'preferred_currency_code' => 'PEN', 'status' => 'pending',
-            'created_at' => now(), 'updated_at' => now(),
-        ]);
+        $this->creadorPendiente(['uuid' => (string) Str::uuid(), 'display_name' => 'ana2', 'document_type' => 'CE', 'document_number' => '999']);
 
         $this->actingAs($this->usuarioCon('admin'))
             ->post("/solicitudes/{$this->uuid}/aprobar", $this->alta(['confirma_revision' => '1']))

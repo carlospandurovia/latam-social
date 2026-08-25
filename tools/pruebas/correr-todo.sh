@@ -8,7 +8,10 @@
 # "recree la base y cargue la semilla".
 set -e
 cd "$(dirname "$0")/../.."
-SUITES="2.12-contenido 2.13-finanzas 3.5-activacion 3.6-fiscal 3.7-redes 3.8-pagos 3.9-tarifas 3.10-periodos 3.11-anulacion 3.12-no-borrar"
+# La lista NO se escribe aqui: vive en tools/pruebas/SUITES, que es tambien la
+# que lee el CI. Tenerla en dos sitios es como se perdieron 3.10, 3.11 y 3.12
+# en dos de los tres motores del CI sin que nadie lo notara.
+SUITES=$(grep -vE '^[[:space:]]*(#|$)' tools/pruebas/SUITES | tr '\n' ' ')
 
 # Los nombres son argumentos para poder correr la misma bateria en otro motor:
 #   MYSQL_CMD=mysql8 bash tools/pruebas/correr-todo.sh latam_m8 latam_m8_57
@@ -51,5 +54,16 @@ python3 tools/verificar-fixturas.py "$SIN" --cliente "$CLIENTE" || tot_fail=$((t
 # que sigan coincidiendo manana.
 echo ""; echo "===== periodos: esquema contra migraciones ====="
 python3 tools/verificar-periodos.py "$SIN" --cliente "$CLIENTE" || tot_fail=$((tot_fail+1))
+
+# Lo que la aplicacion NOMBRA contra lo que la aplicacion TIENE.
+#
+# Aqui no hay `vendor/` —packagist esta bloqueado— asi que PHPUnit no se puede
+# correr, y esa es la razon estructural por la que varias iteraciones se
+# entregaron en rojo. Este gate cubre la clase de fallo que mas veces las
+# rompio: un nombre de ruta, de plantilla, de permiso, de rol, de metodo o de
+# clave validada que no existe. Errores de una letra que tumban la suite entera
+# y que se ven leyendo archivos, sin Laravel y sin base de datos.
+echo ""; echo "===== nombres entre capas ====="
+python3 tools/verificar-pantallas.py || tot_fail=$((tot_fail+1))
 
 [ "$tot_fail" -eq 0 ]

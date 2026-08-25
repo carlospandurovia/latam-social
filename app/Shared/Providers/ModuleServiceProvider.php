@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Shared\Providers;
 
+use App\Shared\Console\ComprobarPrivilegiosCommand;
 use App\Shared\Console\VerificarEsquemaCommand;
 use Illuminate\Support\ServiceProvider;
 
@@ -27,6 +28,11 @@ final class ModuleServiceProvider extends ServiceProvider
         if ($this->app->runningInConsole()) {
             $this->commands([
                 VerificarEsquemaCommand::class,
+                // `T-18`: la inmutabilidad de la bitacora no depende del esquema
+                // —que ya hizo todo lo que podia— sino del usuario con el que se
+                // conecta la aplicacion. `TRUNCATE` no dispara triggers y solo lo
+                // para no tener el privilegio `DROP`. Esta orden lo comprueba.
+                ComprobarPrivilegiosCommand::class,
             ]);
         }
     }

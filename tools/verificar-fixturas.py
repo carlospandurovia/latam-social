@@ -579,7 +579,28 @@ def main():
             err = '\n'.join(l for l in p.stderr.splitlines()
                             if not l.startswith('mysql: [Warning]')).strip()
             if err:
-                detalle = err.split('\n')[0]
+                # La linea que importa es la que empieza por `ERROR`, no la
+                # primera. Ante un fallo, el cliente de MariaDB escribe antes el
+                # eco de la sentencia enmarcado en guiones:
+                #
+                #     --------------
+                #     INSERT INTO `terms_versions` (...) VALUES (...)
+                #     --------------
+                #
+                #     ERROR 1364 (HY000) at line 2: Field 'uuid' doesn't ...
+                #
+                # Coger `err.split('\n')[0]` daba `--------------`, que no casa
+                # con ningun patron conocido, y `culpa_del_fixture()` caia hasta
+                # el final acusando al fixture. O sea: el gate culpaba al fixture
+                # justo cuando no habia entendido el error. Seis fixturas sanas
+                # salieron seniadas asi, con `--------------` por motivo.
+                #
+                # Si no hay linea `ERROR`, no se acusa a nadie: sin veredicto.
+                detalle = next((l.strip() for l in err.splitlines()
+                                if l.lstrip().startswith('ERROR')), '')
+                if detalle == '':
+                    inconcluyentes.append((donde, 'la base fallo pero no dijo ERROR: ' + err.splitlines()[0]))
+                    continue
                 acusar, motivo = culpa_del_fixture(detalle, literales_puestos, tabla)
                 if not acusar:
                     inconcluyentes.append((donde, motivo))

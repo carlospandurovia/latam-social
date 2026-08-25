@@ -109,24 +109,20 @@ jobs:
 
       - name: Restricciones (motor con CHECK nativo)
         run: |
-          bash tools/pruebas/2.12-contenido.sh latam_ref
-          bash tools/pruebas/2.13-finanzas.sh  latam_ref
-          bash tools/pruebas/3.5-activacion.sh latam_ref
-          bash tools/pruebas/3.6-fiscal.sh     latam_ref
-          bash tools/pruebas/3.7-redes.sh      latam_ref
-          bash tools/pruebas/3.8-pagos.sh      latam_ref
-          bash tools/pruebas/3.9-tarifas.sh    latam_ref
+          # La lista sale de tools/pruebas/SUITES, no de aqui: escrita a mano en
+          # cada bloque, 3.10/3.11/3.12 acabaron corriendo en un motor de tres.
+          for s in $(grep -vE '^[[:space:]]*(#|$)' tools/pruebas/SUITES); do
+            bash "tools/pruebas/$s.sh" latam_ref
+          done
 
       # La mitad que importa: produccion es Percona 5.7 y NO aplica los CHECK.
       - name: Restricciones (motor sin CHECK, solo triggers generados)
         run: |
-          bash tools/pruebas/2.12-contenido.sh latam_57
-          bash tools/pruebas/2.13-finanzas.sh  latam_57
-          bash tools/pruebas/3.5-activacion.sh latam_57
-          bash tools/pruebas/3.6-fiscal.sh     latam_57
-          bash tools/pruebas/3.7-redes.sh      latam_57
-          bash tools/pruebas/3.8-pagos.sh      latam_57
-          bash tools/pruebas/3.9-tarifas.sh    latam_57
+          # La lista sale de tools/pruebas/SUITES, no de aqui: escrita a mano en
+          # cada bloque, 3.10/3.11/3.12 acabaron corriendo en un motor de tres.
+          for s in $(grep -vE '^[[:space:]]*(#|$)' tools/pruebas/SUITES); do
+            bash "tools/pruebas/$s.sh" latam_57
+          done
 
       - name: Los dos motores imponen el mismo conjunto de reglas
         run: python3 tools/verificar-equivalencia.py latam_ref latam_57
@@ -144,16 +140,11 @@ jobs:
       - name: Restricciones sobre Percona 5.7 (lo que vera produccion)
         run: |
           export MYSQL_CMD="mysql -h127.0.0.1 -P3307 --protocol=TCP -uroot -proot"
-          bash tools/pruebas/2.12-contenido.sh latam_p57_triggers
-          bash tools/pruebas/2.13-finanzas.sh  latam_p57_triggers
-          bash tools/pruebas/3.5-activacion.sh latam_p57_triggers
-          bash tools/pruebas/3.6-fiscal.sh     latam_p57_triggers
-          bash tools/pruebas/3.7-redes.sh      latam_p57_triggers
-          bash tools/pruebas/3.8-pagos.sh      latam_p57_triggers
-          bash tools/pruebas/3.9-tarifas.sh    latam_p57_triggers
-          bash tools/pruebas/3.10-periodos.sh  latam_p57_triggers
-          bash tools/pruebas/3.11-anulacion.sh latam_p57_triggers
-          bash tools/pruebas/3.12-no-borrar.sh latam_p57_triggers
+          # La lista sale de tools/pruebas/SUITES, no de aqui: escrita a mano en
+          # cada bloque, 3.10/3.11/3.12 acabaron corriendo en un motor de tres.
+          for s in $(grep -vE '^[[:space:]]*(#|$)' tools/pruebas/SUITES); do
+            bash "tools/pruebas/$s.sh" latam_p57_triggers
+          done
 
       # Los fixtures de PHPUnit ejecutados contra el esquema, ANTES de que
       # PHPUnit los use. Aqui el fallo dice «`ck_camp_confirmed` incumplida, el
@@ -161,6 +152,21 @@ jobs:
       # que ir a buscarlo. Tres iteraciones se fueron en rojo por esto.
       # La regla de periodos vive en el esquema de referencia Y en la migracion.
       # Hoy salen de la misma clase; esto es lo que impide que manana no.
+      # PHPUnit corre en su propio paso; esto se adelanta a la clase de fallo
+      # que mas veces lo tumbo: un nombre que no existe. Cuesta un segundo y no
+      # necesita ni base de datos ni `vendor/`.
+      - name: Todo lo que la aplicacion nombra, existe
+        run: python3 tools/verificar-pantallas.py
+
+      # `valid_to` es INCLUSIVO. Cerrar un periodo el mismo dia en que empieza
+      # el siguiente deja los dos vigentes ese dia, y eso ha pasado ONCE veces
+      # en este proyecto: tarifas, disponibilidad, fiscal del creador, fiscal
+      # del cliente, cobertura de paises, terminos legales, y el apoyo de las
+      # pruebas. `Vigencia` es el unico sitio donde vive esa resta; esto
+      # comprueba que sigue siendo unico, en `app/` y en `tests/`.
+      - name: La aritmetica de vigencias vive en un solo sitio
+        run: php tools/verificar-vigencias.php
+
       - name: El esquema y las migraciones dicen lo mismo sobre periodos
         run: |
           python3 tools/verificar-periodos.py latam_p57_triggers \

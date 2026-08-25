@@ -94,9 +94,27 @@ final class MarcasController
         /** @var array<string, mixed> $datos */
         $datos = $request->validated();
 
-        $antes = DB::table('client_brand_categories')
-            ->where('client_brand_id', $fila->id)->pluck('category_id')->sort()->values()->all();
-        $despues = collect($datos['categorias'] ?? [])->map(fn ($c): int => (int) $c)->sort()->values()->all();
+        // Los DOS lados a `int` y ordenados, y sin `collect()` de por medio.
+        //
+        // `collect($datos['categorias'] ?? [])` no compilaba en el analisis
+        // estatico --`$datos` es `array<string, mixed>`, asi que el argumento es
+        // `mixed` y PHPStan no puede resolver `TKey`/`TValue`--, y arreglarlo
+        // destapo algo peor: `pluck()` devuelve lo que da el driver, que puede
+        // ser `'1'`, mientras el otro lado ya venia casteado a `1`. Con `!==`,
+        // `['1'] !== [1]` es SIEMPRE cierto: la bitacora anotaba un cambio de
+        // categorias cada vez que se guardaba la marca, hubiera cambiado o no.
+        /** @var list<mixed> $enviadas */
+        $enviadas = (array) ($datos['categorias'] ?? []);
+
+        $antes = array_map(
+            static fn ($c): int => (int) $c,
+            DB::table('client_brand_categories')
+                ->where('client_brand_id', $fila->id)->pluck('category_id')->all(),
+        );
+        $despues = array_map(static fn ($c): int => (int) $c, $enviadas);
+
+        sort($antes);
+        sort($despues);
 
         $cambios = [];
         foreach (['name', 'website', 'status'] as $campo) {
@@ -104,7 +122,7 @@ final class MarcasController
                 $cambios[$campo] = ['antes' => $fila->{$campo}, 'despues' => $datos[$campo] ?? null];
             }
         }
-        if ($antes !== $despues) {
+        if ($this->trajoCategorias($request) && $antes !== $despues) {
             $cambios['categorias'] = ['antes' => $antes, 'despues' => $despues];
         }
 
@@ -112,7 +130,9 @@ final class MarcasController
             return redirect()->route('clientes.show', $uuid)->with('aviso', 'No cambio nada.');
         }
 
-        DB::transaction(function () use ($fila, $datos): void {
+        $trajo = $this->trajoCategorias($request);
+
+        DB::transaction(function () use ($fila, $datos, $trajo): void {
             $actualizacion = [
                 'name' => $datos['name'],
                 'website' => $datos['website'] ?? null,
@@ -123,13 +143,30 @@ final class MarcasController
             // El slug se rehace SOLO si cambió el nombre. Un slug estable es
             // parte de la identidad de la marca: si algún día está en una URL,
             // cambiarlo por editar el sitio web rompería el enlace.
+            //
+            // Cuando se rehace, lo hace el servicio: calcular el slug y
+            // escribirlo son dos sentencias, y entre las dos cabe otra
+            // peticion. El reintento vive en `Marcas` para que el alta y la
+            // edicion no se arreglen por separado (`T-17`).
             if ((string) $fila->name !== (string) $datos['name']) {
-                $actualizacion['slug'] = Marcas::slugUnico((string) $datos['name'], (int) $fila->id);
+                Marcas::actualizarConSlug((int) $fila->id, (string) $datos['name'], $actualizacion);
+            } else {
+                DB::table('client_brands')->where('id', $fila->id)->update($actualizacion);
             }
 
-            DB::table('client_brands')->where('id', $fila->id)->update($actualizacion);
-
-            $this->sincronizarCategorias((int) $fila->id, $datos['categorias'] ?? []);
+            // Sólo se tocan las categorías si el formulario las mandó.
+            //
+            // `sincronizarCategorias()` empieza por un `delete()`, así que una
+            // petición que no incluyera `categorias` las borraba TODAS, y sin
+            // categorías no hay detección de conflictos de marca
+            // (`BR-CAMPAIGN-007`) para esa marca. Con casillas eso no es
+            // rebuscado: un HTML no manda nada cuando no hay ninguna marcada.
+            //
+            // El formulario manda `categorias_enviadas` siempre, así que
+            // «ninguna marcada» y «el campo no venía» dejan de ser lo mismo.
+            if ($trajo) {
+                $this->sincronizarCategorias((int) $fila->id, $datos['categorias'] ?? []);
+            }
         });
 
         Bitacora::registrar(
@@ -143,6 +180,18 @@ final class MarcasController
     }
 
     // ------------------------------------------------------------------ apoyo
+
+    /**
+     * ¿El formulario mandó la sección de categorías?
+     *
+     * Un `<input type="checkbox">` sin marcar no se manda, así que la ausencia
+     * de `categorias` es ambigua: puede ser «ninguna» o «no venía el campo». El
+     * formulario manda un testigo oculto para deshacer esa ambigüedad.
+     */
+    private function trajoCategorias(GuardarMarcaRequest $request): bool
+    {
+        return $request->boolean('categorias_enviadas');
+    }
 
     /** @param array<int, mixed> $categorias */
     private function sincronizarCategorias(int $marcaId, array $categorias): void

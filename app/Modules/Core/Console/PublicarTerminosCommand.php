@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Core\Console;
 
-use Carbon\CarbonImmutable;
+use App\Shared\Database\Vigencia;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -126,7 +126,14 @@ final class PublicarTerminosCommand extends Command
         // es lo que prohibe `ck_terms_versions_dates`. Y lo que ese caso
         // significaria es que la version vigente no rigio NUNCA, cosa que no se
         // puede decir de un texto que alguien pudo aceptar.
-        if ($vigente !== null && $desde <= (string) $vigente->effective_from) {
+        // `Vigencia::puedeRelevar()` y no `<=` sobre cadenas.
+        //
+        // `$desde` viene de `--desde=` en la linea de ordenes, o sea de fuera y
+        // sin normalizar. `'2026-2-1' <= '2026-11-01'` es FALSO como cadena
+        // --el '2' pesa mas que el '1'--, asi que una fecha tecleada sin ceros
+        // se colaba y dejaba dos textos legales vigentes el mismo dia. Lo
+        // encontro la puerta `vigencias`; era el decimo sitio.
+        if ($vigente !== null && !Vigencia::puedeRelevar($desde, (string) $vigente->effective_from)) {
             $this->error(sprintf(
                 'La nueva version empieza el %s y la vigente (%s) empezo el %s. Tiene que '
                 .'empezar despues: si no, habria dos textos vigentes el mismo dia y no se '
@@ -155,7 +162,11 @@ final class PublicarTerminosCommand extends Command
                 DB::table('terms_versions')
                     ->where('id', $vigente->id)
                     ->update([
-                        'effective_to' => CarbonImmutable::parse($desde)->subDay()->toDateString(),
+                        // La resta la hace `Vigencia`, que es donde vive esta
+                        // aritmetica desde 4.5. Que la columna se llame
+                        // `effective_to` y no `valid_to` no la hace distinta:
+                        // es inclusiva igual, y el defecto es el mismo.
+                        'effective_to' => Vigencia::cerrarElDiaAntesDe($desde),
                         'updated_at' => now(),
                     ]);
             }

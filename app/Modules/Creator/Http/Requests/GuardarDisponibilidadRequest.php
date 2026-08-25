@@ -42,7 +42,7 @@ final class GuardarDisponibilidadRequest extends FormRequest
             'max_campaigns_per_month' => ['nullable', 'integer', 'min:1', 'max:200'],
             'min_lead_time_days' => ['required', 'integer', 'min:0', 'max:365'],
             'notes' => ['nullable', 'string', 'max:255'],
-            'valid_from' => ['required', 'date'],
+            'valid_from' => ['required', 'date_format:Y-m-d'],
         ];
     }
 

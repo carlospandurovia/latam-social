@@ -106,8 +106,39 @@ INSERT INTO creator_payment_methods (uuid,creator_id,owner_type,method_type,coun
    NOW(3) - INTERVAL 1 DAY,1,NOW(3) - INTERVAL 2 DAY
  FROM creators cr WHERE cr.display_name='anatorres';
 
-INSERT INTO campaigns (uuid,code,name,client_organization_id,client_brand_id,currency_code,starts_on,ends_on,status,confirmed_at,created_at)
- SELECT UUID(),'CMP-0001','Campana Demo',co.id,cb.id,'PEN','2026-09-01','2026-09-30','in_progress',NOW(3),NOW(3)
+-- La cobertura de facturacion del pais del cliente.
+--
+-- El esquema de referencia trae la sociedad CTS-PE pero NINGUNA cobertura, y
+-- sin cobertura no hay campana posible fuera de borrador. Se declara aqui, con
+-- su fecha de inicio, porque cubrir un pais es una decision con vigencia (4.5)
+-- y no un booleano: la campana de la semilla empieza el 2026-09-01 y esta
+-- cobertura tiene que estar abierta ese dia.
+INSERT INTO legal_entity_countries (legal_entity_id,country_id,coverage_basis,valid_from,created_at)
+ SELECT le.id, co.country_id, 'local_entity', '2026-01-01', NOW(3)
+   FROM legal_entities le
+   JOIN client_organizations co ON co.client_code='CLI-0001'
+  WHERE le.code='CTS-PE'
+    AND NOT EXISTS (SELECT 1 FROM legal_entity_countries x
+                     WHERE x.country_id=co.country_id AND x.valid_to IS NULL)
+  LIMIT 1;
+
+-- 7.1: la campana DICE quien la factura. Una `in_progress` sin
+-- `billing_legal_entity_id` la rechaza `ck_camp_billing_entity` (`BR-LE-001`),
+-- y esta semilla la creaba sin ella desde antes de que la regla existiera.
+--
+-- Se toma la sociedad que CUBRE el pais del cliente, no «la primera que haya»:
+-- si se cogiera cualquiera, la semilla estaria fabricando el caso que 4.5 y
+-- `BR-LE-003` existen para impedir --una campana facturada por una sociedad que
+-- no cubre ese pais-- y las pruebas correrian sobre datos imposibles.
+INSERT INTO campaigns (uuid,code,name,client_organization_id,client_brand_id,
+   billing_legal_entity_id,currency_code,starts_on,ends_on,status,confirmed_at,created_at)
+ SELECT UUID(),'CMP-0001','Campana Demo',co.id,cb.id,
+   (SELECT lec.legal_entity_id FROM legal_entity_countries lec
+     WHERE lec.country_id = co.country_id
+       AND lec.valid_from <= '2026-09-01'
+       AND (lec.valid_to IS NULL OR lec.valid_to >= '2026-09-01')
+     ORDER BY lec.id LIMIT 1),
+   'PEN','2026-09-01','2026-09-30','in_progress',NOW(3),NOW(3)
  FROM client_organizations co JOIN client_brands cb ON cb.client_organization_id=co.id
  WHERE co.client_code='CLI-0001' LIMIT 1;
 

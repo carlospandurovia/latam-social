@@ -30,10 +30,10 @@ final class GuardarBloqueoRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'starts_on' => ['required', 'date'],
+            'starts_on' => ['required', 'date_format:Y-m-d'],
             // `ck_creator_blackouts_dates` lo exige igual; aqui se dice con
             // palabras en vez de con un error 3819.
-            'ends_on' => ['required', 'date', 'after_or_equal:starts_on'],
+            'ends_on' => ['required', 'date_format:Y-m-d', 'after_or_equal:starts_on'],
             'reason' => ['nullable', 'string', 'max:120'],
         ];
     }

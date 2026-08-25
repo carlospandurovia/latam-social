@@ -55,6 +55,11 @@
         <env name="DB_PASSWORD" value=""/>
 
         <env name="MAIL_MAILER" value="array"/>
+        <!-- T-23: apagado en pruebas. Comprobar una contrasena contra
+             filtraciones publicas es una llamada HTTP saliente, y una prueba no
+             debe depender de la red: seria lenta cuando la hay e inestable
+             cuando no. En produccion va encendido por defecto. -->
+        <env name="LATAM_COMPROBAR_FILTRACIONES" value="false"/>
         <env name="PULSE_ENABLED" value="false"/>
         <env name="QUEUE_CONNECTION" value="sync"/>
         <env name="SESSION_DRIVER" value="array"/>

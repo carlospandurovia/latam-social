@@ -50,6 +50,18 @@ final class Bitacora
     private const REDACTAR = [
         'password', 'secret', 'token', 'api_key', 'private_key',
         'account_number', 'card', 'cvv', 'encrypted', 'fingerprint',
+        // Documentos de identidad y fiscales. La red cubria la cuenta bancaria
+        // y no el DNI ni el RUC, que son el mismo tipo de dato: en
+        // `creator_payment_methods` el numero de cuenta se enmascara a cuatro
+        // digitos, y a la vez `client_tax_profile.created` escribia
+        // «RUC 20512345678» entero. Y la bitacora NO se puede corregir: lo que
+        // entra ahi ya no se saca.
+        //
+        // `ruc` y `dni` NO estan en la lista aunque parezcan lo obvio: se
+        // comparan por contencion, y `str_contains('estructura', 'ruc')` es
+        // cierto. Una entrada demasiado corta esconde campos legitimos en
+        // silencio, que es el mismo pecado al reves.
+        'document_number', 'tax_id', 'identidad_fiscal',
     ];
 
     private const OCULTO = '[redactado]';
@@ -121,17 +133,57 @@ final class Bitacora
     public static function redactar(array $cambios): array
     {
         foreach ($cambios as $campo => $valores) {
-            $nombre = mb_strtolower($campo);
+            if (self::hueleASecreto((string) $campo)) {
+                $cambios[$campo] = ['antes' => self::OCULTO, 'despues' => self::OCULTO];
 
-            foreach (self::REDACTAR as $fragmento) {
-                if (str_contains($nombre, $fragmento)) {
-                    $cambios[$campo] = ['antes' => self::OCULTO, 'despues' => self::OCULTO];
-                    break;
-                }
+                continue;
+            }
+
+            // Y hacia dentro. La version anterior solo miraba el primer nivel,
+            // asi que un `['completitud' => ['despues' => ['document_number' =>
+            // '40000001']]]` salia intacto — y ya hay llamadores que pasan
+            // arrays anidados. `json_encode()` lo escribe entero, y la bitacora
+            // no se puede corregir despues.
+            if (is_array($valores)) {
+                $cambios[$campo] = self::redactarHondo($valores);
             }
         }
 
         return $cambios;
+    }
+
+    /**
+     * @param array<mixed> $valores
+     * @return array<mixed>
+     */
+    private static function redactarHondo(array $valores): array
+    {
+        foreach ($valores as $clave => $valor) {
+            if (is_string($clave) && self::hueleASecreto($clave)) {
+                $valores[$clave] = self::OCULTO;
+
+                continue;
+            }
+
+            if (is_array($valor)) {
+                $valores[$clave] = self::redactarHondo($valor);
+            }
+        }
+
+        return $valores;
+    }
+
+    private static function hueleASecreto(string $campo): bool
+    {
+        $nombre = mb_strtolower($campo);
+
+        foreach (self::REDACTAR as $fragmento) {
+            if (str_contains($nombre, $fragmento)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static function comoTexto(mixed $valor): ?string

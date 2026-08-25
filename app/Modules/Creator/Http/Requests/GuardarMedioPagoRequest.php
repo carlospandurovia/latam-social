@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Creator\Http\Requests;
 
 use App\Shared\Auth\Permisos;
+use App\Shared\Crypto\CuentaBancaria;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -46,7 +47,19 @@ final class GuardarMedioPagoRequest extends FormRequest
             // los quita antes de cifrar y de calcular la huella, para que
             // `0021-2345` y `00212345` sean la misma cuenta a efectos de
             // duplicados.
-            'account_number' => ['required', 'string', 'min:6', 'max:40', 'regex:/^[A-Za-z0-9 \-]+$/'],
+            // `min:6` y el patron miran el numero CRUDO, asi que `"- - - -"` los
+            // pasaba y normalizaba a cadena VACIA: mascara `****`, y todas las
+            // cuentas vacias con la misma huella, o sea `pending_review` entre
+            // creadores que no tienen nada que ver. La regla de cierre pregunta
+            // por lo normalizado, que es lo que de verdad se guarda.
+            'account_number' => [
+                'required', 'string', 'min:6', 'max:40', 'regex:/^[A-Za-z0-9 \-]+$/',
+                function (string $atributo, mixed $valor, \Closure $falla): void {
+                    if (!CuentaBancaria::tieneNumero((string) $valor)) {
+                        $falla('El numero de cuenta no tiene ni una letra ni un digito.');
+                    }
+                },
+            ],
 
             // BR-CREATOR-010: al menor se le paga a nombre del tutor. Que el
             // tutor sea de ESTE creador y siga activo lo comprueba el

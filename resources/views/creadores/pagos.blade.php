@@ -54,10 +54,16 @@
       {{-- DEC-065: la misma cuenta en dos creadores no se rechaza, se marca.
            Hay casos legítimos (dos hermanos menores, un tutor) y hay una señal
            de fraude clásica. Decide una persona. --}}
-      @if ($m->shared_account_status === 'pending_review')
+      {{-- `compartida_con` se calcula al leer (`T-19`). La columna
+           `shared_account_status` no servía: un disparador no puede actualizar
+           su propia tabla, así que la fila del PRIMER creador seguía diciendo
+           «única» mientras la cuenta ya estaba duplicada. --}}
+      @if ($m->compartida_con > 0 && $m->shared_account_status !== 'cleared')
         <div class="px-6 py-3 bg-amber-50 border-b border-amber-200 text-sm text-amber-900">
-          <p>Esta cuenta está registrada también en otro creador. No es un error por sí solo
-             —un tutor puede cobrar por dos pupilos— pero alguien tiene que mirarlo.</p>
+          <p>Esta cuenta está registrada también en
+             {{ $m->compartida_con === 1 ? 'otro creador' : $m->compartida_con.' creadores más' }}.
+             No es un error por sí solo —un tutor puede cobrar por dos pupilos— pero
+             alguien tiene que mirarlo.</p>
           @can('creator.payment.verify')
             <form method="POST" action="{{ route('creadores.pagos.compartida', [$creador->uuid, $m->id]) }}"
                   class="mt-2 flex flex-wrap gap-2 items-end">

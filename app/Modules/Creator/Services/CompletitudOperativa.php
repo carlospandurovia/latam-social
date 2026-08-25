@@ -151,10 +151,22 @@ final class CompletitudOperativa
      */
     private static function fiscal(int $creadorId, ?object $tutor): Requisito
     {
+        // «Vigente» exige tambien que YA HAYA EMPEZADO (`T-21`).
+        //
+        // Antes bastaba `approved` + `valid_to IS NULL`, sin mirar `valid_from`.
+        // Un perfil aprobado hoy con `valid_from = 2027-01-01` se declaraba
+        // vigente, y de aqui sale la frase que dice que retencion aplica: se
+        // anunciaba NRUS «no aplica retencion» cuando lo que aplicaba ese dia
+        // era RER al 8 %. Y la activacion congela esa frase en la bitacora como
+        // evidencia.
+        //
+        // `BR-CREATOR-013` habla de la retencion que se PRACTICA, y esa es la de
+        // la fecha de la operacion, no la del ultimo papel firmado.
         $perfil = DB::table('creator_tax_profiles as p')
             ->join('countries as c', 'c.id', '=', 'p.country_id')
             ->where('p.creator_id', $creadorId)
             ->where('p.status', 'approved')
+            ->whereDate('p.valid_from', '<=', now()->toDateString())
             ->whereNull('p.valid_to')
             ->orderByDesc('p.id')
             ->first([
@@ -289,7 +301,8 @@ final class CompletitudOperativa
         }
 
         $medio = $consulta->orderByDesc('is_default')
-            ->first(['account_number_masked', 'bank_name', 'owner_type', 'shared_account_status']);
+            ->first(['account_number_masked', 'bank_name', 'owner_type', 'shared_account_status',
+                'account_number_fingerprint', 'creator_id']);
 
         if ($medio !== null) {
             // Se enseña la MÁSCARA. El número real no sale de la base ni aquí
@@ -300,7 +313,15 @@ final class CompletitudOperativa
             // bloquea la activación: `DEC-065` dice marcar, no rechazar, y un
             // tutor con dos pupilos es un caso legítimo. Pero se dice, porque
             // un aviso que no se ve es un aviso que no existe.
-            if (($medio->shared_account_status ?? null) === 'pending_review') {
+            // Calculado, no leido de la columna: la fila del primer creador
+            // nunca decia `pending_review` aunque la cuenta estuviera duplicada,
+            // asi que este aviso NO salia justo en la mitad de los casos.
+            $compartida = CuentasCompartidas::estaCompartida(
+                (string) $medio->account_number_fingerprint,
+                (int) $medio->creator_id,
+            );
+
+            if ($compartida && ($medio->shared_account_status ?? null) !== 'cleared') {
                 $detalle .= ' — atención: esa cuenta está también en otro creador y nadie la ha revisado (DEC-065).';
             }
 

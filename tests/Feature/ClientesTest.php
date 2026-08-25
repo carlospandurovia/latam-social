@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
-use App\Models\User;
 use App\Shared\Auth\Permisos;
 use Database\Seeders\CimientosSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Tests\Apoyo\ConFixturas;
 use Tests\TestCase;
 
 /**
@@ -22,6 +22,7 @@ use Tests\TestCase;
  */
 final class ClientesTest extends TestCase
 {
+    use ConFixturas;
     use RefreshDatabase;
 
     private int $paisPE;
@@ -231,18 +232,5 @@ final class ClientesTest extends TestCase
             'country_id' => $this->paisPE,
             'status' => 'prospect',
         ], $cambios);
-    }
-
-    private function usuarioCon(string $rol): User
-    {
-        $usuario = User::factory()->create();
-        DB::table('role_user')->insert([
-            'user_id' => $usuario->id,
-            'role_id' => DB::table('roles')->where('code', $rol)->value('id'),
-            'assigned_at' => now(),
-        ]);
-        Permisos::olvidar((int) $usuario->id);
-
-        return $usuario;
     }
 }

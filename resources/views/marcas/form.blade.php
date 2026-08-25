@@ -54,6 +54,13 @@
         en estas categorías. <strong>Sin categorías, esa comprobación no puede hacerse
         para esta marca.</strong>
       </p>
+      {{-- Testigo: un `<input type="checkbox">` sin marcar NO se manda, asi que
+           «ninguna categoria» y «el campo no venia» llegaban iguales al
+           servidor. Y como sincronizar empieza por un `delete()`, una peticion
+           sin el campo borraba todas las categorias de la marca en silencio.
+           Con esto, desmarcarlas todas sigue siendo posible y una peticion que
+           no traiga la seccion no las toca. --}}
+      <input type="hidden" name="categorias_enviadas" value="1">
       <div class="mt-3 grid grid-cols-3 gap-2">
         @foreach ($categorias as $c)
           <label class="flex items-center gap-2 text-sm text-slate-700">

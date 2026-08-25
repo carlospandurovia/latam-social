@@ -30,6 +30,12 @@
           ['Solicitudes', 'solicitudes.index', 'solicitudes', 'creator.approve'],
           ['Creadores', 'creadores.index', 'creadores', 'creator.view'],
           ['Clientes', 'clientes.index', 'clientes', 'client.view'],
+          // 7.1: va detras de Clientes porque una campana se hace PARA un
+          // cliente y su marca; sin cliente dado de alta no hay nada que ver aqui.
+          ['Campañas', 'campanas.index', 'campanas', 'campaign.view'],
+          // 4.5: la pantalla a la que BR-LE-004 lleva mandando desde 4.1.
+          // `legal_entity.manage` es solo de admin, asi que el resto no la ve.
+          ['Entidades legales', 'entidades.index', 'entidades', 'legal_entity.manage'],
           ['Bitácora', 'bitacora', 'bitacora', 'audit.view'],
         ];
         $catalogos = [

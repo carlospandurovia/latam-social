@@ -1,111 +1,126 @@
-# 09 — Propuesta para la siguiente iteración
+# 09 — Estado del proyecto y siguiente iteración
 
-> Versión 0.1 — 2026-08-21.
+> **Versión 1.0 — 2026-08-25.** Reescrito entero.
+>
+> La versión 0.1 era del 21 de agosto y decía *«me detengo aquí; no hay código,
+> no hay esquema de base de datos y no hay wireframes»*. Cuatro días después eso
+> describía un proyecto que ya no existe: hay 64 tablas, 41 migraciones, 259
+> pruebas de PHPUnit y 812 aserciones de restricción. **El documento cuyo único
+> trabajo es decir qué viene ahora llevaba cuatro días mintiendo**, y nadie lo
+> habría notado hasta abrirlo.
+>
+> Es el mismo defecto que dejó `T-12` marcada como pendiente durante un mes
+> estando resuelta. Un registro que no se mantiene no es un registro: es un
+> documento antiguo con fecha nueva.
 
 ---
 
-## 1. Estado actual
+## 1. Dónde estamos, medido
 
-**Fase 0 (Discovery) — entregada, pendiente de tu revisión.**
+| | |
+|---|---|
+| Tablas | 64 |
+| Migraciones | 41, verdes desde cero en MySQL 8 |
+| Pruebas de PHPUnit | **259**, 763 aserciones |
+| Aserciones de restricción (SQL) | **812** en MariaDB, **802** en MySQL 8 |
+| Puertas de calidad | 6: formato, análisis estático, fronteras, pruebas, CI al día, vigencias |
+| Decisiones registradas | hasta `DEC-088` |
 
-Según lo acordado en §101 de la especificación, **me detengo aquí**. No hay código, no hay esquema de base de datos y no hay wireframes hasta que revises y apruebes (o corrijas) lo anterior.
+### Lo que se puede hacer hoy por pantalla
+
+Dar de alta y gestionar **creadores** (solicitud, aprobación, activación con seis
+requisitos, identidad, redes sociales verificadas, perfil comercial y tarifas,
+perfil fiscal aprobado por dos personas distintas, medios de pago verificados) y
+**clientes** (organización, marcas, contactos con su principal, identidad fiscal
+por país con vigencia, y la sociedad que les factura según cobertura).
+
+Eso completa **7.0 del roadmap**.
 
 ---
 
-## 2. Lo que necesito de ti para desbloquear la Fase 2
+## 2. Lo que bloquea, y a quién le toca
 
-### 2.1 Decisiones que puedes tomar hoy (5 minutos cada una)
+Esto es lo importante de este documento. **La cola de trabajo de ingeniería está
+vacía**: no queda ninguna tarea técnica que yo pueda hacer sin una decisión tuya
+o sin abrir un módulo nuevo.
 
-| # | Decisión | Recomendación | ¿Aceptas? |
+| # | Qué está parado | Quién lo desbloquea | Qué pasa mientras tanto |
 |---|---|---|---|
-| `DEC-001` | Framework: **Laravel 12** | Sí, salvo restricción de hosting o preferencia por Symfony | ☐ |
-| ~~`DEC-002`~~ | ✅ **Resuelta el 2026-08-21: sin multitenancy, sin `tenant_id`.** La plataforma la operan solo CTS y sus sociedades | — | ☑ |
-| `DEC-003` | Frontend renderizado en servidor + PWA para el creador | Sí | ☐ |
-| `DEC-007` | Culqi diferido a F12 | Sí, salvo que exista un cliente que quiera pagar con tarjeta | ☐ |
-| `DEC-008` | Almacenamiento S3-compatible desde el inicio | Sí, sin excepción | ☐ |
-| `DEC-013` | Portal de marca en el MVP = enlaces firmados, no portal completo | Sí | ☐ |
-| `DEC-016` | Renombrar `Brand`→`ClientBrand` y prohibir `Organization` a secas, antes de la Fase 2 | Sí, es casi gratis ahora | ☐ |
-| `DEC-017` | Cobertura de facturación N:M **con vigencia**, no con un booleano `activo` | Sí | ☐ |
-| `DEC-019` | `legal_entity_id` persistido + snapshot del emisor en cada documento fiscal | Sí, sin excepción | ☐ |
-| `DEC-020` | Modelar la separación facturación/liquidación pero **bloquearla** en el MVP | Sí, hasta que haya respaldo fiscal | ☐ |
-| Roadmap | Adelantar motor de campaña, retrasar CRM y portal de marca | Sí | ☐ |
-| MVP | Recorte a los 9 bloques de `04-ROADMAP.md §3` | Sí | ☐ |
-| `DEC-026` | `purpose` de integración como enum cerrado en código, no catálogo editable | Sí | ☐ |
-| `DEC-029` | Aislamiento de ambiente como **barrera** (excepción), no como filtro | Sí, sin excepción | ☐ |
-| `DEC-031` | Una URL de webhook por conexión, con firma verificada de esa conexión | Sí | ☐ |
-| `DEC-032` | `invoicing` y `tax_authority` nunca compartidos entre sociedades (validado, no recomendado) | Sí | ☐ |
-| `DEC-036` | Premiar comportamiento verificado, no resultados ni volumen ni seguidores | Sí | ☐ |
-| `DEC-038` | Ligas por cohorte con temporadas; sin tabla global de posiciones ni ranking por ingresos | Sí | ☐ |
-| `DEC-039` | 🔴 Los retos internos llevan **siempre** recompensa tangible además del XP | Sí, sin excepción | ☐ |
-| `DEC-041` | Gamificación y Creator Score separados: mismo origen de eventos, semántica opuesta | Sí | ☐ |
-| Alcance | +1 a 1,5 semanas por el addendum multi-entidad y otro tanto por el de integraciones. Gamificación: **coste casi nulo en el MVP**, 6–8 semanas si se construye entera en F14–F15 | Sí | ☐ |
+| `T-09` | Publicar la **primera versión real de los términos del creador** | **Tu abogado** | 🔴 **Ningún creador puede activarse.** La pantalla lo dice explícitamente |
+| `Q-40` | Con qué **tasa** se retiene a un creador no domiciliado | **Tu contador** | Un perfil fiscal con retención sin decidir no se puede aprobar (`DEC-048`) |
+| `DEC-085` | Ejecutar los dos `GRANT` en el servidor de producción | **Tú, al desplegar** | La bitácora es truncable por la aplicación hasta que se haga |
+| `Q-44` | ¿Los servicios a un cliente **no domiciliado** son exportación de servicios (sin IGV) o van al 18 %? | **Tu contador** | El modelo admite las cuatro opciones y no fuerza ninguna |
+| `T-10` | Aviso al creador cuando cambian sus datos fiscales (`BR-CREATOR-007`) | Fase de Communication | La pantalla se lo recuerda al operador para que lo haga a mano |
 
-### 2.2 Acciones externas que conviene iniciar **ya** (no dependen de mí)
+Los tres primeros son de verdad urgentes. `T-09` es el más caro de todos: **todo
+el trabajo de adquisición de creadores está construido y probado, y no se puede
+usar con un creador real hasta que exista ese texto.**
 
-| Acción | Por qué urge | Responsable sugerido |
+---
+
+## 3. Decisiones de negocio abiertas
+
+Ninguna bloquea código hoy; todas bloquean una iteración futura concreta.
+
+| # | Pregunta | Cuándo hace falta |
 |---|---|---|
-| 🔴 **Consulta a contador sobre pago a creadores sin RUC** (`DEC-005`) **y sobre pagos a creadores no domiciliados desde CTS Perú** (`Q-13`) | Bloquea toda la Fase 9 y condiciona el formulario de la Fase 5 | Administración |
-| **Confirmar la cobertura de facturación inicial** (`Q-14`, `Q-15`): a qué países puede facturar hoy CTS Perú | Dato de configuración para F4.5b y los seeders | Administración |
-| **Confirmar el registro de la marca "LATAM Social"** y a nombre de qué sociedad (`Q-18`) | Afecta contratos y licencias de contenido | Legal |
-| **Encargar textos legales**: términos de uso, política de privacidad, cesión de derechos de imagen y contenido, consentimiento de datos | No se puede lanzar la landing de creadores sin ellos | Abogado |
-| **Definir el dominio definitivo** de LATAM Social y su correo de remitente (`DEC-000`, `Q-12`) | La reputación de entregabilidad se construye con semanas de antelación | Negocio |
-| **Contratar proveedor SMTP transaccional** y configurar SPF/DKIM/DMARC | La entregabilidad se construye con semanas de antelación | TI |
-| **Abrir cuentas de SMTP, almacenamiento S3 y proveedor de tipo de cambio** (`Q-20`) | Son los tres adaptadores de integración que el MVP usa de verdad, en F4.6b y F4.7 | TI |
-| **Reunir la base de creadores existente** en un archivo | Alimenta la importación masiva de F5.6 | Operaciones |
-
-### 2.3 Preguntas cuya respuesta cambia el modelo de datos
-
-Están las dieciocho en `05-DECISION-LOG.md`. Las seis que más me urgen para la Fase 2:
-
-1. **Q-01/Q-02** — ¿Cómo se pagará legalmente a un creador sin RUC? ¿El operador factura la campaña completa o solo su servicio?
-2. **Q-05** — ¿Cuál es el plazo de pago prometido al creador y desde qué evento se cuenta?
-3. **Q-08/Q-09** — ¿Cuántas rondas de corrección incluye el precio? ¿Cuánto tiempo debe permanecer publicado un post?
-4. **Q-10** — ¿Quién asume el costo del producto enviado y su logística?
-5. **Q-11** — ¿Existe una base de creadores para importar y en qué formato está?
-6. **Q-13/Q-14/Q-15** — ¿Cómo se paga a un creador no domiciliado desde CTS Perú, y a qué países puede facturar hoy la sociedad?
-
-Si alguna no tiene respuesta todavía, no pasa nada: adoptaré la opción recomendada del Decision Log y quedará marcada como provisional. Pero **no la voy a esconder dentro del código**.
+| `Q-46` | Al publicar términos nuevos, ¿qué pasa con los creadores **ya activos**? | Antes de la 2ª versión de los términos |
+| `Q-47` | El periodo de gracia de 30 días, ¿global o por creador? | Iteración de rechazo de creadores |
+| `Q-50` | ¿`campaign_creators` y compañía son **evidencia** (no se borran)? | **Al construir campañas — o sea, ahora** |
+| `Q-52` | ¿Un cliente debería exigir contacto de facturación antes de estar `active`? | Facturación (F9) |
+| `Q-53` | ¿El mismo correo repetido en el mismo cliente y tipo es un error? | Importación de clientes |
+| `Q-54` | ¿Se puede corregir un periodo fiscal ya **cerrado**? | Primera corrección real |
+| `Q-55` | ¿Se valida el formato del documento fiscal por país? | Alta de clientes en el 2º país |
+| `Q-34` | Colombia: ¿DIAN directo o proveedor certificado? *(recomendé proveedor, contra lo que dijiste — revísalo)* | F12 |
+| `Q-38` | ¿Cuántos desarrolladores? Con uno solo, las estimaciones ×1,7 | Todo el plan |
 
 ---
 
-## 3. Propuesta concreta: Fase 2, Iteración 2.1
+## 4. Lo que propongo como siguiente iteración
 
-En cuanto des el visto bueno, la siguiente entrega será:
+**7.1 — La entidad `Campaign`: estados, transiciones, auditoría y
+`billing_legal_entity_id` congelado.**
 
-### Iteración 2.1 — Entidades y glosario de negocio
+Por qué ésta y no otra:
 
-**Objetivo.** Identificar y definir todas las entidades del dominio, sin relaciones todavía, verificando que los nueve procesos P1–P9 se pueden recorrer completos sobre ese conjunto.
+- **7.0 está terminado.** Es literalmente lo que sigue en el roadmap.
+- **Las tablas ya existen.** `2026_08_22_000600_create_campaign_tables` está en
+  el esquema desde la Fase 2, sin una sola pantalla encima. Es la misma
+  situación que tenía `must_change_password` antes de `T-23`: una estructura que
+  nadie lee.
+- **Desbloquea `Q-50`,** que quedó aplazada *«al construir el módulo de
+  campañas, con el caso de uso delante»*. Ese momento es ahora.
+- **`billing_legal_entity_id` congelado** es la pieza que conecta lo construido
+  en 4.5 (cobertura por país) con el dinero. Hoy la cobertura se puede consultar;
+  falta que una campaña **la fije y no la suelte**, que es lo que hace que una
+  factura emitida hace ocho meses siga sabiendo quién la emitió.
 
-**Entregables.**
-1. **Glosario de negocio** — cada término con una definición inequívoca. Sin esto, "campaña", "cliente", "marca" y "entregable" significan cosas distintas para cada persona y esa ambigüedad termina siempre en el código.
-2. **Catálogo de entidades** por dominio (D1–D12), incluidas las del addendum multi-entidad: nombre, propósito, ciclo de vida, volumetría estimada a 1 y 3 años, nivel de criticidad y clasificación de datos.
-3. **Entidades ausentes de la especificación original**, incorporadas y justificadas: `ProductShipment`, `PublicationEvidence`, `UsageRight`, `PurchaseOrder`, `MessageThread`, `TaxRegime`, `CancellationPolicy`, y las de los addenda: `PlatformBrand`, `LegalEntity`, `LegalEntityBillingCountry`, `LegalEntityTaxRegistration`, `LegalEntityFiscalConfiguration`, `LegalEntityDocumentSeries`, `LegalEntityBankAccount`, `IntegrationProvider`, `IntegrationConnection`, `IntegrationAssignment`, `IntegrationCredential`, `IntegrationWebhookEvent`.
-4. **Distinción explícita** de los pares que suelen confundirse: `PlatformBrand` / `LegalEntity` / `ClientOrganization` / `ClientBrand` (los cuatro conceptos organizacionales, `DEC-016`) · `CreatorApplication` / `Creator` · `Campaign` / `CampaignCreator` · `Deliverable` / `DeliverableVersion` / `Publication` · `CreatorRate` (declarada) / `agreed_amount` (congelada) · país de constitución / países de cobertura / países con registro fiscal.
-5. **Matriz entidad × proceso** para demostrar que no falta nada: si un paso de P1–P9 no encuentra dónde escribir, falta una entidad.
-6. **Preguntas abiertas** que la iteración 2.2 debe resolver.
+### Lo que NO propongo, y por qué
 
-**Criterio de salida.** Los nueve procesos se pueden narrar de principio a fin señalando en qué entidad se guarda cada dato, sin decir "eso lo vemos después".
-
-**Lo que NO haré en 2.1.** Nada de columnas, tipos, claves foráneas ni índices — eso es 2.2 y 2.3. Y por supuesto, nada de código.
-
----
-
-## 4. Ritmo de trabajo propuesto
-
-| Momento | Qué entrego | Qué necesito de ti |
-|---|---|---|
-| Cada iteración | Los 14 puntos del entregable de cierre (`08-DEFINITION-OF-DONE.md §3`) | Revisión y visto bueno, o correcciones |
-| Cada fase | Phase Review Report desde el rol de arquitecto externo | Decisión: continuar / continuar con condiciones / detener |
-| Cuando aparezca una decisión de negocio | Entrada nueva en el Decision Log con opciones, recomendación e impacto | Tu decisión, o el permiso para adoptar la recomendación provisionalmente |
-
-**Compromiso explícito:** no avanzo a la siguiente iteración sin que confirmes la anterior, y no escondo decisiones dentro de commits.
+- **Facturación (F9).** Depende de `Q-40` y `Q-44`, o sea de tu contador.
+- **Portal del creador (F6).** Depende de `T-09`, o sea de tu abogado.
+- **Más endurecimiento del esquema.** Se acabó lo que había: `T-12` a `T-27`
+  están todas cerradas. Seguir buscando sería inventar trabajo.
 
 ---
 
-## 5. Una recomendación de gestión, no técnica
+## 5. Deuda de documentación reconocida
 
-Lo más valioso que puedes hacer en las próximas dos semanas **no es revisar estos documentos línea por línea**. Es:
+Cinco iteraciones de la Fase 3 no tienen su documento, mientras todas las demás
+sí: **3.9** (tarifas), **3.11** (anulación), **3.12** (no borrar), **3.13**
+(términos) y **3.14** (rotación de clave). El trabajo está hecho y verificado por
+sus suites; lo que falta es el documento que explica **por qué**.
 
-1. **Sentarte una tarde con quien opera hoy las campañas** y anotar, con cronómetro, cuánto tarda cada tarea repetitiva. Esos números son el mejor criterio de priorización que vamos a tener, y valen más que cualquier opinión mía sobre qué módulo va primero.
-2. **Hablar con 3 creadores actuales** y preguntarles qué es lo que más les molesta de trabajar con agencias. La respuesta más frecuente en este sector suele ser "que no me pagan cuando dijeron". Si eso se confirma, el módulo de pagos deja de ser un módulo de finanzas y pasa a ser el principal argumento de retención de la red.
-3. **Iniciar la consulta con el contador.** Es lo único que puede bloquear el proyecto sin que ninguno de los dos pueda resolverlo por su cuenta.
+Se anota aquí en vez de en un comentario para que no pase lo de `T-12`.
+
+---
+
+## 6. Qué necesito de ti
+
+Tres cosas, por orden de coste para el proyecto:
+
+1. **Manda el texto de los términos del creador a tu abogado.** Es lo único que
+   impide usar de verdad todo lo construido en las fases 3 y 4.
+2. **Pregúntale a tu contador `Q-40` y `Q-44`.** Las dos tienen respuesta corta y
+   las dos bloquean el dinero.
+3. **Dime si arranco 7.1** o prefieres que use el tiempo en otra cosa.

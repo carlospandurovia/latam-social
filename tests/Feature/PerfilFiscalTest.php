@@ -11,6 +11,7 @@ use Database\Seeders\CimientosSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Tests\Apoyo\ConFixturas;
 use Tests\TestCase;
 
 /**
@@ -27,6 +28,7 @@ use Tests\TestCase;
  */
 final class PerfilFiscalTest extends TestCase
 {
+    use ConFixturas;
     use RefreshDatabase;
 
     private string $uuid;
@@ -41,28 +43,7 @@ final class PerfilFiscalTest extends TestCase
         Permisos::olvidar();
 
         $this->uuid = (string) Str::uuid();
-        $this->creadorId = (int) DB::table('creators')->insertGetId([
-            'uuid' => $this->uuid,
-            'first_name' => 'Ana', 'last_name' => 'Torres', 'display_name' => 'anatorres',
-            'birth_date' => '1998-05-12', 'email' => 'ana@ejemplo.test',
-            'country_id' => DB::table('countries')->where('iso2', 'PE')->value('id'),
-            'document_country_code' => 'PE', 'document_type' => 'DNI', 'document_number' => '40000001',
-            'status' => 'pending', 'payment_term_days' => 30, 'preferred_currency_code' => 'PEN',
-            'created_at' => now(), 'updated_at' => now(),
-        ]);
-    }
-
-    private function usuarioCon(string $rol): User
-    {
-        $usuario = User::factory()->create();
-        DB::table('role_user')->insert([
-            'user_id' => $usuario->id,
-            'role_id' => DB::table('roles')->where('code', $rol)->value('id'),
-            'assigned_at' => now(),
-        ]);
-        Permisos::olvidar((int) $usuario->id);
-
-        return $usuario;
+        $this->creadorId = $this->creadorPendiente(['uuid' => $this->uuid]);
     }
 
     /** @return array<string, mixed> */
@@ -125,15 +106,7 @@ final class PerfilFiscalTest extends TestCase
 
     public function test_no_se_admite_el_tutor_de_otro_creador(): void
     {
-        $otro = DB::table('creators')->insertGetId([
-            'uuid' => (string) Str::uuid(),
-            'first_name' => 'Otro', 'last_name' => 'Creador', 'display_name' => 'otro',
-            'birth_date' => '1990-01-01', 'email' => 'otro@ejemplo.test',
-            'country_id' => DB::table('countries')->where('iso2', 'PE')->value('id'),
-            'document_country_code' => 'PE', 'document_type' => 'DNI', 'document_number' => '40000002',
-            'status' => 'pending', 'preferred_currency_code' => 'PEN',
-            'created_at' => now(), 'updated_at' => now(),
-        ]);
+        $otro = $this->creadorPendiente(['uuid' => (string) Str::uuid(), 'first_name' => 'Otro', 'last_name' => 'Creador', 'display_name' => 'otro', 'birth_date' => '1990-01-01', 'email' => 'otro@ejemplo.test', 'document_number' => '40000002']);
 
         $ajeno = $this->tutorDe((int) $otro);
 

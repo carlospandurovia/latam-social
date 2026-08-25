@@ -8,6 +8,7 @@ use App\Modules\Creator\Http\Requests\GuardarBloqueoRequest;
 use App\Modules\Creator\Http\Requests\GuardarDisponibilidadRequest;
 use App\Modules\Creator\Http\Requests\GuardarTarifaRequest;
 use App\Shared\Audit\Bitacora;
+use App\Shared\Database\Vigencia;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -102,7 +103,7 @@ final class PerfilComercialController
             ->whereNull('valid_to')
             ->first(['id', 'valid_from', 'amount']);
 
-        if ($vigente !== null && $vigente->valid_from >= $desde) {
+        if ($vigente !== null && !Vigencia::puedeRelevar($desde, (string) $vigente->valid_from)) {
             // Cerrarla el dia antes la dejaria terminando antes de empezar, que
             // es lo que `ck_creator_rates_dates` prohibe. La base lo rechazaria
             // igual; aqui se dice por que.
@@ -114,7 +115,7 @@ final class PerfilComercialController
             if ($vigente !== null) {
                 // El dia ANTERIOR, no el mismo. Ver el comentario de la clase.
                 DB::table('creator_rates')->where('id', $vigente->id)->update([
-                    'valid_to' => CarbonImmutable::parse($desde)->subDay()->toDateString(),
+                    'valid_to' => Vigencia::cerrarElDiaAntesDe($desde),
                     'updated_at' => now(),
                 ]);
             }
@@ -165,12 +166,25 @@ final class PerfilComercialController
         $datos = $request->validated();
         $desde = (string) $datos['valid_from'];
 
+        // Desde la peticion cruda, no desde `validated()`: `boolean()` de
+        // Laravel devuelve false cuando la clave no existe, que es justo lo que
+        // significa una casilla sin marcar.
+        $marcadas = [
+            'accepts_travel' => $request->boolean('accepts_travel'),
+            'accepts_in_person' => $request->boolean('accepts_in_person'),
+            'accepts_product_only' => $request->boolean('accepts_product_only'),
+        ];
+
+        // Y se quitan de `$datos` para que no entren dos veces con valores
+        // distintos: lo que manda es `$marcadas`.
+        unset($datos['accepts_travel'], $datos['accepts_in_person'], $datos['accepts_product_only']);
+
         $vigente = DB::table('creator_availability')
             ->where('creator_id', $creador->id)
             ->whereNull('valid_to')
             ->first(['id', 'valid_from']);
 
-        if ($vigente !== null && $vigente->valid_from >= $desde) {
+        if ($vigente !== null && !Vigencia::puedeRelevar($desde, (string) $vigente->valid_from)) {
             return back()->withInput()->with('aviso',
                 "Ya hay una disponibilidad vigente desde el {$vigente->valid_from}. La nueva tiene que empezar después.");
         }
@@ -181,16 +195,28 @@ final class PerfilComercialController
             $datos['travel_scope'] = null;
         }
 
-        DB::transaction(function () use ($creador, $datos, $desde, $vigente): void {
+        DB::transaction(function () use ($creador, $datos, $desde, $vigente, $marcadas): void {
             if ($vigente !== null) {
                 DB::table('creator_availability')->where('id', $vigente->id)->update([
-                    'valid_to' => CarbonImmutable::parse($desde)->subDay()->toDateString(),
+                    'valid_to' => Vigencia::cerrarElDiaAntesDe($desde),
                     'updated_at' => now(),
                 ]);
             }
 
             DB::table('creator_availability')->insert($datos + [
                 'creator_id' => $creador->id,
+                // Las tres casillas se escriben SIEMPRE, con su valor explicito.
+                //
+                // Una casilla sin marcar no viaja, asi que `validated()` no
+                // traia la clave y la columna tomaba su DEFAULT. Para
+                // `accepts_travel` y `accepts_product_only` el default es 0 y
+                // coincidia por suerte; `accepts_in_person` tiene DEFAULT 1, asi
+                // que desmarcarla la guardaba como **si**. El operador declaraba
+                // «no acepta presencial» y la tabla de la misma pantalla lo
+                // mostraba como que si.
+                'accepts_travel' => $marcadas['accepts_travel'],
+                'accepts_in_person' => $marcadas['accepts_in_person'],
+                'accepts_product_only' => $marcadas['accepts_product_only'],
                 'created_at' => now(),
                 'updated_at' => now(),
             ]);

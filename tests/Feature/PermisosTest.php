@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
-use App\Models\User;
 use App\Shared\Auth\Permisos;
 use Database\Seeders\CimientosSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Tests\Apoyo\ConFixturas;
 use Tests\TestCase;
 
 /**
@@ -22,6 +22,7 @@ use Tests\TestCase;
  */
 final class PermisosTest extends TestCase
 {
+    use ConFixturas;
     use RefreshDatabase;
 
     protected function setUp(): void
@@ -32,24 +33,6 @@ final class PermisosTest extends TestCase
         // La caché de permisos es estática: sin esto, la segunda prueba vería
         // los permisos de la primera y todo pasaría por el motivo equivocado.
         Permisos::olvidar();
-    }
-
-    private function usuarioCon(?string $codigoRol): User
-    {
-        $usuario = User::factory()->create();
-
-        if ($codigoRol !== null) {
-            $rolId = DB::table('roles')->where('code', $codigoRol)->value('id');
-            DB::table('role_user')->insert([
-                'user_id' => $usuario->id,
-                'role_id' => $rolId,
-                'assigned_at' => now(),
-            ]);
-        }
-
-        Permisos::olvidar((int) $usuario->id);
-
-        return $usuario;
     }
 
     // ------------------------------------------------------------ el middleware

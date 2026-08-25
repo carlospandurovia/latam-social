@@ -1,0 +1,25 @@
+# La lista de suites de restriccion, en un solo sitio.
+#
+# Estaba escrita a mano en CUATRO: `correr-todo.sh` y los tres bloques de motor
+# del CI (CHECK nativo, disparadores, Percona 5.7). Y paso lo que tenia que
+# pasar: 3.10, 3.11 y 3.12 se anadieron solo al bloque de Percona. Durante tres
+# iteraciones esas suites corrieron en UN motor de los tres y el CI salia verde,
+# porque un CI no puede echar de menos una prueba que nadie le nombro.
+#
+# Quien anada una suite anade una linea aqui y ya esta. El orden es el de
+# ejecucion. Las lineas que empiezan por `#` y las vacias se ignoran.
+2.12-contenido
+2.13-finanzas
+3.5-activacion
+3.6-fiscal
+3.7-redes
+3.8-pagos
+3.9-tarifas
+3.10-periodos
+3.11-anulacion
+3.12-no-borrar
+4.3-contactos
+4.4-fiscal-cliente
+4.5-entidades
+4.11-concurrencia
+7.1-campanas

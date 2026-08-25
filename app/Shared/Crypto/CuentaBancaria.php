@@ -51,6 +51,26 @@ final class CuentaBancaria
         return strtoupper((string) preg_replace('/[^A-Za-z0-9]/', '', $numero));
     }
 
+    /**
+     * ¿Queda algo despues de normalizar?
+     *
+     * `"- - - -"` pasa las reglas del formulario —`min:6` y el patron de
+     * caracteres permitidos miran el numero CRUDO— y normaliza a cadena vacia.
+     * Con eso: la mascara sale `****`, `ck_cpm_masked_digits` la acepta, y
+     * **todas** las cuentas vacias comparten la misma huella, asi que la
+     * deteccion de cuenta compartida (`DEC-065`) empieza a marcar
+     * `pending_review` a creadores que no tienen nada que ver entre si.
+     *
+     * Y al final del camino hay un fichero de pagos con una cuenta sin numero.
+     *
+     * Quien valide un numero de cuenta tiene que preguntar por lo NORMALIZADO,
+     * no por lo que se tecleo.
+     */
+    public static function tieneNumero(string $numero): bool
+    {
+        return self::normalizar($numero) !== '';
+    }
+
     public static function cifrar(string $numero): string
     {
         return Crypt::encryptString(self::normalizar($numero));

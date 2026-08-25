@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
-use App\Models\User;
 use App\Shared\Auth\Permisos;
 use Database\Seeders\CimientosSeeder;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Tests\Apoyo\ConFixturas;
 use Tests\TestCase;
 
 /**
@@ -19,6 +19,7 @@ use Tests\TestCase;
  */
 final class EdicionCreadorTest extends TestCase
 {
+    use ConFixturas;
     use RefreshDatabase;
 
     private string $uuid;
@@ -31,35 +32,7 @@ final class EdicionCreadorTest extends TestCase
         Permisos::olvidar();
 
         $this->uuid = (string) Str::uuid();
-        DB::table('creators')->insert([
-            'uuid' => $this->uuid,
-            'first_name' => 'Ana', 'last_name' => 'Torres', 'display_name' => 'anatorres',
-            'birth_date' => '1998-05-12', 'email' => 'ana@ejemplo.test',
-            'country_id' => DB::table('countries')->where('iso2', 'PE')->value('id'),
-            'document_country_code' => 'PE', 'document_type' => 'DNI', 'document_number' => '40000001',
-            // 'pending' y no 'active' a proposito. Desde 3.5, un creador
-            // activo exige `activated_at` e identidad verificada
-            // (`ck_creators_activation`, `ck_creators_active_identity`): la base
-            // lo impone. Esta prueba no va de activacion, asi que monta el
-            // minimo que necesita. Un fixture que declara mas de lo que la
-            // prueba usa es un fixture que se rompe por motivos ajenos.
-            'preferred_currency_code' => 'PEN', 'status' => 'pending',
-            'payment_term_days' => 30, 'locale' => 'es', 'timezone' => 'America/Lima',
-            'created_at' => now(), 'updated_at' => now(),
-        ]);
-    }
-
-    private function usuarioCon(string $rol): User
-    {
-        $usuario = User::factory()->create();
-        DB::table('role_user')->insert([
-            'user_id' => $usuario->id,
-            'role_id' => DB::table('roles')->where('code', $rol)->value('id'),
-            'assigned_at' => now(),
-        ]);
-        Permisos::olvidar((int) $usuario->id);
-
-        return $usuario;
+        $this->creadorId = $this->creadorPendiente(['uuid' => $this->uuid, 'locale' => 'es', 'timezone' => 'America/Lima']);
     }
 
     /** @return array<string, mixed> */

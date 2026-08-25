@@ -79,9 +79,34 @@ return [
      * margen para que el aviso al canal de contacto anterior llegue y el
      * creador reaccione si no fue él quien la cambió. Cero no es una opción:
      * cumpliría la letra de la regla y no su intención.
+     *
+     * Y ahora eso está IMPUESTO, no sólo escrito aquí (`T-24`). Antes, con la
+     * variable a `0`, la pantalla decía «no es pagable hasta dentro de 0 h»
+     * mientras la cuenta ya era pagable —`ck_cpm_eligible_after` usa `>=`—; y
+     * con un valor negativo, `eligible_from` quedaba antes de `verified_at` y el
+     * `UPDATE` salía con un `45000` sin traducir. Un comentario que dice «esto no
+     * puede pasar» y no lo impide es una nota, no una regla.
      */
+    /*
+     * Seguridad de acceso (T-23).
+     */
+    'seguridad' => [
+        /*
+         * Comprobar la contrasena nueva contra filtraciones publicas conocidas
+         * (haveibeenpwned, k-anonymity: nunca se manda la contrasena).
+         *
+         * Es una llamada HTTP SALIENTE y **falla en abierto**: si el servidor no
+         * puede salir a internet, Laravel da la contrasena por buena. Por eso se
+         * puede apagar de forma explicita en vez de dejar que falle en silencio
+         * en el sitio donde mas importa.
+         *
+         * No es la defensa —esa son los 12 caracteres y la mezcla—, es un extra.
+         */
+        'comprobar_filtraciones' => (bool) env('LATAM_COMPROBAR_FILTRACIONES', true),
+    ],
+
     'pagos' => [
-        'enfriamiento_horas' => (int) env('LATAM_PAGOS_ENFRIAMIENTO_HORAS', 24),
+        'enfriamiento_horas' => max(1, (int) env('LATAM_PAGOS_ENFRIAMIENTO_HORAS', 24)),
 
         /*
          * Solo para la migración `000490`, y normalmente null.

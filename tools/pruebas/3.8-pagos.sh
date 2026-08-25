@@ -225,6 +225,44 @@ probar "una huella que no mide 64 se rechaza igual" \
   "UPDATE creator_payment_methods SET account_number_fingerprint='corta' WHERE id=$MP;" RECHAZO
 
 echo ""
+echo "--- T-19: la deteccion de cuenta compartida es ASIMETRICA en la base ---"
+# Esto NO es un fallo que se arregle en el esquema: `tg_cpm_compartida` es
+# BEFORE INSERT y un disparador no puede actualizar su propia tabla (`1442`,
+# comprobado). La suite fija el comportamiento REAL para que quede escrito por
+# que la aplicacion calcula «compartida» al leer en vez de fiarse de la columna.
+CR1="(SELECT id FROM (SELECT id FROM creators ORDER BY id LIMIT 1) t)"
+CR2="(SELECT id FROM (SELECT id FROM creators ORDER BY id LIMIT 1 OFFSET 1) t)"
+U1="(SELECT id FROM (SELECT id FROM users ORDER BY id LIMIT 1) t)"
+HUELLA=$(printf 'f%.0s' $(seq 1 64))
+
+medio() { # creador sufijo
+  echo "INSERT INTO creator_payment_methods
+        (uuid,creator_id,owner_type,method_type,country_id,currency_code,
+         account_number_encrypted,account_number_fingerprint,account_number_masked,
+         holder_name,holder_document_type,holder_document_number,status,created_by_user_id,created_at)
+        SELECT UUID(),id,'creator','bank_account',country_id,'PEN','enc:t19$2','$HUELLA','****9090',
+               'Titular','DNI','$2','pending',$U1,NOW(3) FROM creators WHERE id=$1;"
+}
+
+probar "el primer creador da de alta una cuenta" "$(medio "$CR1" a)" OK
+probar "el segundo da de alta LA MISMA cuenta" "$(medio "$CR2" b)" OK
+n=$($CLIENTE $DB -N -B -e "SELECT COUNT(*) FROM creator_payment_methods
+  WHERE account_number_fingerprint='$HUELLA' AND shared_account_status='pending_review'" 2>/dev/null | grep -v Warning | tr -d '\r')
+if [ "${n:-0}" -eq 1 ]; then
+  printf "  \033[32m✓\033[0m %-70s %s\n" "solo UNA de las dos queda marcada (por eso se calcula al leer)" "1 de 2"; ok=$((ok+1))
+else
+  printf "  \033[31m✗\033[0m %-70s esperaba 1, obtuvo %s\n" "solo UNA de las dos queda marcada" "$n"; fail=$((fail+1))
+fi
+# Y la consulta que usa la aplicacion SI ve las dos.
+n=$($CLIENTE $DB -N -B -e "SELECT COUNT(DISTINCT creator_id) FROM creator_payment_methods
+  WHERE account_number_fingerprint='$HUELLA' AND status NOT IN ('rejected','disabled')" 2>/dev/null | grep -v Warning | tr -d '\r')
+if [ "${n:-0}" -eq 2 ]; then
+  printf "  \033[32m✓\033[0m %-70s %s\n" "pero calcular al leer ve los DOS creadores" "2"; ok=$((ok+1))
+else
+  printf "  \033[31m✗\033[0m %-70s esperaba 2, obtuvo %s\n" "pero calcular al leer ve los DOS creadores" "$n"; fail=$((fail+1))
+fi
+
+echo ""
 echo "==================================================================================="
 printf "  \033[32m%d correctas\033[0m, \033[31m%d fallidas\033[0m\n" $ok $fail
 echo "==================================================================================="

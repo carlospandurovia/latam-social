@@ -9,6 +9,7 @@ use App\Shared\Auth\Permisos;
 use Database\Seeders\CimientosSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Tests\Apoyo\ConFixturas;
 use Tests\TestCase;
 
 /**
@@ -25,6 +26,7 @@ use Tests\TestCase;
  */
 final class MarcasTest extends TestCase
 {
+    use ConFixturas;
     use RefreshDatabase;
 
     private int $paisPE;
@@ -200,6 +202,143 @@ final class MarcasTest extends TestCase
             ->assertForbidden();
     }
 
+    /**
+     * Un nombre comercial largo no puede tumbar el alta del cliente.
+     *
+     * `client_organizations.commercial_name` admite 160 y `client_brands.name`
+     * son 120. Como el alta crea la primera marca con el mismo nombre
+     * (`DEC-074`), un cliente con nombre de 121 a 160 caracteres reventaba con
+     * `1406 Data too long`, y al ir dentro de una transacción **se perdía el
+     * cliente entero**: un 500, no un mensaje. La marca se recorta a 120.
+     */
+    public function test_un_nombre_comercial_largo_no_tumba_el_alta(): void
+    {
+        $largo = str_repeat('A', 155);
+
+        $this->actingAs($this->usuarioCon('campaign_manager'))
+            ->post('/clientes', $this->cliente(['commercial_name' => $largo]))
+            ->assertSessionHas('exito');
+
+        $cliente = DB::table('client_organizations')->where('client_code', 'ACME-01')->first();
+        $marca = DB::table('client_brands')->where('client_organization_id', $cliente->id)->first();
+
+        $this->assertSame($largo, $cliente->commercial_name, 'el cliente conserva su nombre entero');
+        $this->assertSame(120, mb_strlen((string) $marca->name), 'la marca se recorta al ancho de su columna');
+    }
+
+    /**
+     * Editar una marca sin mandar la sección de categorías no las borra.
+     *
+     * `sincronizarCategorias()` empieza por un `delete()`, y un
+     * `<input type="checkbox">` sin marcar no se manda: sin el testigo oculto,
+     * cualquier petición que no trajera `categorias` apagaba la detección de
+     * conflictos de marca (`BR-CAMPAIGN-007`) de esa marca, en silencio.
+     */
+    public function test_editar_sin_mandar_categorias_no_las_borra(): void
+    {
+        $gestor = $this->usuarioCon('campaign_manager');
+        $uuid = $this->crearCliente($gestor);
+        $marca = DB::table('client_brands')->first();
+        $categorias = DB::table('categories')->orderBy('id')->limit(2)->pluck('id')->all();
+
+        $this->actingAs($gestor)->put("/clientes/{$uuid}/marcas/{$marca->uuid}", [
+            'name' => 'ACME', 'status' => 'active',
+            'categorias' => $categorias, 'categorias_enviadas' => '1',
+        ]);
+        $this->assertSame(2, DB::table('client_brand_categories')->where('client_brand_id', $marca->id)->count());
+
+        // Sin `categorias_enviadas`: la seccion no venia, no se toca.
+        $this->actingAs($gestor)->put("/clientes/{$uuid}/marcas/{$marca->uuid}", [
+            'name' => 'ACME Peru', 'status' => 'active',
+        ])->assertSessionHas('exito');
+
+        $this->assertSame(2, DB::table('client_brand_categories')->where('client_brand_id', $marca->id)->count(),
+            'una peticion sin la seccion de categorias no puede borrarlas');
+    }
+
+    /**
+     * **Guardar sin tocar las categorías no anota un cambio de categorías.**
+     *
+     * `$antes` salía de `pluck('category_id')` **sin castear**, y `$despues` ya
+     * venía a `int`. Con `!==`, `['1'] !== [1]` es siempre cierto: la bitácora
+     * anotaría un cambio de categorías cada vez que se guarda la marca, haya
+     * cambiado o no. Y una bitácora que dice que algo cambió cuando no cambió
+     * es peor que una que se lo calla: enseña a no leerla.
+     *
+     * ### Lo que esta prueba NO puede demostrar
+     *
+     * **Depende del driver.** Que `pluck()` devuelva `'1'` o `1` lo decide PDO:
+     * con `PDO::ATTR_EMULATE_PREPARES` o con drivers antiguos son cadenas; en
+     * el contenedor donde se escribió esto son enteros nativos, y ahí el
+     * defecto no se dispara. Se comprobó: quitando el casteo, esta prueba
+     * **sigue verde**.
+     *
+     * O sea que no se sabe si el fallo estaba vivo en alguna máquina o sólo
+     * latente en todas. Lo que sí se sabe es que casteando los dos lados la
+     * comparación deja de depender del driver, y eso es lo que fija esta
+     * prueba: la intención, no la reproducción.
+     *
+     * Salió de PHPStan quejándose del `collect()` de al lado — el fallo de
+     * tipos y el de negocio eran el mismo.
+     */
+    public function test_guardar_sin_tocar_las_categorias_no_anota_un_cambio(): void
+    {
+        $gestor = $this->usuarioCon('campaign_manager');
+        $uuid = $this->crearCliente($gestor);
+        $marca = DB::table('client_brands')->first();
+        $categorias = DB::table('categories')->orderBy('id')->limit(2)->pluck('id')->all();
+
+        $this->actingAs($gestor)->put("/clientes/{$uuid}/marcas/{$marca->uuid}", [
+            'name' => 'ACME', 'status' => 'active',
+            'categorias' => $categorias, 'categorias_enviadas' => '1',
+        ]);
+
+        // La marca de agua: solo interesan las anotaciones POSTERIORES al
+        // segundo guardado. La primera vez las categorias SI cambiaron --de
+        // ninguna a dos-- y anotarlo esta bien; mirar las dos juntas haria que
+        // esta prueba fallara por el motivo equivocado.
+        $antes = (int) DB::table('audit_logs')->max('id');
+
+        // Se vuelve a guardar EXACTAMENTE lo mismo.
+        $this->actingAs($gestor)->put("/clientes/{$uuid}/marcas/{$marca->uuid}", [
+            'name' => 'ACME', 'status' => 'active',
+            'categorias' => $categorias, 'categorias_enviadas' => '1',
+        ])->assertSessionHas('aviso');
+
+        $anotaciones = DB::table('audit_logs')
+            ->where('id', '>', $antes)
+            ->where('action', 'client_brand.updated')
+            ->pluck('changes');
+
+        foreach ($anotaciones as $cambio) {
+            $this->assertStringNotContainsString('categorias', (string) $cambio,
+                'no cambiaron las categorias: anotarlo enseña a no leer la bitacora');
+        }
+    }
+
+    /**
+     * Pero desmarcarlas TODAS sigue siendo posible: para eso está el testigo.
+     * Si «ninguna» no se pudiera expresar, la regla nueva sería otra trampa.
+     */
+    public function test_desmarcar_todas_las_categorias_si_las_borra(): void
+    {
+        $gestor = $this->usuarioCon('campaign_manager');
+        $uuid = $this->crearCliente($gestor);
+        $marca = DB::table('client_brands')->first();
+
+        $this->actingAs($gestor)->put("/clientes/{$uuid}/marcas/{$marca->uuid}", [
+            'name' => 'ACME', 'status' => 'active', 'categorias_enviadas' => '1',
+            'categorias' => DB::table('categories')->orderBy('id')->limit(1)->pluck('id')->all(),
+        ]);
+        $this->assertSame(1, DB::table('client_brand_categories')->where('client_brand_id', $marca->id)->count());
+
+        $this->actingAs($gestor)->put("/clientes/{$uuid}/marcas/{$marca->uuid}", [
+            'name' => 'ACME', 'status' => 'paused', 'categorias_enviadas' => '1',
+        ])->assertSessionHas('exito');
+
+        $this->assertSame(0, DB::table('client_brand_categories')->where('client_brand_id', $marca->id)->count());
+    }
+
     // ------------------------------------------------------------------ apoyo
 
     private function crearCliente(User $quien): string
@@ -221,18 +360,5 @@ final class MarcasTest extends TestCase
             'country_id' => $this->paisPE,
             'status' => 'prospect',
         ], $cambios);
-    }
-
-    private function usuarioCon(string $rol): User
-    {
-        $usuario = User::factory()->create();
-        DB::table('role_user')->insert([
-            'user_id' => $usuario->id,
-            'role_id' => DB::table('roles')->where('code', $rol)->value('id'),
-            'assigned_at' => now(),
-        ]);
-        Permisos::olvidar((int) $usuario->id);
-
-        return $usuario;
     }
 }

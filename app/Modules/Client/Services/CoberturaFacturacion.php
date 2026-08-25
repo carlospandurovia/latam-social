@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Client\Services;
 
+use App\Modules\Core\Services\Cobertura;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -67,17 +68,15 @@ final class CoberturaFacturacion
     {
         $fecha ??= now()->toDateString();
 
-        $filas = DB::table('legal_entity_countries as lec')
-            ->join('legal_entities as le', 'le.id', '=', 'lec.legal_entity_id')
-            ->where('lec.country_id', $paisId)
-            ->whereDate('lec.valid_from', '<=', $fecha)
-            ->where(function ($q) use ($fecha): void {
-                $q->whereNull('lec.valid_to')->orWhereDate('lec.valid_to', '>=', $fecha);
-            })
-            ->where('le.status', 'active')
-            ->orderBy('le.code')
-            ->get(['le.id', 'le.code', 'le.legal_name', 'le.default_currency_code',
-                'lec.coverage_basis', 'lec.valid_from', 'lec.valid_to']);
+        // La consulta vive en Core desde 4.5: `legal_entities` es estructura
+        // societaria del grupo, no dato del cliente, y la pantalla de sociedades
+        // necesitaba la misma respuesta. Dos implementaciones de «quien emite
+        // esta factura» acaban divergiendo, y el sintoma seria una factura
+        // emitida por la sociedad equivocada.
+        //
+        // Lo que sigue viviendo AQUI es la traduccion a un mensaje accionable,
+        // que es lo que pide `BR-LE-004` y es asunto del lado cliente.
+        $filas = Cobertura::quienCubre($paisId, $fecha);
 
         $pais = (string) DB::table('countries')->where('id', $paisId)->value('name');
 

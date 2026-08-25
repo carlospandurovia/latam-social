@@ -105,6 +105,28 @@ final class RedesSocialesController
                 .'Si de verdad es de este creador, hay que resolver primero cuál de los dos la tiene (BR-CREATOR-003).');
         }
 
+        // Y la MISMA cuenta en ESTE creador.
+        //
+        // `uq_social_accounts_creator_handle` es `(creator_id, platform_id,
+        // handle)` y no tiene puerta de estado, asi que una cuenta propia
+        // desactivada o sin verificar sigue ocupando el sitio. La guarda de
+        // arriba solo miraba las verificadas de OTROS, asi que volver a teclear
+        // una cuenta propia —el caso mas frecuente, no el exotico— daba `1062`.
+        $propia = DB::table('social_accounts')
+            ->where('creator_id', $creador->id)
+            ->where('platform_id', $datos['platform_id'])
+            ->where('handle', $datos['handle'])
+            ->first(['id', 'verification_status', 'is_active']);
+
+        if ($propia !== null) {
+            return back()->withInput()->with('aviso', sprintf(
+                'Este creador ya tiene esa cuenta dada de alta (%s%s). No se da de alta dos veces: '
+                .'usa la que ya existe.',
+                $propia->verification_status,
+                $propia->is_active ? '' : ', desactivada',
+            ));
+        }
+
         $id = (int) DB::table('social_accounts')->insertGetId($datos + [
             'uuid' => (string) Str::uuid(),
             'creator_id' => $creador->id,

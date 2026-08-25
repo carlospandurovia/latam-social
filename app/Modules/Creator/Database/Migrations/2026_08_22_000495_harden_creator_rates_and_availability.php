@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Shared\Database\Periodo;
 use App\Shared\Database\Restriccion;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
@@ -84,9 +85,31 @@ return new class extends Migration
             mensaje: 'Una tarifa es mayor que cero, o es cero y esta declarada como gratuita.',
         );
 
-        foreach (self::disparadores() as $nombre => $cuerpo) {
-            DB::unprepared("CREATE TRIGGER `{$nombre}` {$cuerpo}");
-        }
+        // `T-14`: esto eran CUATRO disparadores tecleados a mano --dos por
+        // tabla, doce lineas cada uno-- que hacian exactamente lo que genera
+        // `Periodo`. La regla estaba bien; el problema era que un arreglo
+        // futuro habria que aplicarlo en dos sitios y acordarse de los dos.
+        //
+        // No es hipotetico: `Periodo` usa `<=>` en las columnas de serie y las
+        // copias a mano usaban `=`. Aqui da igual --las tres columnas de serie
+        // son NOT NULL, comprobado-- pero el dia que una admita NULL, la copia
+        // a mano deja pasar el solape en silencio y la generada no.
+        //
+        // Y ademas quedan registrados en `schema_constraints`: cuatro reglas
+        // que hasta ahora no salian en el inventario del esquema.
+        Periodo::sinSolape(
+            tabla: 'creator_rates',
+            nombre: 'crate_sin_solape',
+            serie: ['creator_id', 'content_format_id', 'currency_code'],
+            mensaje: 'Ese periodo se solapa con otra tarifa del mismo formato y moneda: cierre la anterior el dia antes.',
+        );
+
+        Periodo::sinSolape(
+            tabla: 'creator_availability',
+            nombre: 'cav_sin_solape',
+            serie: ['creator_id'],
+            mensaje: 'Ese periodo se solapa con otra disponibilidad declarada: cierre la anterior el dia antes.',
+        );
     }
 
     /**
@@ -115,29 +138,31 @@ return new class extends Migration
                 .'No lo decido yo: cada una significa una cosa distinta ante un cliente.';
         }
 
-        // El solape se comprueba con una tabla derivada, no con una subconsulta
-        // correlacionada: `ERROR 1093` si se lee la misma tabla que se modifica
-        // (`DEC-052`). Aquí no se modifica, pero la costumbre evita el susto.
-        $solapadas = DB::select(<<<'SQL'
-            SELECT COUNT(*) AS n FROM (
-              SELECT a.id
-                FROM creator_rates a
-                JOIN creator_rates b
-                  ON b.id <> a.id
-                 AND b.creator_id = a.creator_id
-                 AND b.content_format_id = a.content_format_id
-                 AND b.currency_code = a.currency_code
-                 AND a.valid_from <= IFNULL(b.valid_to, '9999-12-31')
-                 AND b.valid_from <= IFNULL(a.valid_to, '9999-12-31')
-               GROUP BY a.id
-            ) t
-            SQL);
+        // Los solapes que YA hay dentro, con `Periodo::solapes()`.
+        //
+        // Un disparador **no valida lo que ya esta en la tabla**: se crea, dice
+        // que si, y las filas que se pisaban siguen pisandose. La regla quedaria
+        // puesta y el historico seguiria mintiendo, que es el peor de los dos
+        // mundos: nadie vuelve a mirar una tabla que tiene una restriccion
+        // encima.
+        //
+        // Se preguntaba con SQL tecleado a mano, y **solo por `creator_rates`**.
+        // `creator_availability` recibia su disparador sin que nadie hubiera
+        // mirado si ya tenia solapes. Salio al migrar los cuatro disparadores a
+        // `Periodo` (`T-14`): la pregunta que faltaba estaba a una linea de
+        // distancia, en la misma clase que genera la regla.
+        foreach ([
+            ['creator_rates', ['creator_id', 'content_format_id', 'currency_code'], 'tarifas', 'H-16'],
+            ['creator_availability', ['creator_id'], 'disponibilidades', 'la misma regla'],
+        ] as [$tabla, $serie, $comoSeLlaman, $hallazgo]) {
+            $solapes = Periodo::solapes(tabla: $tabla, serie: $serie, limite: 100);
 
-        $nSolapadas = (int) ($solapadas[0]->n ?? 0);
-
-        if ($nSolapadas > 0) {
-            $problemas[] = "Hay {$nSolapadas} tarifas con periodos solapados (H-16). Cierre cada una "
-                .'el día ANTERIOR al inicio de la siguiente: `valid_to` es inclusivo.';
+            if ($solapes !== []) {
+                $n = count($solapes);
+                $problemas[] = "Hay {$n} par(es) de {$comoSeLlaman} con periodos solapados ({$hallazgo}). "
+                    .'Cierre cada una el dia ANTERIOR al inicio de la siguiente: `valid_to` es inclusivo. '
+                    .'El primero es '.json_encode($solapes[0], JSON_UNESCAPED_UNICODE).'.';
+            }
         }
 
         if ($problemas !== []) {
@@ -153,108 +178,5 @@ return new class extends Migration
         $valor = config('latam.tarifas.autor_migracion');
 
         return is_numeric($valor) ? (int) $valor : null;
-    }
-
-    /**
-     * Que dos periodos no se pisen mira OTRAS FILAS, y eso ningún `CHECK` lo
-     * puede hacer ni en MySQL ni en MariaDB.
-     *
-     * @return array<string, string>
-     */
-    private static function disparadores(): array
-    {
-        $solapeTarifa = <<<'SQL'
-            SELECT 1 FROM creator_rates
-             WHERE creator_id = NEW.creator_id
-               AND content_format_id = NEW.content_format_id
-               AND currency_code = NEW.currency_code
-            SQL;
-
-        return [
-            'tg_crate_sin_solape_ins' => <<<SQL
-                BEFORE INSERT ON `creator_rates`
-                FOR EACH ROW
-                BEGIN
-                  IF EXISTS (
-                    {$solapeTarifa}
-                       AND NEW.valid_from <= IFNULL(valid_to, '9999-12-31')
-                       AND valid_from <= IFNULL(NEW.valid_to, '9999-12-31')
-                  ) THEN
-                    SIGNAL SQLSTATE '45000'
-                      SET MESSAGE_TEXT = 'Ya hay una tarifa para ese formato y moneda en esas fechas: cierre la anterior el dia antes.';
-                  END IF;
-                END
-                SQL,
-            'tg_crate_sin_solape_upd' => <<<SQL
-                BEFORE UPDATE ON `creator_rates`
-                FOR EACH ROW
-                BEGIN
-                  IF EXISTS (
-                    {$solapeTarifa}
-                       AND id <> NEW.id
-                       AND NEW.valid_from <= IFNULL(valid_to, '9999-12-31')
-                       AND valid_from <= IFNULL(NEW.valid_to, '9999-12-31')
-                  ) THEN
-                    SIGNAL SQLSTATE '45000'
-                      SET MESSAGE_TEXT = 'El cambio dejaria dos tarifas solapadas para el mismo formato y moneda.';
-                  END IF;
-                END
-                SQL,
-            'tg_cav_sin_solape_ins' => <<<'SQL'
-                BEFORE INSERT ON `creator_availability`
-                FOR EACH ROW
-                BEGIN
-                  IF EXISTS (
-                    SELECT 1 FROM creator_availability
-                     WHERE creator_id = NEW.creator_id
-                       AND NEW.valid_from <= IFNULL(valid_to, '9999-12-31')
-                       AND valid_from <= IFNULL(NEW.valid_to, '9999-12-31')
-                  ) THEN
-                    SIGNAL SQLSTATE '45000'
-                      SET MESSAGE_TEXT = 'Ya hay una disponibilidad declarada en esas fechas: cierre la anterior el dia antes.';
-                  END IF;
-                END
-                SQL,
-            'tg_cav_sin_solape_upd' => <<<'SQL'
-                BEFORE UPDATE ON `creator_availability`
-                FOR EACH ROW
-                BEGIN
-                  IF EXISTS (
-                    SELECT 1 FROM creator_availability
-                     WHERE id <> NEW.id
-                       AND creator_id = NEW.creator_id
-                       AND NEW.valid_from <= IFNULL(valid_to, '9999-12-31')
-                       AND valid_from <= IFNULL(NEW.valid_to, '9999-12-31')
-                  ) THEN
-                    SIGNAL SQLSTATE '45000'
-                      SET MESSAGE_TEXT = 'El cambio dejaria dos disponibilidades solapadas.';
-                  END IF;
-                END
-                SQL,
-        ];
-    }
-
-    public function down(): void
-    {
-        foreach (array_keys(self::disparadores()) as $nombre) {
-            DB::statement("DROP TRIGGER IF EXISTS `{$nombre}`");
-        }
-
-        Restriccion::quitar('creator_rates', 'ck_creator_rates_amount');
-        Restriccion::comprobacion(
-            tabla: 'creator_rates',
-            nombre: 'ck_creator_rates_amount',
-            expresion: 'amount >= 0',
-            columnas: ['amount'],
-            mensaje: 'La tarifa no puede ser negativa.',
-        );
-
-        DB::statement("ALTER TABLE creator_rates ALTER COLUMN source SET DEFAULT 'self_declared'");
-        DB::statement('ALTER TABLE creator_rates DROP FOREIGN KEY fk_crate_author');
-        DB::statement('ALTER TABLE creator_rates DROP INDEX ix_creator_rates_author');
-
-        Schema::table('creator_rates', function (Blueprint $table): void {
-            $table->dropColumn(['created_by_user_id', 'is_gratis']);
-        });
     }
 };

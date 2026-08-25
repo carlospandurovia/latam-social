@@ -2,10 +2,14 @@
 
 declare(strict_types=1);
 
+use App\Modules\Campaign\Http\Controllers\CampanasController;
 use App\Modules\Client\Http\Controllers\ClientesController;
+use App\Modules\Client\Http\Controllers\ContactosController;
 use App\Modules\Client\Http\Controllers\MarcasController;
+use App\Modules\Client\Http\Controllers\PerfilesFiscalesController;
 use App\Modules\Core\Http\Controllers\BitacoraController;
 use App\Modules\Core\Http\Controllers\CatalogosController;
+use App\Modules\Core\Http\Controllers\EntidadesLegalesController;
 use App\Modules\Core\Http\Controllers\PanelController;
 use App\Modules\Creator\Http\Controllers\ActivacionController;
 use App\Modules\Creator\Http\Controllers\CreadoresController;
@@ -15,6 +19,7 @@ use App\Modules\Creator\Http\Controllers\PerfilFiscalController;
 use App\Modules\Creator\Http\Controllers\RedesSocialesController;
 use App\Modules\Creator\Http\Controllers\SolicitudesController;
 use App\Modules\Identity\Http\Controllers\AccesoController;
+use App\Modules\Identity\Http\Controllers\PasswordController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -39,6 +44,17 @@ Route::middleware('auth')->group(function (): void {
     Route::post('/salir', [AccesoController::class, 'salir'])->name('salir');
 
     Route::get('/panel', PanelController::class)->name('panel');
+
+    // ---- La propia contrasena (T-23) -------------------------------------
+    //
+    // SIN `permiso:`, y es deliberado: si cambiar la propia contrasena
+    // dependiera de un permiso, un usuario al que se le han revocado los
+    // permisos no podria cambiarla — y ese es justo al que mas urge.
+    //
+    // `ExigirCambioDePassword` deja pasar estas dos y `salir`; cualquier otra
+    // ruta redirige aqui mientras `must_change_password` este puesto.
+    Route::get('/contrasena', [PasswordController::class, 'formulario'])->name('contrasena');
+    Route::put('/contrasena', [PasswordController::class, 'cambiar'])->name('contrasena.cambiar');
 
     // Cada ruta de negocio declara el permiso que exige. `RutasProtegidasTest`
     // comprueba que no se cuele ninguna sin declararlo: es fácil añadir una
@@ -144,6 +160,52 @@ Route::middleware('auth')->group(function (): void {
         ->whereUuid('uuid')->whereNumber('id')
         ->name('creadores.fiscal.anular');
 
+    // ---- Entidades legales (iteración 4.5, hoja de ruta 4.5b) ------------
+    //
+    // La pantalla a la que `BR-LE-004` lleva mandando desde 4.1 y el aviso de
+    // perfiles fiscales desde 4.4. Hasta ahora no existia (`Q-51`).
+    //
+    // `legal_entity.manage` es de `admin` y de nadie mas: dar de alta una
+    // sociedad es constituir una empresa en el sistema.
+    Route::get('/entidades', [EntidadesLegalesController::class, 'index'])
+        ->middleware('permiso:legal_entity.manage')
+        ->name('entidades.index');
+
+    Route::get('/entidades/nueva', [EntidadesLegalesController::class, 'create'])
+        ->middleware('permiso:legal_entity.manage')
+        ->name('entidades.create');
+
+    Route::post('/entidades', [EntidadesLegalesController::class, 'store'])
+        ->middleware('permiso:legal_entity.manage')
+        ->name('entidades.store');
+
+    Route::get('/entidades/{uuid}', [EntidadesLegalesController::class, 'show'])
+        ->middleware('permiso:legal_entity.manage')
+        ->whereUuid('uuid')
+        ->name('entidades.show');
+
+    Route::get('/entidades/{uuid}/editar', [EntidadesLegalesController::class, 'edit'])
+        ->middleware('permiso:legal_entity.manage')
+        ->whereUuid('uuid')
+        ->name('entidades.edit');
+
+    Route::put('/entidades/{uuid}', [EntidadesLegalesController::class, 'update'])
+        ->middleware('permiso:legal_entity.manage')
+        ->whereUuid('uuid')
+        ->name('entidades.update');
+
+    Route::post('/entidades/{uuid}/cobertura', [EntidadesLegalesController::class, 'abrirCobertura'])
+        ->middleware('permiso:legal_entity.manage')
+        ->whereUuid('uuid')
+        ->name('entidades.cobertura');
+
+    // Dar de baja CIERRA las coberturas abiertas (`DEC-081`). Sin eso, los
+    // paises que cubria quedan sin cubrir y sin poder cubrirse.
+    Route::post('/entidades/{uuid}/baja', [EntidadesLegalesController::class, 'desactivar'])
+        ->middleware('permiso:legal_entity.manage')
+        ->whereUuid('uuid')
+        ->name('entidades.baja');
+
     // ---- Clientes (iteración 4.1, hoja de ruta 7.0) ----------------------
     //
     // `client.view` para mirar, `client.manage` para tocar. Hasta ahora
@@ -199,6 +261,57 @@ Route::middleware('auth')->group(function (): void {
         ->middleware('permiso:client.manage')
         ->whereUuid('uuid')->whereUuid('marca')
         ->name('marcas.update');
+
+    // ---- Identidad fiscal del cliente (iteración 4.4) --------------------
+    //
+    // Permiso PROPIO, no `client.manage`: de estos campos salen la razon social
+    // y el documento que se imprimen en la factura. El identificador de la ruta
+    // es el id numerico porque `client_tax_profiles` no tiene `uuid`; el
+    // controlador exige ademas que el perfil sea de ESE cliente y que este
+    // vigente, asi que la ruta no sirve para llegar al de otro ni a uno cerrado.
+    Route::get('/clientes/{uuid}/fiscal/nuevo', [PerfilesFiscalesController::class, 'create'])
+        ->middleware('permiso:client.tax.manage')
+        ->whereUuid('uuid')
+        ->name('clientes.fiscal.create');
+
+    Route::post('/clientes/{uuid}/fiscal', [PerfilesFiscalesController::class, 'store'])
+        ->middleware('permiso:client.tax.manage')
+        ->whereUuid('uuid')
+        ->name('clientes.fiscal.store');
+
+    Route::get('/clientes/{uuid}/fiscal/{perfil}/corregir', [PerfilesFiscalesController::class, 'edit'])
+        ->middleware('permiso:client.tax.manage')
+        ->whereUuid('uuid')->whereNumber('perfil')
+        ->name('clientes.fiscal.edit');
+
+    Route::put('/clientes/{uuid}/fiscal/{perfil}', [PerfilesFiscalesController::class, 'update'])
+        ->middleware('permiso:client.tax.manage')
+        ->whereUuid('uuid')->whereNumber('perfil')
+        ->name('clientes.fiscal.update');
+
+    // ---- Contactos del cliente (iteración 4.3) ---------------------------
+    //
+    // `uq_contacts_primary` deja un principal activo por cliente y tipo. El
+    // relevo es automatico (DEC-075) y lo hace `Contactos`, no la ruta.
+    Route::get('/clientes/{uuid}/contactos/nuevo', [ContactosController::class, 'create'])
+        ->middleware('permiso:client.manage')
+        ->whereUuid('uuid')
+        ->name('contactos.create');
+
+    Route::post('/clientes/{uuid}/contactos', [ContactosController::class, 'store'])
+        ->middleware('permiso:client.manage')
+        ->whereUuid('uuid')
+        ->name('contactos.store');
+
+    Route::get('/clientes/{uuid}/contactos/{contacto}/editar', [ContactosController::class, 'edit'])
+        ->middleware('permiso:client.manage')
+        ->whereUuid('uuid')->whereUuid('contacto')
+        ->name('contactos.edit');
+
+    Route::put('/clientes/{uuid}/contactos/{contacto}', [ContactosController::class, 'update'])
+        ->middleware('permiso:client.manage')
+        ->whereUuid('uuid')->whereUuid('contacto')
+        ->name('contactos.update');
 
     // ---- Cuentas sociales (iteración 3.7, BR-CREATOR-003/004/005) --------
     //
@@ -298,4 +411,42 @@ Route::middleware('auth')->group(function (): void {
         ->middleware('permiso:creator.rate.manage')
         ->whereUuid('uuid')->whereNumber('id')
         ->name('creadores.comercial.bloqueo.eliminar');
+    // ---------------------------------------------------------------- Campañas
+    //
+    // `transicionar` es UNA ruta para las ocho transiciones, y su permiso no
+    // está aquí: lo dice `EstadosDeCampana`. Aprobar exige `campaign.approve` y
+    // el resto `campaign.manage`, así que fijar el permiso en la ruta obligaría
+    // a partirla en dos y a acordarse de las dos al añadir un estado. Lo que sí
+    // exige la ruta es poder gestionar campañas; el grafo afina desde ahí.
+    Route::get('/campanas', [CampanasController::class, 'index'])
+        ->middleware('permiso:campaign.view')
+        ->name('campanas.index');
+
+    Route::get('/campanas/nueva', [CampanasController::class, 'create'])
+        ->middleware('permiso:campaign.manage')
+        ->name('campanas.create');
+
+    Route::post('/campanas', [CampanasController::class, 'store'])
+        ->middleware('permiso:campaign.manage')
+        ->name('campanas.store');
+
+    Route::get('/campanas/{uuid}', [CampanasController::class, 'show'])
+        ->middleware('permiso:campaign.view')
+        ->whereUuid('uuid')
+        ->name('campanas.show');
+
+    Route::get('/campanas/{uuid}/editar', [CampanasController::class, 'edit'])
+        ->middleware('permiso:campaign.manage')
+        ->whereUuid('uuid')
+        ->name('campanas.edit');
+
+    Route::put('/campanas/{uuid}', [CampanasController::class, 'update'])
+        ->middleware('permiso:campaign.manage')
+        ->whereUuid('uuid')
+        ->name('campanas.update');
+
+    Route::post('/campanas/{uuid}/estado', [CampanasController::class, 'transicionar'])
+        ->middleware('permiso:campaign.view')
+        ->whereUuid('uuid')
+        ->name('campanas.estado');
 });

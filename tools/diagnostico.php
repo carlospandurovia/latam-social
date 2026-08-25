@@ -1,10 +1,10 @@
 <?php
 
 /*
- * Ejecuta las cuatro puertas de calidad y deja TODA la salida en un archivo.
+ * Ejecuta las puertas de calidad y deja TODA la salida en un archivo.
  *
- *   php tools/diagnostico.php            # las cuatro
- *   php tools/diagnostico.php pruebas    # solo una (formato|analisis|fronteras|pruebas)
+ *   php tools/diagnostico.php            # todas
+ *   php tools/diagnostico.php pruebas    # solo una (formato|analisis|fronteras|pruebas|ci)
  *
  * Por que existe, que no es por comodidad:
  *
@@ -50,6 +50,32 @@ $puertas = [
         // Sin color: los codigos ANSI en un archivo son ruido que estorba al leerlo.
         'cmd' => $php.' artisan test --colors=never',
         'arreglo' => null,
+    ],
+    // `.github/workflows/` es ruta protegida: las herramientas remotas no
+    // escriben ahi. El fichero viaja en `tools/github-workflow-ci.yml` y la
+    // copia se hace desde esta maquina.
+    //
+    // Se comprueba aqui porque un CI desactualizado NO falla: sale verde
+    // comprobando menos cosas, que es la peor forma de fallar. Paso: el CI
+    // estuvo dos dias corriendo una version que no conocia las suites 4.3, 4.4
+    // ni 4.5 ni el gate de nombres, y nadie se entero.
+    // La aritmetica de vigencias. El defecto de `H-16` --cerrar un periodo el
+    // mismo dia en que empieza el siguiente, siendo `valid_to` inclusivo-- ha
+    // aparecido NUEVE veces en este proyecto. `Vigencia` le dio un sitio; esto
+    // impide que vuelva a salir de el.
+    //
+    // Al escribirla quedaban dos copias sueltas y una comparacion de cadenas
+    // sin normalizar, las tres escritas DESPUES de `Vigencia`. Centralizar no
+    // impide descentralizar; buscarlo si.
+    'vigencias' => [
+        'titulo' => 'La aritmetica de vigencias vive en un solo sitio',
+        'cmd' => $php.' tools'.$ds.'verificar-vigencias.php',
+        'arreglo' => null,
+    ],
+    'ci' => [
+        'titulo' => 'El CI del repositorio esta al dia',
+        'cmd' => $php.' tools'.$ds.'sincronizar-ci.php --comprobar',
+        'arreglo' => 'php tools'.$ds.'sincronizar-ci.php   (copia el fichero y ya)',
     ],
 ];
 

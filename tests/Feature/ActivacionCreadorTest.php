@@ -7,7 +7,6 @@ namespace Tests\Feature;
 use App\Models\User;
 use App\Modules\Creator\Services\CompletitudOperativa;
 use App\Shared\Auth\Permisos;
-use Carbon\CarbonImmutable;
 use Database\Seeders\CimientosSeeder;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -16,6 +15,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\DataProvider;
+use Tests\Apoyo\ConFixturas;
 use Tests\TestCase;
 
 /**
@@ -33,6 +33,7 @@ use Tests\TestCase;
  */
 final class ActivacionCreadorTest extends TestCase
 {
+    use ConFixturas;
     use RefreshDatabase;
 
     private int $creadorId;
@@ -59,15 +60,10 @@ final class ActivacionCreadorTest extends TestCase
         $this->revisorId = (int) User::factory()->create()->id;
         $this->capturadorId = (int) User::factory()->create()->id;
 
-        $this->fileId = (int) DB::table('files')->insertGetId([
-            'uuid' => (string) Str::uuid(), 'disk' => 'local', 'path' => 'pruebas/dni.pdf',
-            'original_name' => 'dni.pdf', 'mime_type' => 'application/pdf', 'size_bytes' => 1024,
-            'checksum_sha256' => str_repeat('a', 64), 'visibility' => 'private',
-            'purpose' => 'identity_document', 'created_at' => now(), 'updated_at' => now(),
-        ]);
+        $this->fileId = $this->archivoDeIdentidad();
 
         $this->uuid = (string) Str::uuid();
-        $this->creadorId = $this->crearCreador('1998-05-12');
+        $this->creadorId = $this->creadorPendiente(['uuid' => $this->uuid]);
     }
 
     // --------------------------------------------------------------- utilería
@@ -83,48 +79,6 @@ final class ActivacionCreadorTest extends TestCase
     private function publicarTerminosNuevos(): void
     {
         $this->publicarTerminos('v2-prueba', '2026-07-01');
-    }
-
-    private function crearCreador(string $nacimiento): int
-    {
-        return (int) DB::table('creators')->insertGetId([
-            'uuid' => $this->uuid,
-            'first_name' => 'Ana', 'last_name' => 'Torres', 'display_name' => 'anatorres',
-            'birth_date' => $nacimiento, 'email' => 'ana@ejemplo.test',
-            'country_id' => DB::table('countries')->where('iso2', 'PE')->value('id'),
-            'document_country_code' => 'PE', 'document_type' => 'DNI', 'document_number' => '40000001',
-            'status' => 'pending', 'payment_term_days' => 30, 'preferred_currency_code' => 'PEN',
-            'created_at' => now(), 'updated_at' => now(),
-        ]);
-    }
-
-    private function usuarioCon(string $rol): User
-    {
-        $usuario = User::factory()->create();
-        DB::table('role_user')->insert([
-            'user_id' => $usuario->id,
-            'role_id' => DB::table('roles')->where('code', $rol)->value('id'),
-            'assigned_at' => now(),
-        ]);
-        Permisos::olvidar((int) $usuario->id);
-
-        return $usuario;
-    }
-
-    /**
-     * Un PDF de mentira pero con BYTES DE VERDAD.
-     *
-     * `UploadedFile::fake()->create()` dimensiona el temporal con `ftruncate`,
-     * y en Windows ese archivo se copiaba vacio: `Almacen` acababa guardando
-     * `size_bytes = 0` y `ck_files_size` devolvia un 500. Con contenido escrito
-     * de verdad, la prueba comprueba lo mismo en los dos sistemas.
-     */
-    private static function pdfDePrueba(string $nombre): UploadedFile
-    {
-        return UploadedFile::fake()->createWithContent(
-            $nombre,
-            "%PDF-1.4\n% contenido de prueba\n%%EOF\n",
-        );
     }
 
     /** Deja al creador cumpliendo las seis condiciones. */
@@ -208,36 +162,6 @@ final class ActivacionCreadorTest extends TestCase
             // BR-FIN-006: por defecto, ya fuera del enfriamiento.
             'eligible_from' => $elegibleDesde ?? now()->subHour(), 'is_default' => 1,
             'created_at' => now()->subDay(), 'updated_at' => now(),
-        ]);
-    }
-
-    /**
-     * Publica una versión de los términos, cerrando la anterior **el día antes**.
-     *
-     * Tenía los dos defectos que 3.13 vino a cerrar, y por eso se saltaba la
-     * regla nueva:
-     *
-     * 1. Cerraba la anterior con `effective_to = hoy`, no con la víspera del
-     *    inicio de la nueva. Sexta copia del defecto de `H-16`.
-     * 2. La versión nueva empezaba **siempre** el `2026-01-01`, la misma fecha
-     *    que la anterior, así que dos llamadas producían dos periodos que
-     *    arrancaban el mismo día.
-     *
-     * Ahora la fecha es un parámetro y el cierre se deriva de ella, que es lo
-     * que hace `PublicarTerminosCommand` de verdad.
-     */
-    private function publicarTerminos(string $version = '2026.1', string $desde = '2026-01-01'): int
-    {
-        DB::table('terms_versions')
-            ->where('code', 'creator_terms')
-            ->whereNull('effective_to')
-            ->update(['effective_to' => CarbonImmutable::parse($desde)->subDay()->toDateString()]);
-
-        return (int) DB::table('terms_versions')->insertGetId([
-            'uuid' => (string) Str::uuid(), 'audience' => 'creator', 'code' => 'creator_terms',
-            'version' => $version, 'title' => 'Términos del creador '.$version,
-            'body' => 'Texto de prueba.', 'content_sha256' => hash('sha256', 'Texto de prueba.'.$version),
-            'effective_from' => $desde, 'created_at' => now(), 'updated_at' => now(),
         ]);
     }
 

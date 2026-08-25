@@ -937,6 +937,352 @@ que entender la diferencia hasta que le hace falta.
 **Consecuencia.** Un cliente nunca está sin marcas, así que `campaigns`
 —que tiene `client_brand_id NOT NULL`— siempre tiene a dónde apuntar.
 
+### DEC-075 — El relevo del contacto principal se hace, no se rechaza
+
+**Contexto.** `uq_contacts_primary` deja **un contacto principal activo por
+cliente y por tipo**. Marcar a un segundo choca en la base con
+`Duplicate entry '1-1-commercial' for key 'uq_contacts_primary'`, y hay tres
+caminos que llevan ahí sin querer: subir a un suplente, reactivar a quien
+conservaba `is_primary = 1`, y mover a alguien a un tipo cuyo puesto está
+ocupado. Los tres están comprobados contra el motor en `4.3-contactos.sh`.
+
+**Decisión.** La aplicación **releva**: baja al que ocupa el puesto y sube al
+nuevo, en una transacción, **en ese orden**, y nombra al relevado en el mensaje
+de éxito. El formulario avisa antes, con nombre y apellidos, de a quién se
+desplazaría.
+
+**Por qué.** La alternativa era negarse —*«quítaselo primero al otro»*—, y
+obliga a una maniobra de dos pasos en la que, entre paso y paso, **el cliente se
+queda sin contacto principal de ese tipo**. Una regla que exige pasar por un
+estado peor que el de partida está mal puesta.
+
+**Por qué en ese orden.** No es estilo: al revés choca. Subir antes de bajar deja
+dos filas con `primary_gate = 1` a la vez, aunque sea dentro de la misma
+transacción. Hay una aserción dedicada a fijarlo.
+
+**Consecuencia.** El relevo es un cambio real hecho por un efecto lateral, así
+que **se anuncia siempre**. Un desplazamiento silencioso es un cambio que nadie
+va a deshacer porque nadie se enteró. Si más adelante se decide que el relevo
+deba confirmarse en dos pasos, el sitio es `ContactosController`, no el esquema.
+
+### DEC-076 — La lista de suites de restricción vive en un solo archivo
+
+**Contexto.** La lista estaba escrita a mano en **cuatro** sitios:
+`tools/pruebas/correr-todo.sh` y los tres bloques de motor del CI (CHECK nativo,
+disparadores, Percona 5.7). Al registrar la suite de 4.3 se descubrió que
+`3.10-periodos`, `3.11-anulacion` y `3.12-no-borrar` se habían añadido **solo al
+bloque de Percona**: durante tres iteraciones corrieron en un motor de los tres
+y el CI salía verde.
+
+**Decisión.** La lista vive en `tools/pruebas/SUITES`, una suite por línea.
+`correr-todo.sh` y los tres bloques del CI la leen. Añadir una suite es añadir
+una línea.
+
+**Por qué.** El fallo no fue un despiste: fue que había cuatro sitios donde
+despistarse y ninguno que se quejara. **Un CI no puede echar de menos una prueba
+que nadie le nombró**, y esa es justo la clase de agujero que no se nota porque
+todo está verde.
+
+**Consecuencia.** El total de aserciones subió de 654 a 696 sin escribir una
+sola prueba nueva de más: son las 21 de 4.3 por dos motores. Las tres suites
+recuperadas ya pasaban; lo que faltaba era ejecutarlas.
+
+### DEC-077 — Un contacto no cambia de cliente
+
+**Contexto.** `contacts.client_organization_id` es editable en la base. El
+formulario podría ofrecerlo.
+
+**Decisión.** No lo ofrece. El cliente sale de la ruta y en la edición no se
+toca. Si la persona cambió de empresa, es un contacto nuevo en el cliente nuevo
+y el anterior pasa a `inactive`.
+
+**Por qué.** Mover la fila reescribe el histórico: deja de ser verdad que en su
+día se habló con esa persona en aquella empresa. Y el contacto puede estar
+referenciado desde una campaña o una factura de la etapa en que sí lo era.
+
+**Consecuencia.** Duplicidad aparente de personas entre clientes. Es correcta:
+lo que se guarda no es la persona, es **el contacto con esa empresa**.
+
+
+### DEC-078 — El histórico fiscal del cliente está congelado
+
+**Contexto.** `client_tax_profiles` guarda la identidad fiscal del cliente por
+país y con vigencia. Un periodo cerrado es el registro de quién era el cliente
+entre esas fechas, y es de donde se explica una factura pasada. Desde `3.12` la
+tabla no admite `DELETE`, pero sí admitía `UPDATE`.
+
+**Decisión (negocio, 2026-08-25).** Sólo se corrige el periodo **vigente**. Los
+cerrados no tienen pantalla: la ruta devuelve 404, no un formulario
+deshabilitado. Un cambio de identidad se hace abriendo un periodo nuevo, que
+cierra el anterior el día antes.
+
+**Por qué.** Si la fila no se puede borrar, poder reescribirla sin dejar rastro
+es la misma pérdida por otra puerta. Y el caso legítimo —el cliente cambió de
+razón social— no necesita reescritura: necesita un periodo.
+
+**Por qué esto es seguro.** `invoices` guarda
+`receiver_legal_name_snapshot`, `receiver_tax_id_snapshot` y
+`receiver_address_snapshot`: una corrección de hoy **no reescribe una factura de
+ayer**. Sin esos snapshots, corregir incluso el vigente sería peligroso.
+
+**Consecuencia.** Un RUC tecleado mal que no se detecta hasta después de cerrar
+el periodo no tiene hoy forma de arreglarse por pantalla. Es deliberado y está
+anotado como `Q-54`: si se decide permitirlo, será como la anulación de perfiles
+fiscales de creador (`3.11`) —permiso propio y motivo escrito—, no editando.
+
+### DEC-079 — La identidad fiscal del cliente tiene permiso propio, en dos roles
+
+**Contexto.** Hasta ahora todo lo del cliente estaba detrás de `client.manage`.
+De la identidad fiscal salen la razón social y el documento que se **imprimen en
+una factura**.
+
+**Decisión (negocio, 2026-08-25).** Permiso nuevo `client.tax.manage`, asignado
+a **`finance` y a `campaign_manager`**.
+
+**Por qué un permiso propio.** Permite que alguien edite la ficha comercial del
+cliente sin poder tocar lo que va en un documento legal.
+
+**Por qué NO sigue la simetría de `creator.tax.manage`.** Ese vive sólo en
+`finance` porque el documento de un creador es dato **personal** sensible, y
+`DEC-053` decidió expresamente no abrírselo a campañas. El de una empresa es
+**público**: en Perú cualquiera consulta un RUC en SUNAT. Aquí el riesgo no es
+fuga, es **error**, y quien habla con el cliente —campañas— es quien tiene el
+dato. Copiar la simetría habría obligado a un traspaso entre dos roles para cada
+alta, sin proteger nada.
+
+**Consecuencia.** `finance` gana `client.tax.manage` sin ganar `client.manage`:
+puede corregir la identidad con la que emite, no reorganizar la ficha comercial.
+
+
+### DEC-080 — Un gate que comprueba que los nombres entre capas existen
+
+**Contexto.** En el contenedor donde se escribe este código **no se puede correr
+PHPUnit**: packagist está bloqueado, Composer no puede instalar y no hay
+`vendor/`. Es la razón estructural por la que varias iteraciones se entregaron en
+rojo. Las suites SQL cubren el esquema y `verificar-fixturas.py` cubre los
+`INSERT` de las pruebas; la capa de en medio no la cubría nadie, y es justo donde
+se rompen las pruebas de característica.
+
+**Decisión.** `tools/verificar-pantallas.py`, en `correr-todo.sh` y en el CI.
+Contrasta siete cosas que la aplicación **nombra** contra lo que **tiene**:
+nombres de ruta, plantillas, permisos, roles de prueba, métodos de controlador,
+claves leídas de `validated()` y variables que una plantilla usa sin que su
+controlador se las pase.
+
+**Por qué esos siete.** Todos son errores de **una letra** que dejan una suite
+entera en rojo con un mensaje que no señala la causa —`RouteNotFoundException`,
+un 403 en todas las pruebas de una pantalla, un «Undefined array key» que sale
+como un 500—, y todos se ven leyendo archivos, sin Laravel y sin base de datos.
+
+**No sustituye a PHPUnit.** No comprueba lógica, ni redirecciones, ni permisos
+efectivos. Reduce la superficie de lo que sólo se sabe al ejecutar.
+
+**Cómo se comprobó que sirve.** Rompiendo a propósito cada una de las siete
+cosas, sobre una copia en `/tmp`, y exigiendo que el gate lo denunciara. Un gate
+que dice «todo bien» sin que nadie haya comprobado que sabe decir «todo mal» no
+prueba nada. Las siete se pillan.
+
+**Dos falsos positivos que tuvo antes de servir**, y que valen como advertencia:
+`->route('uuid')` no es el ayudante `route()` sino el accesor del parámetro, y
+acusaba a cuatro sitios sanos; y `GuardarPerfilFiscalRequest` existe **dos
+veces** —en `Modules/Creator` y en `Modules/Client`—, así que un índice por
+nombre corto hacía que el gate leyera las reglas de la clase equivocada y acusara
+al controlador de cliente de ocho claves que sí declara. Ahora resuelve por los
+`use` del archivo que nombra, y **si el nombre es ambiguo se calla**: adivinar
+entre dos clases homónimas es como se fabrica una acusación falsa.
+
+
+### DEC-081 — Dar de baja una sociedad cierra sus coberturas abiertas
+
+**Contexto.** `uq_lec_country` es `(current_gate, country_id)`: una sola
+cobertura **abierta** por país, mire o no el estado de la sociedad. Pero quien
+resuelve quién factura sólo cuenta las sociedades `active`. Las dos cosas juntas
+dejan un país **incomunicado**: se desactiva la sociedad que lo cubre sin cerrar
+su cobertura, ninguna activa lo cubre —`BR-LE-004` bloquea toda operación— y
+ninguna otra puede empezar, porque la fila abierta de la inactiva sigue ocupando
+el sitio. Comprobado contra el motor.
+
+**Decisión (negocio, 2026-08-25).** La baja pide la fecha efectiva, **cierra las
+coberturas abiertas en esa fecha dentro de la misma transacción**, y el mensaje
+dice qué países quedan descubiertos y **desde cuándo** —el día siguiente al
+último cubierto, no el último cubierto—.
+
+**Por qué no bloquear la baja hasta que haya relevo.** Se consideró. Garantizaría
+que ningún país quede descubierto, pero obliga a un orden que la realidad no
+siempre permite: una sociedad puede cesar antes de que la sucesora esté
+constituida. Y un sistema que impide registrar lo que ya pasó empuja a
+registrarlo mal.
+
+**Consecuencia.** Un país puede quedar temporalmente descubierto, y eso **se
+dice en el momento**, no el día de facturar. `BR-LE-004` prohíbe continuar en
+silencio, y enterarse tarde es esa clase de silencio.
+
+**Dos casos que la pantalla tampoco deja pasar**, por la misma razón: una
+sociedad inactiva no puede declarar cobertura —fabricaría el bloqueo a mano—, y
+no se da de baja si deja una cobertura que empieza *después* de la fecha de baja,
+porque esa no se puede cerrar (`ck_lec_dates`) ni borrar (es evidencia).
+
+### DEC-082 — Las sociedades del grupo las gestiona sólo `admin`
+
+**Contexto.** Hasta 4.5 no había pantalla: la cobertura se declaraba con el
+seeder o SQL a mano (`Q-51`).
+
+**Decisión (negocio, 2026-08-25).** Permiso nuevo `legal_entity.manage`, **sólo
+en `admin`**.
+
+**Por qué.** Dar de alta una sociedad es constituir una empresa dentro del
+sistema: de ella salen la numeración de comprobantes (`BR-LE-007`), el emisor
+congelado en cada factura (`BR-LE-005`) y las cuentas de cobro (`BR-LE-006`). Se
+toca dos o tres veces al año. `finance` emite **desde** estas sociedades; no
+necesita crearlas.
+
+**Consecuencia.** Si finanzas descubre un país sin cubrir, depende de un admin
+para desbloquearlo. Es el coste aceptado: el listado enseña los países
+descubiertos en la portada de la pantalla precisamente para que se vea antes de
+que bloquee una factura.
+
+
+### DEC-083 — «Cuenta compartida» se calcula al leer, no se guarda
+
+**Contexto.** `tg_cpm_compartida` es `BEFORE INSERT` y sólo puede escribir `NEW`.
+Cuando el creador 2 da de alta la cuenta del creador 1, la fila del 2 queda
+`pending_review` y **la del 1 sigue diciendo `unique`**: el operador que abre la
+pantalla del creador 1 —el que probablemente cobre primero— ve «única» mientras
+la cuenta está duplicada (`T-19`).
+
+**Lo obvio no se puede.** Un `AFTER INSERT` que marcase también la fila anterior
+choca contra el motor:
+
+> `ERROR 1442: Can't update table 'creator_payment_methods' in stored
+> function/trigger because it is already used by statement which invoked this
+> stored function/trigger.`
+
+Comprobado. Un disparador no puede tocar su propia tabla.
+
+**Decisión (negocio, 2026-08-25).** El hecho **no se guarda dos veces**.
+«Compartida» es una propiedad del conjunto de filas con la misma huella, no de
+una fila: se pregunta al leer (`Creator\Services\CuentasCompartidas`) y entonces
+todas las filas implicadas dicen lo mismo por construcción.
+
+`shared_account_status` deja de ser la DETECCIÓN y pasa a ser el resultado de la
+REVISIÓN: `cleared` significa «una persona miró esto y dijo que está bien», que
+sí es un hecho de la fila y sí hay que conservar.
+
+**Por qué no marcarlo desde la aplicación.** Funcionaría, y dejaría la regla
+fuera de la base: cualquier importación u orden de consola se la saltaría. Este
+proyecto pone las reglas en el esquema a propósito, y cuando el esquema no puede,
+la respuesta es no duplicar el dato — no moverlo a un sitio más débil.
+
+**Consecuencia.** `T-20` desaparece: si el estado no se guarda, el comando que
+recalcula huellas tras rotar `APP_KEY` no puede dejarlo desfasado. Y
+`revisarCompartida()` ya funciona desde la pantalla de **cualquiera** de los dos
+creadores, no sólo del segundo.
+
+### DEC-084 — «Perfil fiscal vigente» exige que ya haya empezado
+
+**Contexto.** «Vigente» se definía como `status = 'approved' AND valid_to IS NULL`,
+sin mirar `valid_from`, y nada acotaba la fecha en el formulario. Un perfil
+aprobado hoy con `valid_from = 2027-01-01` se declaraba vigente **y era el que
+decidía la retención que se mostraba**: la pantalla decía «NRUS, no aplica
+retención» cuando ese día aplicaba RER al 8 %. La activación congela esa frase en
+la bitácora como evidencia.
+
+**Decisión (negocio, 2026-08-25).** «Vigente» exige además
+`valid_from <= CURDATE()`. El perfil futuro se ve como «aprobado, rige desde el
+…» y el que decide hoy sigue siendo el anterior.
+
+**Por qué no prohibir las fechas futuras.** Se consideró, y es más simple. Pero
+un cambio de régimen ante SUNAT tiene fecha conocida de antemano, y prohibirlo
+obliga a acordarse de entrar ese día exacto. `BR-CREATOR-013` habla de la
+retención que se **practica**, y esa es la de la fecha de la operación, no la del
+último papel firmado: el modelo ya sabe expresar eso, lo que faltaba era leerlo.
+
+
+### DEC-085 — La bitácora la protegen dos usuarios de base de datos, no el esquema
+
+**Contexto.** `audit_logs` rechaza `UPDATE` y `DELETE` con dos disparadores.
+`TRUNCATE TABLE audit_logs` **no dispara triggers** y deja la tabla a cero. No es
+un descuido del esquema: no hay forma de escribir un disparador que lo pare,
+porque `TRUNCATE` es una operación de **esquema**, no de datos.
+
+Lo único que lo detiene es no tener el privilegio `DROP`, que es el que
+`TRUNCATE` exige. Comprobado en los dos motores:
+
+| | usuario sin `DROP` |
+|---|---|
+| `UPDATE` | `1644` — lo para el disparador |
+| `DELETE` | `1644` — lo para el disparador |
+| `TRUNCATE` | `1142 DROP command denied` |
+
+**Decisión.** Dos usuarios: `latam_app` con
+`SELECT, INSERT, UPDATE, DELETE, EXECUTE`, y `latam_mig` con `ALL PRIVILEGES`.
+Las migraciones se corren sobrescribiendo las credenciales:
+`DB_USERNAME=latam_mig php artisan migrate`.
+
+**Por qué NO una segunda conexión en `config/database.php`.** Es lo que el
+`.env.example` prometía con `DB_MIGRATION_USERNAME`, y habría sido peor: las
+migraciones de este proyecto generan DDL con `DB::statement()` (`Restriccion`,
+`Periodo`), y `DB::statement()` va **siempre** por la conexión por defecto aunque
+la migración declare otra. La mitad del DDL habría ido por un usuario y la otra
+mitad por el otro.
+
+**Y se comprueba, no se promete.** `php artisan seguridad:privilegios` lee los
+privilegios reales del usuario conectado. No intenta el `TRUNCATE` para ver si
+falla: `TRUNCATE` hace *commit implícito*, así que la comprobación habría vaciado
+la bitácora para demostrar que se puede vaciar.
+
+**Lo que había antes era una promesa incumplida.** El docblock de la migración de
+trazabilidad afirmaba que el usuario de aplicación no tenía `UPDATE` ni `DELETE`
+—falso: eso lo hacen los disparadores, con cualquier usuario— y remitía a
+`DB_MIGRATION_USERNAME`, una variable que **no leía ninguna configuración**. Una
+promesa escrita y no cumplida es peor que no prometer nada, porque nadie va a
+comprobarla.
+
+
+### DEC-086 — La contraseña temporal deja de ser válida en el primer acceso
+
+**Contexto.** `usuarios:crear` escribía `must_change_password = 1` desde la
+primera iteración de identidad, y **nadie lo leía nunca**: única aparición de la
+columna en todo el árbol, aparte de la migración. No había middleware que la
+comprobara ni pantalla donde cambiar la contraseña (`T-23`).
+
+O sea: el administrador que da de alta a la persona de finanzas teclea su
+contraseña, se la dice, y esa contraseña sigue siendo válida indefinidamente.
+
+**Por qué no es sólo higiene.** La base **exige dos personas distintas** para lo
+que toca dinero: `ck_ctp_segregation` al aprobar un perfil fiscal,
+`ck_cpm_segregation` al verificar un medio de pago (`DEC-044`, `BR-FIN-005`). Esa
+garantía se apoya entera en que dos `user_id` distintos sean dos personas
+distintas. Si un tercero conoce la credencial de la segunda, la separación es una
+columna en una tabla y nada más.
+
+**Decisión.** Middleware en el grupo `web` —no ruta a ruta: una obligación que
+hay que acordarse de poner en cada pantalla nueva se salta la primera que alguien
+olvide— con tres excepciones: la pantalla de cambio, su acción, y `salir`. Sin
+esas tres es un bucle de redirecciones, que es la forma más rápida de dejar a
+alguien fuera de su propia cuenta.
+
+**Tres reglas que hacen que sirva de algo:**
+
+1. **La nueva tiene que ser distinta.** Sin esto, teclear la temporal dos veces
+   limpia la marca y deja válida la contraseña que conoce el administrador:
+   cumplido en la base de datos y sin cumplir en la realidad.
+2. **Se pide la contraseña actual**, aunque el cambio sea obligatorio. «Entró con
+   ella» y «sigue delante» no son lo mismo: una sesión abierta y desatendida
+   bastaría para dejar fuera al dueño de la cuenta.
+3. **Sin permiso.** Si cambiar la propia contraseña dependiera de un permiso, un
+   usuario al que se le han revocado no podría cambiarla — y es al que más urge.
+   Entra en `RutasProtegidasTest::SIN_PERMISO` con ese motivo escrito.
+
+**Y la comprobación contra filtraciones es configurable, a propósito.**
+`Password::uncompromised()` es una llamada HTTP saliente que **falla en abierto**:
+sin salida a internet, Laravel da la contraseña por buena. Un servidor endurecido
+sería justo donde la comprobación no comprueba, y sin decirlo. Así que la defensa
+son los 12 caracteres y la mezcla; esto es un extra que quien despliega enciende
+o apaga sabiendo lo que hace. En pruebas va apagado: una prueba no debe depender
+de la red.
+
+
 ## Decisiones pendientes de información del negocio
 
 | # | Pregunta | Bloquea |
@@ -982,14 +1328,40 @@ que entender la diferencia hasta que le hace falta.
 | ~~Q-45~~ | ✅ **RESUELTA (2026-08-22):** opción **B** — sin datos fiscales no hay alta, pero se acompaña al creador a formalizarse. Ver `DEC-049`. El pago a un tercero **no se implementa**; el análisis queda en `docs/fase-2/2.14-PAGO-A-TERCEROS.md` | — |
 | **Q-46** | ⚠️ **§56 — nuevo, abierto por `DEC-059`.** Cuando se publique una **versión nueva de los términos**, ¿qué pasa con los creadores **ya activos**? Hoy el sistema **no los desactiva**: siguen activos con la aceptación de la versión anterior. Las opciones son (a) dejarlo así y pedir la nueva aceptación solo la próxima vez que hagan algo relevante, (b) bloquear invitaciones hasta que re-acepten, (c) suspenderlos. Tiene consecuencias legales y operativas, y **no lo decido yo** | Antes de publicar la segunda versión de los términos |
 | **Q-47** | ⚠️ **Abierto por la iteración 3.6.** `BR-CREATOR-014` fija un **periodo de gracia de 30 días** antes de rechazar a un creador por falta de datos fiscales, y dice «configurable». ¿Configurable **globalmente** (una constante de despliegue) o **por creador**, como `payment_term_days`? No lo invento: son dos modelos de datos distintos. Hasta que se responda, el periodo de gracia no está implementado | Iteración de rechazo de creadores |
-| **T-12** | 📋 **`creator_tax_profiles` cierra el perfil anterior con `valid_to = valid_from` del nuevo**, o sea que se solapan un día. `uq_ctp_current` garantiza un solo perfil *vigente*, pero el histórico fiscal tiene el mismo defecto que `H-16` cerró en tarifas: «qué régimen aplicaba el 1 de mayo» puede tener dos respuestas. En un historial fiscal eso se paga en una declaración. Encontrado al escribir 3.9; merece iteración propia, no colarlo aquí | Antes de la primera declaración con dos regímenes |
-| **T-16** | ✅ *(hecho en 3.12)* **`creator_tax_profiles` se puede borrar con un `DELETE`.** Lo llevan `payouts`, `invoices`, `ledger_entries`, `creator_payment_methods` y cinco tablas más, pero ésta no. Anular (`3.11`) existe justamente para no destruir el histórico —guarda quién, cuándo y por qué—, y todo eso se va con un `DELETE`. Salió al escribir la suite de 3.11: la aserción que iba a escribir habría dicho «el DELETE funciona», o sea habría fijado el hueco como si fuera lo correcto, que es el mismo error que `PerfilFiscalTest` cometió con `T-12`. Hace falta `tg_ctp_no_delete` y revisar si alguna otra tabla de histórico está igual | Antes de la primera declaración que se apoye en este histórico |
-| **Q-51** | ❓ **No hay pantalla de entidades legales.** El mensaje de `BR-LE-004` le dice al operador que declare la cobertura «en Entidades legales», y ese sitio **no existe**: hoy la única forma es el seeder o SQL a mano. Un mensaje accionable que manda a una pantalla inexistente es solo la mitad de accionable. Hace falta CRUD de sociedades y de su cobertura por país con vigencia — es la iteración `4.5b` de la hoja de ruta | Justo después de 4.2 |
+| ~~T-12~~ | ✅ **RESUELTA (2026-08-24), y el registro se entero el 2026-08-25.** Las dos mitades estaban hechas desde hacia un dia: la migracion `no_overlapping_tax_periods` --que ocupa periodo con `approved` **y** `superseded`, porque filtrando solo `approved` no habria cazado el defecto que venia a arreglar-- y el cierre el dia antes en `PerfilFiscalController`. Esta entrada se quedo en 📋 y asi siguio un mes. Al ir a abrirla se descubrio que ademas ese sitio restaba el dia **a mano** en vez de por `Vigencia`: era la octava copia. De ahi sale 4.7 | — |
+| ~~T-16~~ | ✅ *(hecho en 3.12)* **`creator_tax_profiles` se puede borrar con un `DELETE`.** Lo llevan `payouts`, `invoices`, `ledger_entries`, `creator_payment_methods` y cinco tablas más, pero ésta no. Anular (`3.11`) existe justamente para no destruir el histórico —guarda quién, cuándo y por qué—, y todo eso se va con un `DELETE`. Salió al escribir la suite de 3.11: la aserción que iba a escribir habría dicho «el DELETE funciona», o sea habría fijado el hueco como si fuera lo correcto, que es el mismo error que `PerfilFiscalTest` cometió con `T-12`. Hace falta `tg_ctp_no_delete` y revisar si alguna otra tabla de histórico está igual | Antes de la primera declaración que se apoye en este histórico |
+| **Q-54** | ❓ **¿Se puede corregir un periodo fiscal ya CERRADO?** `DEC-078` dice que no: sólo se corrige el vigente. Cubre el caso normal —el cliente cambió de razón social, y eso es un periodo nuevo, no una reescritura— pero deja fuera el RUC tecleado mal que no se detecta hasta meses después, cuando el periodo ya se cerró. Hoy eso se arregla en base de datos. Si se decide permitirlo por pantalla, la forma es la de la anulación de perfiles fiscales de creador (`3.11`): permiso propio, motivo escrito y rastro de quién. Lo que no puede ser es un `UPDATE` normal | Primera correccion real de un histórico |
+| **Q-55** | ❓ **¿Se valida el formato del documento fiscal por país?** Hoy **no**: `tax_id_number` acepta cualquier cosa de hasta 40 caracteres y la pantalla avisa de que no se comprueba. Escribir una tabla de expresiones regulares (11 dígitos para un RUC peruano, dígito verificador del NIT colombiano…) es fácil y es una trampa: en cuanto una esté mal o falte un país, el sistema rechaza un documento válido y **no hay forma de meterlo**, que es peor que aceptar uno malo —eso se detecta al facturar—. Si se hace, tiene que ser dato de catálogo por país y editable, no código | Alta de clientes en el segundo país |
+| ~~T-18~~ | ✅ **RESUELTA (2026-08-25).** `DEC-085`: dos usuarios de base de datos, `.env.example` con las concesiones exactas, y `php artisan seguridad:privilegios` que lo comprueba en vez de prometerlo. La suite `3.12` fija las dos mitades con usuarios reales, incluida la incomoda: **con `DROP` la bitacora si se vacia**. Falta ejecutar los `GRANT` en el servidor de produccion | Al desplegar |
+| ~~T-19~~ | ✅ **RESUELTA (2026-08-25).** Se calcula al leer (`DEC-083`). Un disparador no puede actualizar su propia tabla (`1442`, comprobado), asi que el estado dejo de guardarse: `CuentasCompartidas` resuelve la pregunta y las dos filas dicen lo mismo por construccion | — |
+| ~~T-20~~ | ✅ **CERRADA DEL TODO (2026-08-25, iteracion 4.10).** La primera mitad la resolvio `DEC-083`. El resto era el `1062` del recalculo cuando dos filas del MISMO creador convergen: con la clave rotada, dos medios de la misma cuenta llevan huellas distintas, `uq_cpm_open_account` no los ve y **los dos entran**; al recalcular convergen y la transaccion se cae con un `Duplicate entry` en crudo, dejando el recalculo sin hacer. Y este choque **no se absorbe**: reintentar da la misma huella y choca igual. Es el lado opuesto de `DEC-087` --el valor no lo eligio el sistema, lo eligio la realidad-- y la respuesta es contar, no recalcular: dos medios abiertos del mismo creador que son la misma cuenta, y cual sobrevive depende de cual esta verificado y si tiene pagos detras. Ahora se ve en la revision, antes de escribir nada, comparando el estado DESPUES del recalculo --mirar solo las pendientes entre si dejaria pasar el caso mas probable, una fila vieja y una nueva-- y solo sobre las filas ABIERTAS. El `1062` que sobreviva a la carrera se traduce con `Choque::esDe`. Ver `docs/fase-4/4.10-CONVERGENCIA-DE-HUELLAS.md` | — |
+| ~~T-21~~ | ✅ **RESUELTA (2026-08-25).** «Vigente» exige `valid_from <= CURDATE()` (`DEC-084`), y el mensaje de aprobacion distingue «aprobado y vigente» de «aprobado, todavia NO rige» | — |
+| ~~T-22~~ | ✅ **RESUELTA (2026-08-25).** La guarda de solicitudes deja de filtrar por estado —las unicas se apoyan en `identity_gate`, que no lo mira— y el mensaje distingue un duplicado administrativo de una persona en lista negra. La de redes sociales comprueba ademas las cuentas propias, que era el caso frecuente | — |
+| ~~T-23~~ | ✅ **RESUELTA (2026-08-25).** `DEC-086`: middleware en el grupo `web`, pantalla de cambio, y tres reglas que hacen que sirva —la nueva distinta de la actual, se pide la actual, y sin permiso—. La marca que se escribia desde 3.1 por fin significa algo | — |
+| ~~T-24~~ | ✅ **RESUELTA (2026-08-25).** `max(1, ...)` en el config. Un comentario que dice «esto no puede pasar» y no lo impide es una nota, no una regla | — |
+| ~~T-25~~ | ✅ **RESUELTA (2026-08-25). La suite de PHPUnit se ejecuto por primera vez.** 228 pruebas, 695 aserciones. Seis iteraciones (4.1–4.5 y los ~23 arreglos de las revisiones) solo se habian comprobado con suites SQL y puertas estaticas. Unico fallo real: `tests/Feature/ExampleTest.php`, la prueba de ejemplo de Laravel que afirma que `/` devuelve 200 cuando `Route::redirect('/', '/panel')` devuelve 302. Llevaba roja desde 1.1 y nadie lo sabia porque **nada la ejecutaba**: la puerta `pruebas` existe, pero el CI se instalo este mismo dia. `RutasTest` dice en su propio docblock que la *sustituye* — se escribio el reemplazo y no se borro el original. Se borra | — |
+| ~~T-26~~ | ✅ **RESUELTA (2026-08-25). Verificado el verificador.** Que 228 pruebas nunca ejecutadas salgan verdes a la primera es sospechoso, asi que se comprobo con tres mutaciones. Dos se detectaron por la prueba que dice detectarlas (`Vigencia::puedeRelevar()` sin normalizar fechas → `VigenciaTest`; `different:actual` fuera → `CambioPasswordTest`). **La tercera sobrevivio:** devolver el `where('le.status','active')` a `Cobertura::abiertaEnPais()` dejaba las quince pruebas de 4.5 en verde. La suite SQL si lo veia —el disparador de no-solapamiento rechaza el `INSERT`— pero ninguna prueba comprobaba que la capa PHP lo evita ANTES, o sea que el operador recibiria un `45000` en crudo. Se anadio la prueba 16, que con la mutacion se pone roja | — |
+| **DEC-087** | ✅ **Un `1062` se absorbe o se cuenta segun quien eligio el valor, y hay que NOMBRAR el indice para absorberlo.** Si el valor lo calculo el sistema —el slug de una marca— el choque se recalcula y se reintenta en silencio. Si lo escribio la persona —un RUC, el nombre de una marca— tiene que llegar arriba con palabras. `App\Shared\Database\Choque` obliga a elegir: `reintentar()` exige el nombre del indice y vuelve a lanzar cualquier otro a la primera, porque un `catch (QueryException)` a secas absorberia el RUC repetido igual que el slug. Tres intentos como tope: un bucle sin tope convierte un indice mal entendido en una peticion eterna. El nombre se lee cortando por el ultimo punto —MySQL 8 antepone la tabla y Percona 5.7 no—, comprobado contra los dos motores | 4.6 |
+| **DEC-088** | ✅ **La aritmetica de vigencias vive en `Vigencia`, y una puerta lo comprueba.** El error de un dia --cerrar un periodo el mismo dia en que empieza el siguiente, siendo `valid_to` inclusivo-- ha aparecido NUEVE veces. `Vigencia` (4.5) le dio un sitio; `tools/verificar-vigencias.php` impide que vuelva a salir de el. Dos reglas: ninguna aritmetica de dias fuera de `Vigencia`, y ninguna comparacion de una columna de vigencia contra algo sin normalizar. Escrita en PHP con `token_get_all()` y no en Python con expresiones regulares, porque los comentarios de este proyecto **nombran** el defecto y las migraciones llevan SQL con `>=` dentro: una regex se acusaria a si misma. Al estrenarla quedaban tres sitios sueltos, los tres escritos DESPUES de `Vigencia`, y uno era un fallo real --`--desde=2026-2-1` contra `effective_from` como cadenas, dejando dos textos legales vigentes el mismo dia--. Ver `docs/fase-4/4.7-PUERTA-VIGENCIAS.md` | 4.7 |
+| **DEC-089** | ✅ **La sociedad que factura una campana se resuelve a `starts_on`.** `BR-LE-003` dice «en la fecha de la operacion»; para una campana esa fecha es cuando empieza a prestarse el servicio, que es lo que un contador defiende ante SUNAT. Consecuencia: una campana creada en diciembre para arrancar en febrero usa la cobertura de FEBRERO, asi que si la cobertura cambia el 1 de enero la campana nace ya con la sociedad correcta en vez de con una que habria que corregir --y corregirla es justo lo que `DEC-090` impide-- | 7.1 |
+| **DEC-090** | ✅ **Se congela al confirmar, no al salir de borrador.** `BR-LE-002` dice «inmutable una vez emitido» y para una campana «emitido» es ambiguo. Mientras es `draft` o `pending_approval` se corrige un dedazo; con `confirmed_at` puesto, no se toca. Lo impone `tg_camp_entidad_congelada` y no el controlador: de este dato depende que una factura de dentro de dos anos siga sabiendo quien la emitio, asi que tiene que sobrevivir a un `UPDATE` de mantenimiento. La alternativa --congelar al salir de borrador-- llenaria el historico de campanas `cancelled` que no se cancelaron por negocio, y un estado que miente sobre por que existe es peor que un campo editable un rato mas | 7.1 |
+| **DEC-091** | ✅ **Aprobar una campana es de finanzas, no de quien la monta.** Aprobar fija el ingreso comprometido y congela la sociedad emisora: es una decision de dinero, y la misma separacion que `DEC-044` impone en la base para perfiles fiscales y medios de pago. Permiso nuevo `campaign.approve`, y vive en el GRAFO de transiciones, no en la ruta: una ruta con permiso fijo obligaria a partir la accion en dos y a acordarse de las dos al anadir un estado | 7.1 |
+| ~~7.1~~ | ✅ **CERRADA (2026-08-25).** `campaigns` existia desde la Fase 2 **sin `billing_legal_entity_id`**, y `BR-LE-001` es 🔴 y nombra la campana explicitamente. Sin esa columna, «quien facturo esta campana de 2026» se respondia mirando la cobertura de HOY: una respuesta plausible y falsa. Al construirla salieron tres cosas mas: la semilla de las suites creaba una campana imposible, **el esquema de referencia no tenia NINGUNA cobertura sembrada** --asi que ninguna campana podia existir fuera de borrador-- y tres fixtures a mano quedaron obsoletos, que es el sintoma literal de `T-13`. 284 pruebas, 846/836 aserciones de restriccion. Ver `docs/fase-7/7.1-CAMPANA.md` | — |
+| ~~T-28~~ | ✅ **RESUELTA (2026-08-25). El paso `verificar-pantallas.py` del CI estaba roto desde que se instalo el workflow.** Apuntaba a `stage/routes/web.php` y `stage/app`, que es la disposicion del area de entrega y no la del repositorio: reventaba con un `FileNotFoundError` sobre una carpeta que en la maquina no existe. No salia verde en falso --eso habria sido peor-- pero el paso no comprobaba nada y el mensaje no decia nada util. Las dos herramientas resuelven ahora la disposicion mirando cual existe. Y la puerta nueva sale con codigo 2 si recorre CERO archivos: contar que no hay problemas cuando lo que no hay es busqueda es el modo de fallo mas caro de una comprobacion automatica, y con este van tres en dos dias (`T-25`, la regex de `verificar-fixturas.py`, y esta) | — |
+| ~~T-27~~ | ✅ **RESUELTA (2026-08-25, iteracion 4.11).** `tools/pruebas/4.11-concurrencia.sh`: dos clientes de verdad contra el mismo motor, **sin un solo `sleep` de sincronizacion**. B pone `innodb_lock_wait_timeout=1` y se afirma el **1205**: mientras A tenga el bloqueo, B falla siempre, tarde lo que tarde la maquina; si no lo tiene, pasa. Los dos resultados son deterministas. Para saber que una sesion ya ejecuto se usan **cerrojos con nombre**: escribir una marca y buscarla en la salida no funciona porque el cliente bufferiza, y un `GET_LOCK` no es transaccional --se ve desde fuera aunque quien lo tomo siga con su transaccion abierta-- y se pregunta con SQL. Demuestra en el motor lo que hasta hoy estaba **deducido y no medido**: que el `UPDATE` que baja al principal no toma ningun bloqueo cuando el puesto esta libre, que por eso los dos llegan al `INSERT`, y que con el bloqueo de la fila del cliente se ponen en fila antes de escribir. Lleva su propio contraejemplo (con el puesto OCUPADO **si** espera), sin el cual la primera asercion saldria verde aunque el aparato no funcionase. Bateria: 812 (MariaDB) y 802 (MySQL 8), cero fallidas. El CI no hubo que tocarlo: los tres bloques leen `SUITES` desde `DEC-076`. Ver `docs/fase-4/4.11-CONCURRENCIA.md` | — |
+| **T-29** | 📋 **Cinco iteraciones de la Fase 3 sin documento.** 3.9 (tarifas), 3.11 (anulacion), 3.12 (no borrar), 3.13 (terminos) y 3.14 (rotacion de clave). Todas las demas iteraciones del proyecto tienen el suyo. El trabajo esta hecho y verificado por sus suites; lo que falta es el documento que explica **por que**, que es justo lo que no se puede reconstruir leyendo el codigo dentro de seis meses | Antes de que se olvide el porque |
+| ~~T-30~~ | ✅ **RESUELTA (2026-08-25).** `09-NEXT-ITERATION.md` llevaba desde el 21 de agosto diciendo «me detengo aqui; no hay codigo, no hay esquema y no hay wireframes». Cuatro dias y 64 tablas despues, el documento cuyo unico trabajo es decir que viene ahora describia un proyecto que ya no existe. Reescrito entero: estado medido, que bloquea y a quien le toca, y la siguiente iteracion propuesta con su motivo. **Y tres tareas mas estaban en el mismo estado**: `T-11`, `T-15` y `T-16` decian «hecho en 3.14 / 3.11 / 3.12» y llevaban el marcador de ABIERTA. Es el mismo defecto que dejo `T-12` en 📋 durante un mes estando resuelta | — |
+| ~~T-31~~ | ✅ **RESUELTA (2026-08-25). Dos de las seis puertas no se podian ejecutar del lado del contenedor, y por eso se entrego codigo con tres errores de PHPStan.** PHPStan y Deptrac no estaban instalados: packagist esta bloqueado desde aqui, asi que durante toda la sesion esas dos salieron «sin comprobar» mientras las otras cuatro pasaban. Se resolvio trayendo los `.phar` por el puente desde la maquina del usuario --`phpstan.phar` (27 MB), `deptrac.phar` (1,5 MB), `larastan` y sus dependencias--, mas `phpstan.neon` y `deptrac.yaml`. Costo un rato: **la limpieza de rutas colgantes del autoloader de `T-25` habia dejado la entrada PSR-4 de `Larastan` con el array VACIO**, y en PHP la ultima definicion de una clave gana, asi que rellenarla arriba no servia de nada --habia que rellenar la duplicada de abajo--. Es el mismo arreglo mordiendose la cola dos iteraciones despues. Ahora `puertas` corre las seis aqui. Las seis, en verde | — |
+| ~~T-32~~ | ✅ **RESUELTA (2026-08-25).** Los tres errores que PHPStan encontro en la maquina del usuario. Dos eran de tipos puros --`collect()` sobre un `mixed`, y `Collection<int, object>` donde llega `Collection<int, stdClass>`, que no vale porque `TValue` **no es covariante**--. El tercero escondia un defecto de negocio: `$antes` salia de `pluck()` sin castear y `$despues` ya venia en `int`, asi que `['1'] !== [1]` era SIEMPRE cierto y la bitacora anotaria un cambio de categorias cada vez que se guarda una marca, haya cambiado o no. **No se pudo reproducir**: depende de si PDO devuelve cadenas o enteros, y en el contenedor devuelve enteros. Queda fijado por `MarcasTest`, que documenta la intencion y dice explicitamente que no demuestra el fallo | — |
+| ~~T-17~~ | ✅ **RESUELTA (2026-08-25, iteracion 4.6).** Las dos carreras cerradas por caminos opuestos, porque son problemas opuestos. **Contactos:** se bloquea la fila del CLIENTE —que siempre existe— antes de tocar el puesto de principal; el `UPDATE` que baja al anterior no bloquea nada cuando el puesto esta libre, que es justo el caso normal. **Marcas:** el slug lo calcula el sistema, asi que su choque se absorbe y se reintenta (`DEC-087`). Comprobado contra el motor que reintentar «volviendo a preguntar» **no converge** —en `REPEATABLE READ` la lectura sigue viendo la foto vieja— y que un `FOR UPDATE` sobre una fila inexistente cambiaria el `1062` por un `1213`. Por eso el que reintenta le dice a `slugUnico()` que ya probo. Ver `docs/fase-4/4.6-CARRERAS.md` | — |
+| **Q-52** | ❓ **¿Un cliente debería exigir contacto principal de facturación antes de poder estar `active`?** Hoy nada lo obliga: `contacts` no tiene regla que exija un principal de ningún tipo, y un cliente puede activarse sin un solo contacto. Cuando llegue la facturación habrá que saber a quién se le manda la factura, y descubrirlo entonces significa perseguir clientes ya activos. La ficha lo **avisa en ámbar** y no lo impide, porque convertirlo en requisito es una decisión de negocio: bloquear el alta de un cliente por un dato que a veces llega después tiene su propio coste. Si la respuesta es sí, el sitio es la activación del cliente, no `contacts` | Facturación (F9) |
+| **Q-53** | ❓ **¿El mismo correo repetido dentro del mismo cliente y tipo es un error?** `contact_email` **no** es único a propósito: es un canal comercial y puede compartirse (`facturacion@cliente.com` para varias personas), a diferencia de `users.email`, que es la identidad de acceso y sí lo es. Pero dos contactos con el mismo correo, el mismo cliente **y el mismo tipo** parece captura duplicada más que reparto. No se ha añadido regla: una validación que solo vive en el formulario se la salta cualquier importación o `INSERT` de mantenimiento. Si se decide que es error, el sitio es el esquema | Importación de clientes |
+| ~~Q-51~~ | ✅ **RESUELTA (2026-08-25, iteracion 4.5).** La pantalla de entidades legales existe: alta y edicion de sociedades, cobertura por pais con vigencia, y baja que **cierra las coberturas abiertas** (`DEC-081`). El listado enseña arriba los paises con clientes que hoy no puede facturar nadie, que es la pregunta por la que se entra. Al construirla aparecio un bloqueo real del esquema: desactivar sin cerrar la cobertura dejaba el pais sin cubrir **y sin poder cubrirse** | — |
 | **Q-50** | ❓ **¿`campaign_creators`, `agreement_amendments`, `domain_events` y `status_transitions` son evidencia?** Se quedaron fuera de `3.12` a propósito. `campaign_creators` lleva `agreed_amount` —el precio pactado, congelado—, y borrar una participación borraría el precio con ella; pero el módulo de campañas no está construido y decidir ahora si una participación se borra o se cancela sería adivinar. Los otros dos son rastros de auditoría de alto volumen, donde puede hacer falta purga por antigüedad. Que lo decida la iteración que los construya, con el caso de uso delante | Al construir el módulo de campañas |
-| **T-15** | ✅ *(hecho en 3.11)* **No existe anular un perfil fiscal aprobado.** `superseded` significa *reemplazado* —o sea que estuvo vigente— y `rejected` significa que se rechazó en revisión, antes de aprobarse. No hay forma de decir «esto se aprobó y no debió aprobarse nunca». Lo destapó `test_para_un_menor_el_perfil_del_creador_no_cuenta` al ponerse en rojo con `DEC-071`: un perfil fiscal a nombre de un menor no fue válido ni un día, pero la única salida hoy es cerrarlo la víspera del correcto, y eso deja en el histórico un periodo cubierto por un perfil que no valía. Hace falta decidir el mecanismo (¿un estado `annulled`? ¿un `voided_at` con motivo y autor?) y quién puede hacerlo — es la misma conversación que `Q-48` | Cuando haya que corregir un perfil aprobado por error |
-| **T-14** | ✅ *(hecho en 3.10)* **Los cuatro disparadores de 3.9 siguen escritos a mano.** `creator_rates` y `creator_availability` imponen la misma regla que ahora genera `App\Shared\Database\Periodo`, pero con SQL tecleado. Son doce líneas duplicadas cuatro veces, y un arreglo futuro habría que aplicarlo en dos sitios. Migrarlos es mecánico y la suite de 3.9 (23 aserciones) lo verifica sin depender de PHPUnit. Se deja para su propia iteración porque 3.9 todavía no tiene la suite de PHPUnit confirmada en verde | Cuando 3.9 esté en verde |
-| **T-13** | 📋 **Los `insert` de los fixtures están escritos a mano en 10 sitios de 7 archivos.** Cada tabla que gana una restricción los deja obsoletos de uno en uno, y el aviso llega como «14 failed» en la máquina de quien recibe la entrega. `tools/verificar-fixturas.py` ya detecta la contradicción, pero no la evita: hace falta un apoyo compartido en `tests/` que sepa construir un creador `pending` y uno `active` **con su evidencia** (fecha de activación, identidad verificada, revisor y documento). Hoy nadie puede escribir un creador activo en una prueba sin descubrir tres restricciones a base de errores 4025 | Cuando una prueba necesite un creador activo |
-| **T-11** | ✅ *(hecho en 3.14)* **Rotar `APP_KEY` invalida las huellas de las cuentas bancarias.** Los números siguen siendo recuperables (`Crypt` conserva `APP_PREVIOUS_KEYS`), pero la huella es un HMAC con esa clave: tras una rotación, la detección de cuentas repetidas (`DEC-065`) deja de funcionar sobre las filas viejas. Hace falta un comando que las recalcule. No es un problema hoy y sí lo será el día de la primera rotación | Antes de la primera rotación de clave |
+| ~~T-15~~ | ✅ *(hecho en 3.11)* **No existe anular un perfil fiscal aprobado.** `superseded` significa *reemplazado* —o sea que estuvo vigente— y `rejected` significa que se rechazó en revisión, antes de aprobarse. No hay forma de decir «esto se aprobó y no debió aprobarse nunca». Lo destapó `test_para_un_menor_el_perfil_del_creador_no_cuenta` al ponerse en rojo con `DEC-071`: un perfil fiscal a nombre de un menor no fue válido ni un día, pero la única salida hoy es cerrarlo la víspera del correcto, y eso deja en el histórico un periodo cubierto por un perfil que no valía. Hace falta decidir el mecanismo (¿un estado `annulled`? ¿un `voided_at` con motivo y autor?) y quién puede hacerlo — es la misma conversación que `Q-48` | Cuando haya que corregir un perfil aprobado por error |
+| ~~T-14~~ | ✅ **RESUELTA (2026-08-25, iteracion 4.8).** Los cuatro disparadores de 3.9 pasan a `Periodo::sinSolape()`: 48 lineas de SQL tecleado a mano por 2 declaraciones. Pero lo que escondian valia mas que la duplicacion. **(a)** La referencia SQL y la migracion creaban disparadores **distintos** --`<=>` frente a `=`, y otros mensajes--: las suites llevaban desde 3.9 probando un disparador que no era el de produccion. Es `DEC-042` por la puerta de atras. Hoy no cambia el comportamiento porque las tres columnas de serie son NOT NULL, comprobado; el dia que una admita NULL, `=` deja pasar el solape en silencio. **(b)** `tools/verificar-periodos.py` existe exactamente para cazar eso, pero solo ve lo declarado con `Periodo::`: cuatro `DB::unprepared` eran invisibles. Paso de 6 reglas/12 disparadores a **8/16**. **(c)** La comprobacion previa de la migracion miraba los solapes existentes **solo en `creator_rates`**: `creator_availability` recibia su disparador sin que nadie hubiera mirado sus datos, y un disparador no valida lo que ya esta dentro. **(d)** Las cuatro reglas no estaban en `schema_constraints`. Baterias: 794 (MariaDB) y 784 (MySQL 8), cero fallidas. Ver `docs/fase-4/4.8-DISPARADORES-DE-3.9.md` | — |
+| ~~T-13~~ | ✅ **RESUELTA (2026-08-25, iteracion 4.9).** `tests/Apoyo/ConFixturas.php`: **16 copias de `usuarioCon` en 15 archivos** y **9 `insert` de creador en 6** pasan a un sitio. Lo caro no era escribirlos: era saber que escribir. Un creador `active` son CUATRO reglas a la vez --`ck_creators_activation`, `ck_creators_active_identity`, `ck_creators_identity_evidence` y la foranea `fk_creators_identity_file`--, y se descubrian a base de `4025`, uno por intento, con un `1452` de premio final. `creadorActivo()` ahorra los cuatro intentos, no las teclas. La version compartida de `usuarioCon` es la de `PermisosTest` --la unica de las dieciseis que admitia `null`, o sea un usuario SIN rol, que es el que comprueba que una pantalla protegida rechaza-- y ademas avisa cuando el rol no existe en vez de dejar un `1048` que acusa a la tabla. Salto a la primera con `creator_manager`, que suena perfecto y no existe. De paso cayo la copia **numero once** del defecto de `H-16`: `publicarTerminos()` cerraba `effective_to` a mano y la puerta `vigencias` no la veia porque solo miraba `app/`. Ahora mira tambien `tests/`, con la regla A acotada alli --medido: cuatro sitios de aritmetica de dias en pruebas, tres legitimos--. 253 pruebas, 747 aserciones. Ver `docs/fase-4/4.9-APOYO-DE-PRUEBAS.md` | — |
+| ~~T-11~~ | ✅ *(hecho en 3.14)* **Rotar `APP_KEY` invalida las huellas de las cuentas bancarias.** Los números siguen siendo recuperables (`Crypt` conserva `APP_PREVIOUS_KEYS`), pero la huella es un HMAC con esa clave: tras una rotación, la detección de cuentas repetidas (`DEC-065`) deja de funcionar sobre las filas viejas. Hace falta un comando que las recalcule. No es un problema hoy y sí lo será el día de la primera rotación | Antes de la primera rotación de clave |
 | **T-10** | 📋 **Aviso al creador cuando cambian sus datos fiscales.** `BR-CREATOR-007` lo exige y el módulo Communication no existe. Hoy la pantalla se lo recuerda al operador para que lo haga a mano; queda pendiente automatizarlo | Fase de Communication |
 | **T-09** | 📋 **Publicar la primera versión real de los términos del creador**, revisada legalmente, con `php artisan terminos:publicar`. **Ningún creador puede activarse hasta entonces** — la pantalla lo dice explícitamente | Bloquea toda activación |
 | Q-29 | ¿Se aprueba la propuesta tipográfica (Sora + Plus Jakarta Sans + IBM Plex Mono), o hay una tipografía corporativa ya comprada? | Iteración 3.2 |

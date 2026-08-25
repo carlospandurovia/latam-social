@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
-use App\Models\User;
 use App\Shared\Auth\Permisos;
 use Database\Seeders\CimientosSeeder;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Tests\Apoyo\ConFixturas;
 use Tests\TestCase;
 
 /**
@@ -24,6 +24,7 @@ use Tests\TestCase;
  */
 final class PerfilComercialTest extends TestCase
 {
+    use ConFixturas;
     use RefreshDatabase;
 
     private string $uuid;
@@ -40,44 +41,9 @@ final class PerfilComercialTest extends TestCase
         Permisos::olvidar();
 
         $this->uuid = (string) Str::uuid();
-        $this->creadorId = (int) DB::table('creators')->insertGetId([
-            'uuid' => $this->uuid,
-            'first_name' => 'Ana', 'last_name' => 'Torres', 'display_name' => 'anatorres',
-            'birth_date' => '1998-05-12', 'email' => 'ana@ejemplo.test',
-            'country_id' => DB::table('countries')->where('iso2', 'PE')->value('id'),
-            'document_country_code' => 'PE', 'document_type' => 'DNI', 'document_number' => '40000001',
-            // `pending`, no `active`. Y no es un detalle de fixture.
-            //
-            // `active` no es una palabra que se teclee: son TRES restricciones a
-            // la vez --`ck_creators_activation` exige `activated_at`,
-            // `ck_creators_active_identity` exige `identity_verified_at`, y
-            // `ck_creators_identity_evidence` exige ademas quien lo verifico y
-            // el archivo del documento--. Poner `active` aqui costaba una fila
-            // en `files` y cuatro columnas mas.
-            //
-            // Y lo peor: no hacia falta para nada. `PerfilComercialController`
-            // no mira el estado del creador en ninguna linea. Escribi `active`
-            // porque sonaba al estado correcto para un creador con tarifas, no
-            // porque algo lo pidiera: un valor por defecto que parece una
-            // respuesta, otra vez (DEC-048).
-            'status' => 'pending', 'payment_term_days' => 30, 'preferred_currency_code' => 'PEN',
-            'created_at' => now(), 'updated_at' => now(),
-        ]);
+        $this->creadorId = $this->creadorPendiente(['uuid' => $this->uuid]);
 
         $this->formatoId = (int) DB::table('content_formats')->orderBy('id')->value('id');
-    }
-
-    private function usuarioCon(string $rol): User
-    {
-        $usuario = User::factory()->create();
-        DB::table('role_user')->insert([
-            'user_id' => $usuario->id,
-            'role_id' => DB::table('roles')->where('code', $rol)->value('id'),
-            'assigned_at' => now(),
-        ]);
-        Permisos::olvidar((int) $usuario->id);
-
-        return $usuario;
     }
 
     /**
@@ -340,19 +306,15 @@ final class PerfilComercialTest extends TestCase
             'created_at' => now(), 'updated_at' => now(),
         ]);
 
-        $campanaId = (int) DB::table('campaigns')->insertGetId([
-            'uuid' => (string) Str::uuid(),
-            'code' => $codigo, 'name' => $nombre,
-            'client_organization_id' => $orgId, 'client_brand_id' => $marcaId,
-            'currency_code' => 'PEN',
-            'starts_on' => $desde, 'ends_on' => $hasta,
-            // El mismo error que arriba, segunda vez en el mismo archivo:
-            // `in_progress` tampoco es una palabra que se teclee.
-            // `ck_camp_confirmed` exige `confirmed_at` para todo lo que no sea
-            // `draft`, `pending_approval` o `cancelled`, porque esa fecha es el
-            // instante a partir del cual la campana ya no se puede borrar.
-            'status' => 'in_progress', 'confirmed_at' => now(),
-            'created_at' => now(), 'updated_at' => now(),
+        // El fixture vive en `ConFixturas` desde 7.1: `in_progress` arrastra
+        // `ck_camp_confirmed` **y** `ck_camp_billing_entity`, y las dos se
+        // descubren estrellandose. Este archivo las descubrio dos veces.
+        $campanaId = $this->campanaDe($orgId, $marcaId, [
+            'code' => $codigo,
+            'name' => $nombre,
+            'starts_on' => $desde,
+            'ends_on' => $hasta,
+            'status' => 'in_progress',
         ]);
 
         DB::table('campaign_creators')->insert([

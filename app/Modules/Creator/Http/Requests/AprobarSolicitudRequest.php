@@ -37,7 +37,7 @@ final class AprobarSolicitudRequest extends FormRequest
             'display_name' => ['required', 'string', 'max:120'],
             // `ck_creators_birth_date` exige > 1920-01-01; y una fecha futura
             // no es una fecha de nacimiento.
-            'birth_date' => ['required', 'date', 'after:1920-01-01', 'before:today'],
+            'birth_date' => ['required', 'date_format:Y-m-d', 'after:1920-01-01', 'before:today'],
             'document_country_code' => ['required', 'string', 'size:2', Rule::exists('countries', 'iso2')],
             'document_type' => ['required', Rule::in([
                 'DNI', 'CE', 'RUC', 'PASSPORT', 'CC', 'NIT', 'CURP', 'RFC', 'RUT', 'SSN', 'NIE', 'NIF', 'OTHER',

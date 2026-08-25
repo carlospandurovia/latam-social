@@ -6,6 +6,7 @@ namespace App\Modules\Client\Http\Controllers;
 
 use App\Modules\Client\Http\Requests\GuardarClienteRequest;
 use App\Modules\Client\Services\CoberturaFacturacion;
+use App\Modules\Client\Services\Contactos;
 use App\Modules\Client\Services\Marcas;
 use App\Shared\Audit\Bitacora;
 use Illuminate\Http\RedirectResponse;
@@ -110,8 +111,21 @@ final class ClientesController
                 ->join('countries as p', 'p.id', '=', 'ctp.country_id')
                 ->where('ctp.client_organization_id', $cliente->id)
                 ->orderByDesc('ctp.valid_from')
-                ->get(['ctp.tax_id_type', 'ctp.tax_id_number', 'ctp.legal_name',
+                ->get(['ctp.id', 'ctp.tax_id_type', 'ctp.tax_id_number', 'ctp.legal_name',
+                    'ctp.city', 'ctp.payment_term_days',
                     'ctp.valid_from', 'ctp.valid_to', 'p.name as pais']),
+            // Iteración 4.3. El orden pone arriba a los activos y, dentro de
+            // cada tipo, al principal primero: es el que se busca.
+            'contactos' => DB::table('contacts')
+                ->where('client_organization_id', $cliente->id)
+                ->orderByRaw("CASE WHEN status = 'active' THEN 0 ELSE 1 END")
+                ->orderBy('contact_type')
+                ->orderByDesc('is_primary')
+                ->orderBy('full_name')
+                ->get(['uuid', 'full_name', 'contact_email', 'phone', 'position',
+                    'contact_type', 'is_primary', 'status']),
+            'tiposContacto' => Contactos::TIPOS,
+            'tiposSinPrincipal' => Contactos::tiposSinPrincipal((int) $cliente->id),
         ]);
     }
 

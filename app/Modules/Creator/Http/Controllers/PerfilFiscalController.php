@@ -8,6 +8,7 @@ use App\Modules\Creator\Http\Requests\AnularPerfilFiscalRequest;
 use App\Modules\Creator\Http\Requests\AprobarPerfilFiscalRequest;
 use App\Modules\Creator\Http\Requests\GuardarPerfilFiscalRequest;
 use App\Shared\Audit\Bitacora;
+use App\Shared\Database\Vigencia;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -181,7 +182,10 @@ final class PerfilFiscalController
         // pantalla se queda corta a propósito: reescribir un histórico del que
         // sale la retención practicada necesita rastro de quién y por qué. Está
         // anotado como `Q-48`.
-        if ($vigente !== null && (string) $perfil->valid_from <= (string) $vigente->valid_from) {
+        // `Vigencia::puedeRelevar()` y no `<=` sobre cadenas: `'2026-2-1' >
+        // '2026-11-01'` es cierto en PHP, y esta guarda existe justo para que
+        // el operador no vea el `45000` de `ck_ctp_dates`.
+        if ($vigente !== null && !Vigencia::puedeRelevar((string) $perfil->valid_from, (string) $vigente->valid_from)) {
             return back()->with('aviso', sprintf(
                 'Este perfil entra en vigor el %s, y el vigente (%s) empezó el %s. '
                 .'El nuevo tiene que empezar después, porque si no habría dos regímenes '
@@ -211,9 +215,13 @@ final class PerfilFiscalController
                 //
                 // Es el mismo defecto que `H-16` cerró en tarifas. Allí se paga
                 // explicando una factura; aquí, en una declaración.
-                $cierre = CarbonImmutable::parse((string) $perfil->valid_from)
-                    ->subDay()
-                    ->toDateString();
+                //
+                // La resta la hace `Vigencia` y no este archivo. Aquí estuvo el
+                // `subDay()` suelto hasta que la puerta `vigencias` lo encontró:
+                // el arreglo era correcto, pero era la OCTAVA copia de la misma
+                // aritmética, y una aritmética copiada ocho veces se arregla
+                // ocho veces o se arregla en siete.
+                $cierre = Vigencia::cerrarElDiaAntesDe((string) $perfil->valid_from);
 
                 DB::table('creator_tax_profiles')->where('id', $vigente->id)->update([
                     'status' => 'superseded',
@@ -246,9 +254,21 @@ final class PerfilFiscalController
             ],
         );
 
+        // «Aprobado y vigente» sólo si YA empezó (`T-21`). Un perfil aprobado
+        // con fecha futura está aprobado y todavía no rige: decir que es el
+        // vigente es afirmar que la retención de hoy es la suya, y no lo es.
+        $rigeYa = Vigencia::fecha((string) $perfil->valid_from) <= Vigencia::fecha(now()->toDateString());
+
+        $estado = $rigeYa
+            ? 'Perfil aprobado y vigente.'
+            : sprintf(
+                'Perfil aprobado. Todavia NO rige: empieza el %s, y hasta ese dia sigue aplicando el anterior.',
+                $perfil->valid_from,
+            );
+
         return redirect()
             ->route('creadores.fiscal', $uuid)
-            ->with('exito', 'Perfil aprobado y vigente. Avisa al creador por su canal de contacto anterior: '
+            ->with('exito', $estado.' Avisa al creador por su canal de contacto anterior: '
                 .'BR-CREATOR-007 lo exige y todavía no hay envío automático (T-10).');
     }
 

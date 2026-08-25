@@ -42,7 +42,7 @@ final class GuardarTarifaRequest extends FormRequest
             // base rechaza si no está declarada como gratuita.
             'amount' => ['exclude_if:is_gratis,1', 'required', 'numeric', 'gt:0', 'max:99999999'],
             'source' => ['required', Rule::in(['self_declared', 'negotiated', 'estimated'])],
-            'valid_from' => ['required', 'date'],
+            'valid_from' => ['required', 'date_format:Y-m-d'],
         ];
     }
 

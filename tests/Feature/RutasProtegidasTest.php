@@ -31,6 +31,11 @@ final class RutasProtegidasTest extends TestCase
     private const SIN_PERMISO = [
         'panel' => 'Portada de cualquier usuario interno; su contenido ya se filtra por permiso.',
         'salir' => 'Cerrar la propia sesión no puede depender de un permiso.',
+        // `T-23`. Mismo motivo que `salir`, y uno mas: si dependiera de un
+        // permiso, un usuario al que se le han revocado los permisos no podria
+        // cambiar su contrasena, y ese es justo al que mas urge.
+        'contrasena' => 'Cambiar la propia contrasena no puede depender de un permiso.',
+        'contrasena.cambiar' => 'Idem: es la accion de la anterior.',
     ];
 
     public function test_toda_ruta_autenticada_declara_su_permiso(): void

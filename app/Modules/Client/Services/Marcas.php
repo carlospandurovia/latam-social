@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Client\Services;
 
+use App\Shared\Database\Choque;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -48,15 +49,69 @@ final class Marcas
      */
     public static function crear(int $clienteId, string $nombre, array $extra = []): int
     {
-        return (int) DB::table('client_brands')->insertGetId($extra + [
-            'uuid' => (string) Str::uuid(),
-            'client_organization_id' => $clienteId,
-            'name' => $nombre,
-            'slug' => self::slugUnico($nombre),
-            'status' => 'active',
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
+        // `client_brands.name` son 120 y `client_organizations.commercial_name`
+        // son 160. El alta de cliente crea su primera marca con el mismo nombre
+        // (`DEC-074`), asi que un cliente con nombre comercial de 121 a 160
+        // caracteres —una razon social larga— reventaba con
+        // `1406 Data too long for column 'name'`. Y como el alta va en una
+        // transaccion, **se perdia el cliente entero** y el operador veia un 500.
+        //
+        // Se recorta aqui y no se valida a 120 arriba: el nombre comercial del
+        // cliente PUEDE ser mas largo que el de una marca, son campos distintos.
+        // El mensaje de exito ya nombra la marca creada, asi que el recorte se ve.
+        $nombre = mb_substr($nombre, 0, 120);
+
+        // El slug lo calcula el sistema, no la persona: si choca, se recalcula
+        // y se vuelve a intentar en silencio (`T-17`). Se absorbe SOLO
+        // `uq_cb_slug`; `uq_cb_name` —el operador dando de alta dos veces la
+        // misma marca del mismo cliente— tiene que llegar arriba y leerse.
+        //
+        // Y esto va dentro de la transaccion del alta de cliente. Comprobado
+        // contra el motor: en InnoDB un `1062` deshace la SENTENCIA, no la
+        // transaccion, asi que el reintento no se lleva el cliente por delante.
+        // Antes si: un doble clic devolvia un 500 y el cliente no existia.
+        $probados = [];
+
+        return Choque::reintentar('uq_cb_slug', function () use (
+            $extra, $clienteId, $nombre, &$probados
+        ): int {
+            $slug = self::slugUnico($nombre, evitando: $probados);
+            $probados[] = $slug;
+
+            return (int) DB::table('client_brands')->insertGetId($extra + [
+                'uuid' => (string) Str::uuid(),
+                'client_organization_id' => $clienteId,
+                'name' => $nombre,
+                'slug' => $slug,
+                'status' => 'active',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        });
+    }
+
+    /**
+     * Escribe columnas en una marca **rehaciendo su slug**, con el mismo
+     * reintento que el alta (`T-17`).
+     *
+     * Existe para que la carrera del slug se resuelva en UN sitio. La edición
+     * de marca tiene exactamente el mismo hueco que el alta —calcular el slug y
+     * escribirlo son dos sentencias— y dejar la reacción en el controlador
+     * garantizaba que las dos se arreglaran por separado, o que sólo una lo
+     * hiciera.
+     *
+     * @param array<string, mixed> $columnas todo menos el slug, que lo pone esto
+     */
+    public static function actualizarConSlug(int $marcaId, string $nombre, array $columnas): void
+    {
+        $probados = [];
+
+        Choque::reintentar('uq_cb_slug', function () use ($marcaId, $nombre, $columnas, &$probados): void {
+            $slug = self::slugUnico($nombre, $marcaId, evitando: $probados);
+            $probados[] = $slug;
+
+            DB::table('client_brands')->where('id', $marcaId)->update($columnas + ['slug' => $slug]);
+        });
     }
 
     /**
@@ -70,8 +125,35 @@ final class Marcas
      *
      * Se resuelve aquí, sufijando, en vez de devolverle un error de unicidad a
      * alguien que no eligió el slug.
+     *
+     * ### `$evitando`, y por qué no basta con volver a preguntar (`T-17`)
+     *
+     * Entre este `SELECT` y el `INSERT` que viene después cabe otra petición.
+     * Si la otra gana, ésta choca contra `uq_cb_slug`. La reacción evidente
+     * —volver a calcular y reintentar— **no funciona**, y el motivo se comprobó
+     * contra el motor antes de escribir esto:
+     *
+     * ```
+     * A: START TRANSACTION;  SELECT ... WHERE slug='acme-2';   -> 0 filas
+     * B: INSERT slug='acme-2';  COMMIT;
+     * A: INSERT slug='acme-2';  -> 1062
+     * A: SELECT ... WHERE slug='acme-2';   -> 0 filas   <-- SIGUE sin verla
+     * ```
+     *
+     * En `REPEATABLE READ` la lectura de consistencia sigue viendo la foto del
+     * principio de la transacción, así que recalcular devuelve **el mismo
+     * slug** y el reintento choca otras dos veces. Una lectura con bloqueo sí
+     * la ve, pero un `FOR UPDATE` sobre una fila que no existe toma un bloqueo
+     * de hueco, y dos peticiones con huecos compatibles acaban en interbloqueo
+     * al insertar: se cambia un `1062` por un `1213`.
+     *
+     * Por eso el que reintenta **le dice a esta función qué ya probó**. No
+     * necesita ver la fila de la otra transacción para saber que ese slug está
+     * cogido: acaba de estrellarse contra él.
+     *
+     * @param list<string> $evitando slugs que ya se intentaron y chocaron
      */
-    public static function slugUnico(string $nombre, ?int $exceptoId = null): string
+    public static function slugUnico(string $nombre, ?int $exceptoId = null, array $evitando = []): string
     {
         $base = Str::slug($nombre);
 
@@ -85,7 +167,7 @@ final class Marcas
         $slug = $base;
         $n = 1;
 
-        while (self::ocupado($slug, $exceptoId)) {
+        while (in_array($slug, $evitando, true) || self::ocupado($slug, $exceptoId)) {
             $n++;
             $slug = $base.'-'.$n;
         }

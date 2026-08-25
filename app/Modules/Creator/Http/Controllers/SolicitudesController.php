@@ -85,8 +85,18 @@ final class SolicitudesController
         // casilla del formulario dice que el revisor MIRÓ; no le da permiso para
         // crear una colisión. Se comprueba con los datos que acaba de teclear,
         // que son los que van a entrar.
+        // SIN filtrar por estado.
+        //
+        // Antes miraba solo `pending|active|suspended`, pero las unicas que de
+        // verdad protegen —`uq_creators_email` y `uq_creators_identity`— se
+        // apoyan en `identity_gate`, que vale 1 mientras `anonymized_at IS NULL`
+        // y **no mira el estado**. O sea que un creador `blacklisted`,
+        // `rejected` o `inactive` seguia ocupando su correo y su documento, y
+        // esta guarda no lo veia: el `INSERT` reventaba con `1062` dentro de la
+        // transaccion y el revisor veia un 500 en vez de «esta persona esta en
+        // lista negra», que es justo lo que necesita saber.
         $choque = DB::table('creators')
-            ->whereIn('status', ['pending', 'active', 'suspended'])
+            ->whereNull('anonymized_at')
             ->where(function ($w) use ($datos, $solicitud): void {
                 $w->where('email', $solicitud->email)
                     ->orWhere(function ($d) use ($datos): void {
@@ -95,13 +105,23 @@ final class SolicitudesController
                             ->where('document_number', $datos['document_number']);
                     });
             })
-            ->first(['uuid', 'display_name', 'email']);
+            ->first(['uuid', 'display_name', 'email', 'status']);
 
         if ($choque !== null) {
             return back()
                 ->withInput()
-                ->with('choque', "Ya existe «{$choque->display_name}» ({$choque->email}) con ese correo o documento. "
-                    .'Resuélvelo antes de aprobar: marca esta solicitud como duplicada, o corrige el documento.');
+                ->with('choque', sprintf(
+                    'Ya existe «%s» (%s, estado: %s) con ese correo o documento. %s',
+                    $choque->display_name,
+                    $choque->email,
+                    $choque->status,
+                    // El estado cambia lo que hay que hacer, asi que se dice. Un
+                    // creador en lista negra no es un duplicado administrativo.
+                    in_array($choque->status, ['blacklisted', 'rejected'], true)
+                        ? 'No es un duplicado que se resuelva corrigiendo datos: esa persona ya fue apartada. '
+                          .'Si hay que readmitirla, es una decision aparte.'
+                        : 'Resuelvelo antes de aprobar: marca esta solicitud como duplicada, o corrige el documento.',
+                ));
         }
 
         $creadorId = DB::transaction(function () use ($solicitud, $datos): int {

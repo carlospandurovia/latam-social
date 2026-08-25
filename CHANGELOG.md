@@ -2,6 +2,592 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 
+## [Seguridad · cambio obligatorio de contraseña (`T-23`)] — 2026-08-25
+
+Con esto quedan cerrados **los siete** hallazgos que dejó la revisión adversarial.
+
+`usuarios:crear` escribía `must_change_password = 1` desde la primera iteración
+de identidad y **nadie lo leía nunca**. Única aparición de la columna en todo el
+árbol, aparte de la migración: ni middleware que la comprobara, ni pantalla donde
+cambiar la contraseña.
+
+O sea que el administrador que da de alta a la persona de finanzas teclea su
+contraseña, se la dice, y esa contraseña sigue valiendo indefinidamente.
+
+### Por qué no es sólo higiene
+La base **exige dos personas distintas** para lo que toca dinero:
+`ck_ctp_segregation` al aprobar un perfil fiscal, `ck_cpm_segregation` al
+verificar un medio de pago (`BR-FIN-005`). Esa garantía se apoya entera en que
+dos `user_id` distintos sean dos personas distintas. Si un tercero conoce la
+credencial de la segunda, la separación es una columna en una tabla y nada más.
+
+### Tres reglas, y cada una tapa un agujero distinto
+1. **La nueva tiene que ser distinta de la actual.** Es la que justifica la
+   iteración: sin ella, teclear la temporal dos veces limpia la marca y deja
+   válida la contraseña que conoce el administrador. Cumplido en la base de
+   datos, sin cumplir en la realidad. Hay prueba dedicada.
+2. **Se pide la contraseña actual**, aunque el cambio sea obligatorio: «entró con
+   ella» y «sigue delante» no son lo mismo, y una sesión abierta y desatendida no
+   debe bastar para dejar fuera al dueño.
+3. **Sin permiso.** Si dependiera de uno, un usuario al que se le han revocado no
+   podría cambiar su contraseña — y es al que más urge. Entra en
+   `RutasProtegidasTest::SIN_PERMISO` con el motivo escrito.
+
+### El middleware va en el grupo, no ruta a ruta
+Una obligación que hay que acordarse de poner en cada pantalla nueva se salta la
+primera que alguien olvide. Tres excepciones —la pantalla, su acción y `salir`—
+porque sin ellas es un bucle de redirecciones, que es la forma más rápida de
+dejar a alguien fuera de su propia cuenta. Se comparan **nombres de ruta**, no
+URLs: una URL escrita a mano se desincroniza en cuanto alguien renombra la ruta,
+y el síntoma sería el bucle.
+
+### Y una comprobación que decidí no dar por buena en silencio
+`Password::uncompromised()` contrasta la contraseña contra filtraciones públicas.
+Es una llamada HTTP saliente y **falla en abierto**: sin salida a internet,
+Laravel da la contraseña por buena. Un servidor endurecido —donde más importa—
+sería justo donde la comprobación no comprueba, sin decirlo.
+
+Así que es configurable y documentado: la defensa son los 12 caracteres y la
+mezcla, esto es un extra que quien despliega enciende sabiendo lo que hace. En
+pruebas va apagado — una prueba no debe depender de la red.
+
+### Verificación
+**794 correctas, 0 fallidas** en MariaDB, 784 en MySQL 8. Nombres entre capas,
+fixturas, periodos, migraciones, triggers, equivalencia y DDL crudo sin
+discrepancias. Pint `passed`, 174 archivos PHP compilan. `CambioPasswordTest`
+(8 pruebas) pendiente de PHPUnit.
+
+## [Seguridad · la bitácora deja de ser truncable (`T-18`)] — 2026-08-25
+
+El pendiente más grave de la revisión, cerrado. `audit_logs` rechaza `UPDATE` y
+`DELETE` con disparadores, pero **`TRUNCATE` no dispara triggers** y deja la
+tabla a cero. No es un descuido del esquema: no hay forma de escribir un
+disparador que lo pare, porque `TRUNCATE` es una operación de esquema, no de
+datos.
+
+Lo único que lo detiene es no tener el privilegio `DROP`. Comprobado con usuarios
+reales en los dos motores:
+
+```
+usuario sin DROP:
+  UPDATE   -> 1644  lo para el disparador
+  DELETE   -> 1644  lo para el disparador
+  TRUNCATE -> 1142  DROP command denied
+```
+
+### `DEC-085` — dos usuarios de base de datos
+`latam_app` con `SELECT, INSERT, UPDATE, DELETE, EXECUTE`; `latam_mig` con `ALL
+PRIVILEGES` y sólo para migrar. El `.env.example` trae las concesiones exactas y
+la razón real —antes decía que lo que protegía era la falta de `UPDATE`/`DELETE`,
+que es falso: eso lo hacen los disparadores con cualquier usuario—.
+
+**No hay segunda conexión en `config/database.php`**, y es deliberado: es lo que
+el `.env.example` prometía con `DB_MIGRATION_USERNAME`, y habría sido peor. Las
+migraciones generan DDL con `DB::statement()`, que va **siempre** por la conexión
+por defecto aunque la migración declare otra: la mitad del DDL habría ido por un
+usuario y la otra mitad por el otro.
+
+### Se comprueba, no se promete
+`php artisan seguridad:privilegios` lee los privilegios reales del usuario
+conectado y, si puede vaciar la bitácora, imprime los `GRANT` que hacen falta.
+Avisa en desarrollo —donde el usuario suele ser `root` y eso no es un fallo— y
+falla con `--exigir` o en producción.
+
+No intenta el `TRUNCATE` para ver si falla: `TRUNCATE` hace *commit implícito*,
+así que la comprobación habría **vaciado la bitácora** para demostrar que se
+puede vaciar.
+
+### La suite fija las dos mitades, incluida la incómoda
+`3.12` crea dos usuarios de verdad y comprueba que el de aplicación puede anotar,
+no puede reescribir, no puede borrar y **no puede vaciar** — y que el de
+migraciones **sí la vacía, sin que salte nada**. Esa última aserción es la que
+justifica que existan dos usuarios; sin ella, la sección sólo diría que algo
+funciona.
+
+En MySQL 8 la sección se omite por fontanería del contenedor (el envoltorio fija
+`-uroot`), y se dice en la salida. La propiedad se comprobó a mano allí: mismo
+`1142`. Importa porque producción es Percona 5.7, familia MySQL.
+
+### Verificación
+**794 correctas, 0 fallidas** en MariaDB (784 en MySQL 8: las 10 de diferencia
+son esta sección, omitida y anunciada). Nombres entre capas, fixturas, periodos,
+migraciones, triggers, equivalencia y DDL crudo sin discrepancias. Pint
+`passed`, 169 archivos PHP compilan.
+
+### Queda por hacer en el servidor
+Ejecutar los `GRANT`. El código ya no puede hacer más: esto se concede en el
+servidor, no se declara en una migración.
+
+## [Herramientas · el CI se copia solo] — 2026-08-25
+
+`.github/workflows/` es ruta protegida —quien puede editar el fichero de CI
+puede hacer que el CI ejecute cualquier cosa—, así que el fichero vive en
+`tools/github-workflow-ci.yml` y la copia se hace desde la máquina del
+desarrollador. Mientras eso fue «acuérdate de hacerlo a mano», **no se hizo**:
+el CI estuvo dos días corriendo una versión que no conocía las suites 4.3, 4.4
+ni 4.5 ni el gate de nombres.
+
+Un CI desactualizado **no falla**: sale verde comprobando menos cosas, que es la
+peor forma de fallar.
+
+### `tools/sincronizar-ci.php`
+```
+php tools/sincronizar-ci.php              # copia si hace falta
+php tools/sincronizar-ci.php --comprobar  # solo avisa, no escribe
+```
+Es idempotente, crea `.github/workflows/` si no existe, enseña qué líneas entran
+antes de copiar —para que no sea a ciegas— y relee el fichero de disco para
+confirmar: dar por bueno lo que uno *pretendía* escribir no confirma nada.
+
+En PHP y no en PowerShell por dos razones: ya hay PHP instalado (es lo que corre
+`diagnostico.php`) y este proyecto ya se quemó una vez con las rarezas de
+redirección de PowerShell.
+
+### Y una quinta puerta en `diagnostico.php`
+La puerta `ci` corre `--comprobar` en cada pasada. Si el fichero se queda atrás,
+el diagnóstico lo dice y ofrece el comando exacto para arreglarlo. Es la única
+forma de que esto no vuelva a pasar: lo que depende de acordarse, se olvida.
+
+Comprobado con los cinco casos —desactualizado, copia, segunda pasada, carpeta
+inexistente y la puerta en fallo dentro del diagnóstico— sobre una copia en
+`/tmp`, nunca sobre los ficheros del repositorio.
+
+## [Cierre de la deuda de la revisión: T-19 a T-24] — 2026-08-25
+
+Cinco de los siete hallazgos que quedaron anotados, cerrados. Dos exigían una
+decisión de negocio y se tomaron.
+
+### `DEC-083` — «cuenta compartida» se calcula al leer
+Cuando dos creadores comparten cuenta bancaria, sólo se marcaba el **segundo**:
+`tg_cpm_compartida` es `BEFORE INSERT` y un disparador sólo escribe `NEW`. El
+operador que abre la pantalla del primero —el que probablemente cobre primero—
+veía «única» mientras la cuenta estaba duplicada.
+
+Lo obvio, un `AFTER INSERT` que marcase también la fila anterior, **no existe**:
+
+> `ERROR 1442: Can't update table 'creator_payment_methods' in stored
+> function/trigger because it is already used by statement which invoked this
+> stored function/trigger.`
+
+Comprobado contra el motor. Así que el hecho deja de guardarse dos veces:
+«compartida» es una propiedad del conjunto de filas con la misma huella, se
+pregunta al leer (`CuentasCompartidas`), y las dos filas dicen lo mismo por
+construcción. `shared_account_status` pasa a guardar sólo el resultado de la
+**revisión** (`cleared`), que sí es un hecho de la fila.
+
+Se descartó marcar las hermanas desde la aplicación: funcionaría y dejaría la
+regla fuera de la base, donde cualquier importación se la salta. Cuando el
+esquema no puede imponer algo, la respuesta es no duplicar el dato — no moverlo a
+un sitio más débil.
+
+Efecto: `T-20` desaparece, y `revisarCompartida()` ya funciona desde la pantalla
+de cualquiera de los dos creadores en vez de sólo del segundo.
+
+### `DEC-084` — «vigente» exige que ya haya empezado
+Un perfil fiscal aprobado con `valid_from` futuro se declaraba vigente **y era el
+que decidía la retención mostrada**: decía «NRUS, no aplica retención» cuando ese
+día aplicaba RER al 8 %, y la activación congelaba esa frase en la bitácora como
+evidencia. Ahora «vigente» exige `valid_from <= CURDATE()`, y el mensaje de
+aprobación distingue «aprobado y vigente» de «aprobado, todavía NO rige».
+
+Se descartó prohibir las fechas futuras: un cambio de régimen ante SUNAT tiene
+fecha conocida de antemano, y prohibirlo obliga a acordarse de entrar ese día.
+
+### Dos guardas de duplicado que dejaban pasar un `1062`
+La de solicitudes filtraba por `status IN ('pending','active','suspended')`,
+pero las únicas que protegen se apoyan en `identity_gate`, que **no mira el
+estado**: un creador en lista negra que volvía a postular reventaba con `1062`
+dentro de la transacción y el revisor veía un 500. Ahora no filtra por estado y
+el mensaje distingue un duplicado administrativo de una persona ya apartada — que
+no se resuelve corrigiendo datos.
+
+La de redes sociales sólo miraba cuentas verificadas **de otros** creadores, pero
+`uq_social_accounts_creator_handle` no tiene puerta de estado: volver a teclear
+una cuenta propia desactivada daba `1062`. Era el caso frecuente, no el exótico.
+
+### Y el enfriamiento de pagos, acotado
+Con `0`, la pantalla decía «no es pagable hasta dentro de 0 h» mientras la cuenta
+ya era pagable; con un valor negativo, `45000` sin traducir. El comentario del
+config ya decía «cero no es una opción»: ahora lo impone. Un comentario que dice
+«esto no puede pasar» y no lo impide es una nota, no una regla.
+
+### Verificación
+**784 correctas, 0 fallidas** en los dos motores (776 → 784). La suite de pagos
+fija ahora la asimetría real del disparador **y** que la consulta que usa la
+aplicación sí ve a los dos creadores: queda escrito por qué se calcula al leer.
+Nombres entre capas, fixturas, periodos, migraciones, triggers, equivalencia y
+DDL crudo sin discrepancias. Pint `passed`, 168 archivos PHP compilan.
+
+### Sigue abierto
+`T-18` (la bitácora se puede `TRUNCATE`: hacen falta dos usuarios de base de
+datos, es despliegue) y `T-23` (`must_change_password` se escribe y nadie lo
+lee: hace falta una pantalla de cambio de contraseña).
+
+## [Revisión adversarial del módulo Creator y de Shared] — 2026-08-25
+
+La revisión de 4.1–4.5 encontró siete defectos reales. Ese ritmo justificaba
+mirar el resto: el módulo **Creator** —que toca tarifas, retenciones y cuentas
+bancarias— y la **infraestructura compartida**. Dos revisiones independientes,
+~20 hallazgos. Se arreglan ocho; los siete restantes quedan anotados con su
+escenario (`T-18` a `T-24`) en vez de a medias.
+
+### Lo más grave: la aplicación hacía DDL en producción
+`Restriccion::motorAplicaCheck()` sondea el motor con
+`DROP TABLE` + `CREATE TABLE` + `DROP TABLE`. `PanelController` la llamaba sólo
+para pintar «el motor aplica CHECK: sí/no», así que **cada worker de PHP frío
+hacía DDL porque alguien abrió la portada**. Tres consecuencias, y la tercera es
+la que importa: el DDL hace *commit implícito* de cualquier transacción abierta,
+y obliga a que el usuario de la aplicación tenga `CREATE` y `DROP` — y con `DROP`
+se puede `TRUNCATE` la bitácora, que rechaza `UPDATE` y `DELETE` con disparadores
+pero **no sobrevive a un `TRUNCATE`** (`T-18`). Ahora la sonda sólo corre en
+consola; fuera devuelve el caso conservador sin tocar nada.
+
+### El compilador de restricciones se rompía con `\'`
+`partirFueraDeLiterales()` entendía `''` pero no `\'`, así que
+`note <> 'it\'s status'` cerraba el literal antes de tiempo: el nombre de
+columna se reescribía **dentro** de la cadena y el `status` de verdad se quedaba
+sin `NEW.`. El disparador compilaba, se instalaba, y comparaba contra la fila
+**vieja**: la comprobación quedaba puesta y no comprobaba nada. Es exactamente el
+fallo silencioso que `DEC-042` existe para eliminar, escondido en su propio lexer.
+
+### El RUC entero entraba en claro en una bitácora que no se puede corregir
+`REDACTAR` cubría cuentas bancarias y no documentos de identidad ni fiscales, así
+que `client_tax_profile.created` escribía `"RUC 20512345678"` en `audit_logs` —una
+tabla de sólo inserción— visible para cualquiera con `audit.view`, un permiso
+distinto de `client.tax.manage`. Y la redacción **sólo miraba el primer nivel**:
+un `document_number` dentro de un array anidado salía intacto. Ahora la lista
+incluye documentos y la redacción es recursiva. `ruc` y `dni` se dejaron **fuera**
+a propósito: se comparan por contención y `str_contains('estructura', 'ruc')` es
+cierto — una entrada demasiado corta esconde campos legítimos, que es el mismo
+pecado al revés.
+
+### Documentos de identidad detrás del permiso equivocado
+El listado y la ficha de creadores imprimían el `document_number` **entero** con
+sólo `creator.view` —que `content_reviewer` tiene— y el listado dejaba **buscar**
+por él: `LIKE '%40000001%'` contesta «¿está esta persona en el sistema y quién
+es?». Nuevo `Shared\Auth\Confidencial`: sin `creator.view_sensitive` se ven los
+últimos cuatro dígitos, la búsqueda por documento se desactiva y el marcador del
+buscador deja de prometerla. Se enmascara en el controlador, no en la plantilla,
+para que el valor entero no llegue a la vista.
+
+### Desmarcar «acepta presencial» lo guardaba como SÍ
+Una casilla sin marcar no viaja, así que `validated()` no traía la clave y la
+columna tomaba su `DEFAULT`. `accepts_travel` y `accepts_product_only` tienen
+default 0 y coincidían por suerte; `accepts_in_person` tiene **DEFAULT 1**. El
+operador declaraba «no acepta presencial» y la tabla de la misma pantalla lo
+mostraba como que sí. Las tres se escriben ahora con su valor explícito. Es la
+misma trampa de la casilla que apareció en marcas — y no es casualidad.
+
+### Y tres más
+- **`"- - - -"` pasaba como número de cuenta**: `min:6` y el patrón miran el
+  número crudo, y normalizaba a cadena **vacía** — máscara `****` y todas las
+  cuentas vacías con la misma huella, o sea `pending_review` entre creadores sin
+  relación. La regla nueva pregunta por lo normalizado.
+- **`date` en tres fechas que van directas a columnas `DATE`**: `01/15/2026` pasa
+  la validación y MySQL lo rechaza con `1292` dentro de una transacción.
+- **`PerfilComercialController` calculaba el cierre a mano** en dos sitios y
+  comparaba fechas como cadenas, teniendo `Vigencia` al lado. Hoy salía bien; era
+  el mismo par de cálculos que ya falló seis veces.
+
+### Lo que NO se arregló, y por qué
+Siete hallazgos quedan anotados con su escenario reproducible: la bitácora
+truncable (`T-18`, es despliegue: hacen falta dos usuarios de base de datos), la
+asimetría de la cuenta compartida (`T-19`), el comando de recálculo de huellas
+(`T-20`), el perfil fiscal con fecha futura llamado «vigente» (`T-21`), dos
+guardas de duplicado que dejan pasar un `1062` (`T-22`), `must_change_password`
+que nadie lee (`T-23`) y el enfriamiento de pagos sin acotar (`T-24`). Cada uno
+necesita una decisión o un cambio de esquema, no un parche a ciegas.
+
+### Verificación
+**776 correctas, 0 fallidas** en los dos motores. DDL crudo, nombres entre capas,
+fixturas, periodos, migraciones, triggers y equivalencia sin discrepancias. Pint
+`passed`, 167 archivos PHP compilan. El lexer y la redacción se comprobaron
+ejecutándolos con los casos exactos que los rompían.
+
+## [Revisión adversarial de 4.1–4.5] — 2026-08-25
+
+Cinco iteraciones sin poder pasar por PHPUnit son cinco iteraciones sin verificar.
+En vez de añadir una sexta, esta entrega somete 4.1–4.5 a una **revisión
+adversarial independiente** y arregla lo que apareció. Cada defecto se comprobó
+contra el motor antes de tocar nada.
+
+### El más grave: un nombre de cliente largo tumbaba el alta entera
+`client_organizations.commercial_name` admite **160** y `client_brands.name` son
+**120**. Como el alta de cliente crea su primera marca con el mismo nombre
+(`DEC-074`), una razón social de 121 a 160 caracteres daba
+`1406 Data too long`, y al ir dentro de una transacción **se perdía el cliente
+entero**: un 500, no un mensaje. La marca se recorta a 120; el cliente conserva
+su nombre completo, que es lo correcto — son campos distintos.
+
+### El más sutil: las fechas se comparaban como cadenas
+`'2026-2-1' > '2026-11-01'` es **cierto** en PHP. Y la regla `date` de Laravel
+acepta `2026-2-1`. Así que la guarda que existe para que el operador no vea un
+`45000` decía que sí se puede relevar, cerraba el periodo anterior *antes* de su
+propio `valid_from`… y salía el `45000`. Afectaba a **cuatro** sitios:
+`Vigencia::puedeRelevar()`, `Cobertura::noCerrablesEn()`, el veto `DEC-071` del
+perfil fiscal del creador, y por extensión toda pantalla con periodos.
+
+Cerrado en dos capas: `Vigencia` normaliza a `Y-m-d` antes de comparar (y expone
+`Vigencia::fecha()` para quien tenga que comparar fechas en otro sitio), y las
+validaciones pasan de `date` a `date_format:Y-m-d` en **siete** peticiones.
+`VigenciaTest` (9 pruebas, sin base de datos) lo fija.
+
+### La unicidad fiscal estaba desactivada en toda edición de sociedad
+`country_id` no se pide al editar, así que la regla leía `null`, buscaba
+`country_id = 0` y no encontraba nunca nada. Poner en una sociedad el documento
+de otra pasaba la validación y salía como `1062` crudo — el mensaje traducido no
+se emitía jamás al editar. Ahora el país se lee de la propia sociedad.
+
+### Y tres más
+- **Disolver antes de constituirse** (`ck_le_dates`) no tenía veto: `45000`.
+- **La ficha de sociedad decía «hoy lo cubre X»** de una sociedad *inactiva*, o
+  sea afirmando lo contrario de lo que 4.5 vino a hacer visible. Ahora distingue
+  «lo cubre» de «sitio ocupado por X (inactiva: NO puede facturar)».
+- **Una sociedad se anunciaba a sí misma como relevada** al redeclarar la
+  cobertura de un país que ya cubría. Además había dos lecturas de la fila
+  ocupada, una fuera de la transacción: ahora se pasa la que ya se leyó.
+
+### Editar una marca sin mandar categorías las borraba todas
+`sincronizarCategorias()` empieza por un `delete()`, y un checkbox sin marcar no
+se manda: «ninguna» y «no venía el campo» llegaban iguales. Cualquier petición
+sin la sección apagaba la detección de conflictos de marca (`BR-CAMPAIGN-007`) de
+esa marca, **en silencio**. Un testigo oculto deshace la ambigüedad, y hay prueba
+de que desmarcarlas todas sigue siendo posible — si «ninguna» no se pudiera
+expresar, la regla nueva sería otra trampa.
+
+### Lo que NO se arregló, y por qué (`T-17`)
+Dos carreras: `Contactos::bajarPrincipal()` no toma bloqueo cuando el puesto está
+libre, y `Marcas::slugUnico()` es un `SELECT` y luego un `INSERT`. La base
+protege el dato en ambos casos —no hay corrupción— pero el operador vería un
+`1062` crudo. Meter una captura amplia de `QueryException` sin poder ejecutar las
+pruebas es cambiar un riesgo conocido por uno que no puedo medir. Queda anotado.
+
+### Verificación
+**776 correctas, 0 fallidas** en los dos motores. Nombres entre capas, fixturas,
+periodos, migraciones, triggers, equivalencia y DDL crudo sin discrepancias.
+Pint `passed`, 166 archivos PHP compilan. **16 pruebas nuevas** (9 de `Vigencia`,
+3 de marcas, 4 de sociedades) — pendientes de PHPUnit como el resto.
+
+## [Fase 4 · 4.5 — Entidades legales y cobertura] — 2026-08-25
+
+**Cierra `Q-51`**, que era deuda mía. `BR-LE-004` lleva desde 4.1 diciéndole al
+operador *«dé de alta la cobertura en Entidades legales»*, y en 4.4 el aviso de
+los perfiles fiscales del cliente empezó a decir lo mismo. **Ese sitio no
+existía.** Un mensaje accionable que manda a una pantalla inexistente es sólo la
+mitad de accionable, y empeoraba con cada iteración que añadía otro mensaje.
+
+### El bloqueo que apareció al construirla (`DEC-081`)
+`uq_lec_country` ocupa el sitio de un país **mire o no el estado de la
+sociedad**, pero quien resuelve quién factura sólo cuenta las `active`. Juntas
+dejan un país **incomunicado**: se desactiva la sociedad que lo cubre sin cerrar
+su cobertura, ninguna activa lo cubre —así que `BR-LE-004` bloquea todo— y
+**ninguna otra puede tomarlo**, porque la fila abierta de la inactiva sigue
+ocupando el sitio. No se puede facturar y no se puede arreglar por el camino
+evidente.
+
+Comprobado contra el motor antes de escribir aplicación. Ahora la baja **cierra
+las coberturas abiertas en la misma transacción** y dice qué países quedan
+descubiertos y desde cuándo.
+
+### Un día importa, en los dos sentidos
+Al relevar, la anterior se cierra **el día antes**. Al dar de baja, si el último
+día facturado es el 30 de junio, el primer día **descubierto** es el 1 de julio.
+Decir «desde el 30 no se puede facturar» cuando el 30 sí se podía es el mismo
+error de un día, contado al revés.
+
+### El `subDay()` iba camino de la octava copia
+Ya se había hecho mal en **seis** sitios; en 4.4 escribí la séptima. Ahora vive
+en `Shared\Database\Vigencia` —`cerrarElDiaAntesDe()`, `elDiaDespuesDe()`,
+`puedeRelevar()`— y el parámetro se llama **como lo que de verdad se sabe**
+(`$empiezaElSiguiente`), porque el error consiste en confundir las dos fechas.
+`PerfilesFiscales::cerrarElDiaAntes()` conserva el nombre y delega.
+
+### Y la consulta de cobertura se unificó
+*«¿Quién factura a este país en esta fecha?»* vivía sólo dentro de
+`CoberturaFacturacion` (Client), y Core no puede depender de Client. Se movió a
+`Core\Services\Cobertura`; `CoberturaFacturacion` delega con su API intacta y
+conserva lo suyo: **la traducción a un mensaje accionable**. Dos implementaciones
+de «quién emite esta factura» habrían divergido, y el síntoma habría sido una
+factura emitida por la sociedad equivocada.
+
+### No hecho a propósito
+Sin reglas nuevas de esquema. **No se añade `priority` a la cobertura** aunque la
+hoja de ruta la mencione: `uq_lec_country` más el no-solape garantizan que en
+cualquier fecha hay como mucho una sociedad por país, así que sería un campo que
+nunca se lee y que insinúa que los empates son posibles. Tampoco cuentas
+bancarias, monedas permitidas ni series de documentos: van con la iteración que
+las use.
+
+### Tres errores míos en la suite
+Usé países que **no existen** en la semilla (`CL`, `MX`): `country_id` salió
+`NULL` y **tres aserciones de rechazo se pusieron verdes por el motivo
+equivocado** —las destaparon las de PERMITIR—. Cambié a `CO`/`US` y entonces
+pasaba sola y fallaba en la batería, porque `3.10` deja Colombia cubierta. Y el
+`DELETE` de «no se borra» apuntaba a cero filas, que **no dispara el
+`BEFORE DELETE`** y sale verde sin probar nada (la trampa que `3.12` ya
+documentó). Ahora la suite crea sus propios países y comprueba su premisa.
+
+### Verificación
+**776 correctas, 0 fallidas** en MariaDB y en MySQL 8 (732 → 776: 22 de esta
+iteración × 2 motores). Nombres entre capas, fixturas, periodos, migraciones,
+triggers, equivalencia, nombres SQL y DDL crudo sin discrepancias. Pint `passed`,
+165 archivos PHP compilan. `EntidadesLegalesTest` (11 pruebas) **pendiente de
+PHPUnit**.
+
+## [Herramientas · nombres entre capas] — 2026-08-25
+
+Cuatro iteraciones seguidas (4.1 a 4.4) se han entregado sin pasar por PHPUnit,
+porque **aquí no se puede correr**: packagist está bloqueado, Composer no puede
+instalar y no hay `vendor/`. En vez de acumular una quinta, esta entrega ataca la
+causa por el lado que sí se puede.
+
+### `tools/verificar-pantallas.py` (`DEC-080`)
+Contrasta lo que la aplicación **nombra** contra lo que **tiene**, en siete
+frentes: nombres de ruta, plantillas, permisos, roles usados en las pruebas,
+métodos de controlador referenciados desde las rutas, claves leídas de
+`validated()` que la `FormRequest` no declara, y variables que una plantilla usa
+sin que su controlador se las pase.
+
+Los siete son errores de **una letra** que tumban una suite entera con un mensaje
+que no señala la causa, y los siete se ven leyendo archivos. Cuesta un segundo y
+no necesita ni Laravel ni base de datos. **No sustituye a PHPUnit**: reduce la
+superficie de lo que sólo se sabe al ejecutar.
+
+### Se comprobó rompiendo, no confiando
+Cada uno de los siete se rompió a propósito sobre una copia en `/tmp` —nunca
+sobre los archivos entregados— y se exigió que el gate lo denunciara. Los siete
+se pillan. Un gate que dice «todo bien» sin que nadie haya comprobado que sabe
+decir «todo mal» no prueba nada.
+
+### Dos falsos positivos antes de que sirviera
+`->route('uuid')` no es el ayudante `route()` sino el accesor del parámetro de
+ruta: acusaba a cuatro sitios sanos. Y **`GuardarPerfilFiscalRequest` existe dos
+veces** —en `Modules/Creator` y en `Modules/Client`—, así que indexar por nombre
+corto hacía que el gate leyera las reglas de la clase equivocada y acusara al
+controlador de cliente de ocho claves que sí declara. Ahora resuelve por los
+`use` del archivo, y si el nombre sigue siendo ambiguo **se calla**.
+
+### Resultado sobre 4.1–4.4
+Limpio: 92 nombres de ruta, 43 plantillas, 99 permisos, 203 roles, 54 acciones de
+controlador y 15 plantillas contrastadas, sin un solo nombre roto. Además, los
+157 archivos PHP compilan y Pint pasa.
+
+## [Fase 4 · 4.4 — Identidad fiscal del cliente] — 2026-08-25
+
+Cierra el bloque **7.0** de la hoja de ruta. Hasta ahora la ficha del cliente
+**mostraba** los perfiles fiscales y no había forma de crear ninguno: el dato del
+que salen la razón social y el RUC de la factura sólo entraba por SQL.
+
+### El defecto que ha aparecido seis veces, cerrado en un solo sitio
+`valid_to` es **inclusivo**. Cerrar el periodo anterior con el `valid_from` del
+siguiente los deja solapados un día, y ese día *«¿con qué RUC se factura hoy?»*
+tiene dos respuestas. Ha pasado en tarifas (`H-16`), en el perfil fiscal del
+creador (`T-12`), en sus pruebas, en su suite, en la publicación de términos y en
+la suite de activación.
+
+Aquí se cierra con `valid_from - 1 día` y **en un único sitio**
+(`PerfilesFiscales::cerrarElDiaAntes()`), lo fija la suite en los dos sentidos, y
+`test_ningun_dia_tiene_dos_identidades_aplicables` comprueba la propiedad de
+verdad consultando como lo hará la facturación: para el 30, el 31, el 1 y el 2 la
+respuesta tiene que ser exactamente una. El mensaje de éxito **dice la fecha de
+cierre**, porque es el dato que decide con qué identidad se factura el día del
+relevo.
+
+### Dos códigos de la base traducidos a palabras
+`ck_ctxp_dates` cuando el periodo nuevo empezaría en o antes del vigente
+(`DEC-071`: eso no es cerrar el anterior, es decir que nunca estuvo vigente) y
+`uq_ctxp_taxid` cuando el documento ya es la identidad vigente de otro cliente en
+ese país. Este último **nombra al otro cliente**: `Duplicate entry
+'1-1-RUC-20123456789'` no le dice nada a nadie, y lo que ese choque significa casi
+siempre es que la misma empresa está dada de alta dos veces.
+
+### `DEC-078` — el histórico está congelado
+Sólo se corrige el vigente; un periodo cerrado devuelve 404. Si la fila no se
+puede borrar (`3.12`), poder reescribirla sin rastro es la misma pérdida por otra
+puerta. Es seguro corregir el vigente precisamente porque `invoices` guarda
+`receiver_*_snapshot`: **una corrección de hoy no reescribe una factura de ayer**.
+
+### `DEC-079` — permiso propio, y a propósito en dos roles
+`client.tax.manage`, no `client.manage`. **No** sigue la simetría de
+`creator.tax.manage` —que vive sólo en `finance`— y la asimetría es deliberada:
+el documento de un creador es dato personal sensible; el de una empresa es
+público. Aquí el riesgo no es fuga, es error, así que lo tienen `finance`, que
+emite, y `campaign_manager`, que habla con el cliente y tiene el dato.
+
+### No hecho a propósito
+Sin reglas nuevas de esquema. No se valida el formato del documento por país
+—una tabla de expresiones regulares mal puesta rechaza documentos válidos y no
+deja meterlos (`Q-55`)— y la falta de cobertura de facturación **avisa** en vez de
+bloquear: `BR-LE-003` se resuelve en la fecha de la operación, y registrar hoy la
+identidad de un cliente cuyo país se cubrirá el mes que viene es legítimo.
+
+### Corregido — la suite pasaba sola y fallaba en la batería
+La primera versión usaba el cliente de la semilla como «el vigente». Para cuando
+le toca el turno, `2.13` y `3.6` ya le han dejado perfiles fiscales en PE y CO, y
+tres aserciones acusaban a `uq_ctxp_taxid` de algo que no hizo. Ahora crea sus
+propios clientes y comprueba su premisa: *una prueba que sólo pasa si es la
+primera no está comprobando lo que dice*.
+
+### Verificación
+**732 correctas, 0 fallidas** en MariaDB y en MySQL 8 (696 → 732: 18 de esta
+iteración × 2 motores). Fixturas, periodos, migraciones, triggers generados,
+equivalencia, nombres SQL y DDL crudo sin discrepancias. Pint `passed`.
+`PerfilFiscalClienteTest` (13 pruebas) **pendiente de PHPUnit**.
+
+## [Fase 4 · 4.3 — Contactos del cliente] — 2026-08-25
+
+Con quién se habla en la empresa cliente. `uq_contacts_primary` ya dejaba **un
+contacto principal activo por cliente y tipo**; esta iteración construye la
+pantalla y, sobre todo, se ocupa de que ese límite **nunca llegue al operador en
+forma de `Duplicate entry`**.
+
+### `DEC-075` — el relevo se hace, no se rechaza
+Marcar a un segundo principal releva al primero, en una transacción, bajando al
+que ocupa **antes** de subir al nuevo. El orden no es estilo: al revés choca, y
+hay una aserción que lo fija. La alternativa —*«quítaselo primero al otro»*—
+obliga a una maniobra de dos pasos en la que, entre paso y paso, el cliente se
+queda sin principal de ese tipo. Una regla que exige pasar por un estado peor que
+el de partida está mal puesta.
+
+El relevo se anuncia **antes** (aviso ámbar en el formulario, con nombre) y
+**después** (el mensaje de éxito nombra al relevado). Y hay una prueba de que el
+mensaje *no* nombra a nadie cuando no se relevó a nadie.
+
+### Tres maniobras, una comprobación
+Subir a un suplente, reactivar a quien conservaba `is_primary = 1`, y mover a
+alguien a un tipo ocupado dan `1062` en SQL crudo. Son la misma situación vista
+desde tres sitios, así que `Contactos::actualizar()` tiene **una** comprobación,
+no tres. `4.3-contactos.sh` comprueba que la base las rechaza; `ContactosTest`,
+que por la pantalla no llegan.
+
+### `DEC-076` — la lista de suites vive en un solo archivo
+Al registrar la suite nueva se descubrió que **`3.10`, `3.11` y `3.12` estaban
+sólo en el bloque de Percona del CI**. La lista estaba escrita a mano en cuatro
+sitios; durante tres iteraciones esas suites corrieron en un motor de los tres y
+el CI salía verde, porque *un CI no puede echar de menos una prueba que nadie le
+nombró*. Ahora vive en `tools/pruebas/SUITES` y la leen los cuatro.
+
+### Corregido — el gate de fixturas culpaba al fixture cuando no entendía el error
+`verificar-fixturas.py` tomaba la primera línea de `stderr` como texto del error.
+El cliente de MariaDB escribe antes el eco de la sentencia entre guiones, así que
+el «error» era `--------------`, no casaba con ningún patrón, y
+`culpa_del_fixture()` caía hasta el final **acusando al fixture**. Seis fixturas
+sanas salían señaladas. Ahora se busca la línea `ERROR`; si no la hay, el
+veredicto es *sin veredicto*, no una acusación.
+
+### No hecho a propósito
+Sin reglas nuevas de esquema. `contact_email` sigue sin ser única —es un canal
+comercial compartible, no una identidad de acceso (`Q-53`)—, no se exige contacto
+principal para activar un cliente (se avisa en ámbar, `Q-52`), no se expone
+`user_id` (no hay flujo de invitación todavía) y los contactos se desactivan, no
+se borran. Y un contacto **no cambia de cliente** (`DEC-077`).
+
+### Verificación
+**696 correctas, 0 fallidas** en MariaDB y en MySQL 8 (654 → 696: 21 de esta
+iteración × 2 motores). Fixturas, periodos, migraciones, triggers generados,
+equivalencia, nombres SQL y DDL crudo sin discrepancias. Pint `passed`.
+`ContactosTest` (13 pruebas) **pendiente de PHPUnit**.
+
 ## [Fase 4 · 4.2 — Marcas] — 2026-08-25
 
 Esta iteración nace de una pregunta de revisión: *«¿clientes y marcas no son lo

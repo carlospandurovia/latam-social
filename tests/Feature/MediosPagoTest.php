@@ -14,6 +14,7 @@ use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Tests\Apoyo\ConFixturas;
 use Tests\TestCase;
 
 /**
@@ -28,6 +29,7 @@ use Tests\TestCase;
  */
 final class MediosPagoTest extends TestCase
 {
+    use ConFixturas;
     use RefreshDatabase;
 
     private string $uuid;
@@ -47,28 +49,7 @@ final class MediosPagoTest extends TestCase
 
     private function crearCreador(string $nombre, string $correo, string $documento, ?string $uuid = null): int
     {
-        return (int) DB::table('creators')->insertGetId([
-            'uuid' => $uuid ?? (string) Str::uuid(),
-            'first_name' => 'Ana', 'last_name' => 'Torres', 'display_name' => $nombre,
-            'birth_date' => '1998-05-12', 'email' => $correo,
-            'country_id' => DB::table('countries')->where('iso2', 'PE')->value('id'),
-            'document_country_code' => 'PE', 'document_type' => 'DNI', 'document_number' => $documento,
-            'status' => 'pending', 'payment_term_days' => 30, 'preferred_currency_code' => 'PEN',
-            'created_at' => now(), 'updated_at' => now(),
-        ]);
-    }
-
-    private function usuarioCon(string $rol): User
-    {
-        $usuario = User::factory()->create();
-        DB::table('role_user')->insert([
-            'user_id' => $usuario->id,
-            'role_id' => DB::table('roles')->where('code', $rol)->value('id'),
-            'assigned_at' => now(),
-        ]);
-        Permisos::olvidar((int) $usuario->id);
-
-        return $usuario;
+        return $this->creadorPendiente(['uuid' => $uuid ?? (string) Str::uuid(), 'display_name' => $nombre, 'email' => $correo, 'document_number' => $documento]);
     }
 
     /**

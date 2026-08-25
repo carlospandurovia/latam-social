@@ -42,7 +42,7 @@ final class GuardarPerfilFiscalRequest extends FormRequest
             'issued_document_type' => ['required', Rule::in(['recibo_honorarios', 'factura', 'invoice', 'none'])],
             'holder_type' => ['required', Rule::in(['creator', 'guardian'])],
             'holder_guardian_id' => ['nullable', 'integer', 'required_if:holder_type,guardian'],
-            'valid_from' => ['required', 'date'],
+            'valid_from' => ['required', 'date_format:Y-m-d'],
         ];
     }
 

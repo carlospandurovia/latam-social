@@ -12,8 +12,22 @@ use Illuminate\Support\Facades\Schema;
  * Las tres tablas de solo-inserción del sistema.
  *
  * Ninguna tiene updated_at, y es deliberado: una fila que puede actualizarse no
- * es un hecho, es una opinión. El usuario de aplicación no debe tener UPDATE ni
- * DELETE sobre audit_logs (ver .env.example, DB_MIGRATION_USERNAME).
+ * es un hecho, es una opinión.
+ *
+ * `UPDATE` y `DELETE` sobre `audit_logs` los paran dos disparadores, aquí abajo,
+ * y funcionan con cualquier usuario. Lo que NINGÚN disparador puede parar es
+ * `TRUNCATE`: no dispara triggers, y no hay forma de escribir uno que lo haga —
+ * es una operación de esquema, no de datos.
+ *
+ * Así que la última defensa de la bitácora **no está en este archivo**: está en
+ * que el usuario de la aplicación no tenga el privilegio `DROP`, que es el que
+ * `TRUNCATE` exige. Ver `.env.example` para las dos concesiones, y
+ * `php artisan seguridad:privilegios` para comprobar que se hicieron.
+ *
+ * Este comentario decía antes que el usuario de aplicación «no debe tener UPDATE
+ * ni DELETE» y remitía a una `DB_MIGRATION_USERNAME` que no leía nadie. Las dos
+ * cosas eran falsas: los disparadores ya cubren `UPDATE` y `DELETE`, y la
+ * variable no existía en ninguna configuración (`T-18`).
  */
 return new class extends Migration
 {

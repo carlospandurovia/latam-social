@@ -205,6 +205,24 @@ final class Restriccion
         for ($i = 0; $i < $longitud; $i++) {
             $caracter = $expresion[$i];
 
+            // `\'` dentro de un literal tambien es una comilla escapada.
+            //
+            // Sin esto, `note <> 'it\'s status'` cerraba el literal en la
+            // comilla escapada, y lo que venia detras se trataba como SQL: el
+            // nombre de columna se reescribia DENTRO de la cadena y el `status`
+            // de verdad se quedaba sin `NEW.`. El disparador compilaba, se
+            // instalaba, y comparaba contra la fila VIEJA. O sea: la
+            // comprobacion quedaba puesta y no comprobaba nada.
+            //
+            // Es exactamente el fallo silencioso que esta clase existe para
+            // eliminar (`DEC-042`), escondido en su propio lexer.
+            if ($dentro && $caracter === '\\' && $i + 1 < $longitud && $expresion[$i + 1] === "'") {
+                $actual .= "\\'";
+                $i++;
+
+                continue;
+            }
+
             if ($caracter === "'") {
                 // '' dentro de un literal es una comilla escapada, no un cierre.
                 if ($dentro && $i + 1 < $longitud && $expresion[$i + 1] === "'") {
@@ -286,6 +304,28 @@ final class Restriccion
     {
         if (self::$motorAplicaCheck !== null) {
             return self::$motorAplicaCheck;
+        }
+
+        // La sonda hace DDL: `DROP TABLE` + `CREATE TABLE` + `DROP TABLE`.
+        //
+        // Eso NO puede pasar desde una peticion web. Tres razones, y la tercera
+        // es la que de verdad importa:
+        //
+        //  1. `PanelController` llamaba aqui solo para pintar «el motor aplica
+        //     CHECK: si/no». Cada worker de PHP frio hacia DDL en produccion
+        //     por que alguien abrio la portada.
+        //  2. El DDL hace *commit implicito* de cualquier transaccion abierta.
+        //  3. Obliga a que el usuario de la aplicacion tenga `CREATE` y `DROP`.
+        //     Y `TRUNCATE` exige `DROP`: con ese privilegio, `audit_logs` —que
+        //     rechaza `UPDATE` y `DELETE` con disparadores— se puede **vaciar
+        //     entera** sin disparar nada. La bitagora deja de ser evidencia.
+        //
+        // Fuera de consola se devuelve el caso CONSERVADOR sin tocar nada: que
+        // el motor NO aplica CHECK. Es el que hace que `Restriccion` instale
+        // disparadores, o sea el que impone la regla de verdad. La decision que
+        // cuenta se toma en las migraciones, y esas corren en consola.
+        if (!app()->runningInConsole()) {
+            return self::$motorAplicaCheck = false;
         }
 
         try {

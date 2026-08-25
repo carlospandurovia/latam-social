@@ -1,0 +1,303 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Modules\Campaign\Http\Controllers;
+
+use App\Modules\Campaign\Http\Requests\GuardarCampanaRequest;
+use App\Modules\Campaign\Services\Campanas;
+use App\Modules\Campaign\Services\EstadosDeCampana;
+use App\Shared\Audit\Bitacora;
+use App\Shared\Auth\Permisos;
+use App\Shared\Database\Choque;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\View\View;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
+
+/**
+ * Campañas: alta, ficha y movimiento de estado (7.1).
+ *
+ * ### Lo que esta pantalla existe para impedir
+ *
+ * Dos cosas, y las dos son de dinero:
+ *
+ * 1. **Que una campaña salga de borrador sin saber quién la factura.**
+ *    `BR-LE-004` lo dice literal: *nunca se asigna una entidad por defecto ni se
+ *    continúa en silencio*. Si ningún país está cubierto, se bloquea **con el
+ *    motivo y con qué hacer**, no con un 500 ni con una sociedad inventada.
+ * 2. **Que alguien salte estados.** `ck_camp_status` admite ocho valores y no
+ *    dice nada de cómo se pasa de uno a otro; eso vive en `EstadosDeCampana`.
+ *
+ * ### El permiso de aprobar es OTRO
+ *
+ * Aprobar fija el ingreso comprometido y congela la sociedad emisora. Lo firma
+ * finanzas y no quien montó la campaña —la misma separación que `DEC-044`
+ * impone en la base para perfiles fiscales y medios de pago—, y por eso el
+ * permiso sale del **grafo**, no de la ruta: una ruta con un permiso fijo
+ * obligaría a partir la acción en dos y a acordarse de las dos.
+ */
+final class CampanasController
+{
+    public function index(Request $peticion): View
+    {
+        $estado = (string) $peticion->query('estado', '');
+
+        $consulta = DB::table('campaigns as c')
+            ->join('client_organizations as co', 'co.id', '=', 'c.client_organization_id')
+            ->join('client_brands as cb', 'cb.id', '=', 'c.client_brand_id')
+            ->leftJoin('legal_entities as le', 'le.id', '=', 'c.billing_legal_entity_id')
+            ->orderByDesc('c.starts_on');
+
+        if (isset(EstadosDeCampana::NOMBRES[$estado])) {
+            $consulta->where('c.status', $estado);
+        }
+
+        return view('campanas.index', [
+            'campanas' => $consulta->get([
+                'c.uuid', 'c.code', 'c.name', 'c.status', 'c.starts_on', 'c.ends_on',
+                'c.revenue_amount', 'c.currency_code',
+                'co.commercial_name as cliente', 'cb.name as marca', 'le.code as sociedad',
+            ]),
+            'estados' => EstadosDeCampana::NOMBRES,
+            'estado' => $estado,
+            // Cuantas hay sin sociedad: son las que no van a poder salir de
+            // borrador, y verlo aqui evita descubrirlo una por una.
+            'sinSociedad' => DB::table('campaigns')->whereNull('billing_legal_entity_id')->count(),
+        ]);
+    }
+
+    public function show(string $uuid): View
+    {
+        $campana = $this->campana($uuid);
+
+        return view('campanas.show', [
+            'campana' => $campana,
+            'estados' => EstadosDeCampana::NOMBRES,
+            'objetivos' => Campanas::OBJETIVOS,
+            // Solo las transiciones que ESTE usuario puede hacer. Ensenar un
+            // boton que va a dar 403 es peor que no ensenarlo.
+            'transiciones' => $this->transicionesDisponibles((string) $campana->status),
+            'cobertura' => Campanas::quienFactura(
+                (int) $campana->client_organization_id,
+                (string) $campana->starts_on,
+            ),
+        ]);
+    }
+
+    public function create(): View
+    {
+        return view('campanas.form', $this->datosDelFormulario());
+    }
+
+    public function store(GuardarCampanaRequest $peticion): RedirectResponse
+    {
+        /** @var array<string, mixed> $datos */
+        $datos = $peticion->validated();
+
+        // La sociedad se resuelve a `starts_on`, no a hoy: `BR-LE-003` dice «en
+        // la fecha de la operacion», y para una campana esa fecha es cuando
+        // empieza a prestarse el servicio.
+        $cobertura = Campanas::quienFactura(
+            (int) $datos['client_organization_id'],
+            (string) $datos['starts_on'],
+        );
+
+        $uuid = null;
+        $codigo = null;
+        $probados = [];
+
+        // `$datos` va POR REFERENCIA. Sin el `&`, el `code` que calcula el
+        // reintento se queda dentro del cierre y el mensaje de exito de abajo
+        // lee una clave que no existe. Salio a la primera ejecucion de las
+        // pruebas, que es exactamente para lo que estan.
+        Choque::reintentar('uq_camp_code', function () use (
+            $peticion, &$datos, $cobertura, &$uuid, &$codigo, &$probados
+        ): void {
+            $codigo = Campanas::codigoLibre(
+                $peticion->nombreDelCliente(),
+                (int) substr((string) $datos['starts_on'], 0, 4),
+                evitando: $probados,
+            );
+            $probados[] = $codigo;
+            $datos['code'] = $codigo;
+
+            $uuid = Campanas::crear(
+                $datos,
+                $cobertura->hay() ? (int) $cobertura->entidad->id : null,
+                (int) Auth::id(),
+            );
+        });
+
+        Bitacora::registrar(
+            accion: 'campaign.created',
+            tipoEntidad: 'campaign',
+            idEntidad: (int) DB::table('campaigns')->where('uuid', $uuid)->value('id'),
+            cambios: ['campana' => ['antes' => null, 'despues' => $datos['name']]],
+        );
+
+        $mensaje = "Campana «{$datos['name']}» creada como borrador, con codigo {$codigo}.";
+
+        return redirect()->route('campanas.show', $uuid)->with(
+            $cobertura->hay() ? 'exito' : 'aviso',
+            $cobertura->hay()
+                ? $mensaje." La factura la emitira {$cobertura->entidad->code}."
+                : $mensaje.' '.$cobertura->explicacion.' Hasta entonces se queda en borrador.',
+        );
+    }
+
+    public function edit(string $uuid): View
+    {
+        $campana = $this->campana($uuid);
+
+        if (!in_array((string) $campana->status, EstadosDeCampana::INICIALES, true)) {
+            // No es un 403: el usuario PUEDE gestionar campanas. Lo que no se
+            // puede es editar esta, y eso se dice.
+            abort(409, 'Una campana confirmada no se edita: sus datos ya se comprometieron con el cliente.');
+        }
+
+        return view('campanas.form', $this->datosDelFormulario() + ['campana' => $campana]);
+    }
+
+    public function update(GuardarCampanaRequest $peticion, string $uuid): RedirectResponse
+    {
+        $campana = $this->campana($uuid);
+
+        /** @var array<string, mixed> $datos */
+        $datos = $peticion->validated();
+
+        $cobertura = Campanas::quienFactura(
+            (int) $datos['client_organization_id'],
+            (string) $datos['starts_on'],
+        );
+
+        $cambios = [];
+        foreach ($datos as $campo => $valor) {
+            if ((string) ($campana->{$campo} ?? '') !== (string) ($valor ?? '')) {
+                $cambios[$campo] = ['antes' => $campana->{$campo} ?? null, 'despues' => $valor];
+            }
+        }
+
+        DB::table('campaigns')->where('id', $campana->id)->update($datos + [
+            // Cambiar la fecha de inicio puede cambiar QUIEN factura. Se
+            // recalcula en vez de arrastrar la de antes: si no, mover la fecha
+            // dejaria la campana con la sociedad de la fecha vieja, que es
+            // exactamente el «deducirlo de la configuracion vigente» que
+            // `BR-LE-001` prohibe, pero congelado al reves.
+            'billing_legal_entity_id' => $cobertura->hay() ? (int) $cobertura->entidad->id : null,
+            'updated_at' => now(),
+        ]);
+
+        if ($cambios !== []) {
+            Bitacora::registrar(
+                accion: 'campaign.updated',
+                tipoEntidad: 'campaign',
+                idEntidad: (int) $campana->id,
+                cambios: $cambios,
+            );
+        }
+
+        return redirect()->route('campanas.show', $uuid)->with('exito', 'Campana actualizada.');
+    }
+
+    /**
+     * Mueve la campaña de estado.
+     *
+     * Una sola acción para las ocho transiciones. El permiso lo dice el grafo,
+     * no la ruta: partirlo en una acción por transición obligaría a repetir el
+     * permiso en cada una y a acordarse de todas al añadir un estado.
+     */
+    public function transicionar(Request $peticion, string $uuid): RedirectResponse
+    {
+        $campana = $this->campana($uuid);
+        $desde = (string) $campana->status;
+        $hasta = (string) $peticion->input('estado', '');
+
+        if (($aviso = EstadosDeCampana::veto($desde, $hasta)) !== null) {
+            return back()->with('aviso', $aviso);
+        }
+
+        $permiso = (string) EstadosDeCampana::permiso($desde, $hasta);
+
+        if (!Permisos::tiene((int) Auth::id(), $permiso)) {
+            abort(403, "Esta transicion exige el permiso `{$permiso}`.");
+        }
+
+        // Salir de borrador sin sociedad lo rechaza `ck_camp_billing_entity` con
+        // un 45000. Se veta ANTES para poder decir por que y que hacer
+        // (`BR-LE-004`), en vez de traducir un error del motor.
+        if ($campana->billing_legal_entity_id === null
+            && !in_array($hasta, EstadosDeCampana::INICIALES, true)) {
+            return back()->with('aviso', Campanas::quienFactura(
+                (int) $campana->client_organization_id,
+                (string) $campana->starts_on,
+            )->explicacion);
+        }
+
+        Campanas::transicionar($campana, $hasta);
+
+        Bitacora::registrar(
+            accion: 'campaign.status_changed',
+            tipoEntidad: 'campaign',
+            idEntidad: (int) $campana->id,
+            cambios: ['status' => ['antes' => $desde, 'despues' => $hasta]],
+        );
+
+        return redirect()->route('campanas.show', $uuid)->with('exito', sprintf(
+            'Campana movida a «%s».%s',
+            EstadosDeCampana::NOMBRES[$hasta],
+            $campana->confirmed_at === null && in_array($hasta, EstadosDeCampana::confirmados(), true)
+                ? ' A partir de ahora la sociedad que la factura ya no se puede cambiar (BR-LE-002).'
+                : '',
+        ));
+    }
+
+    // ------------------------------------------------------------------ apoyo
+
+    private function campana(string $uuid): object
+    {
+        $fila = DB::table('campaigns')->where('uuid', $uuid)->first();
+
+        if ($fila === null) {
+            throw new NotFoundHttpException('No existe esa campana.');
+        }
+
+        return $fila;
+    }
+
+    /** @return array<string, string> destino => nombre para la pantalla */
+    private function transicionesDisponibles(string $estado): array
+    {
+        $usuarioId = (int) Auth::id();
+        $salida = [];
+
+        foreach (EstadosDeCampana::desde($estado) as $destino => $permiso) {
+            if (Permisos::tiene($usuarioId, $permiso)) {
+                $salida[$destino] = EstadosDeCampana::NOMBRES[$destino];
+            }
+        }
+
+        return $salida;
+    }
+
+    /** @return array<string, mixed> */
+    private function datosDelFormulario(): array
+    {
+        return [
+            'clientes' => DB::table('client_organizations')
+                ->whereNotIn('status', ['inactive', 'blacklisted'])
+                ->orderBy('commercial_name')
+                ->get(['id', 'commercial_name', 'country_id']),
+            'marcas' => DB::table('client_brands')
+                ->where('status', 'active')
+                ->orderBy('name')
+                ->get(['id', 'client_organization_id', 'name']),
+            'monedas' => DB::table('currencies')->orderBy('code')->get(['code', 'name']),
+            'objetivos' => Campanas::OBJETIVOS,
+            'hoy' => now()->toDateString(),
+            'campana' => null,
+        ];
+    }
+}

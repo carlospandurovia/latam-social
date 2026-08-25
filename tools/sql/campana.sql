@@ -8,6 +8,10 @@ CREATE TABLE campaigns (
   name                 VARCHAR(180)  NOT NULL,
   client_organization_id BIGINT UNSIGNED NOT NULL,
   client_brand_id      BIGINT UNSIGNED NOT NULL,
+  -- 7.1 / BR-LE-001: la campana DICE quien la factura, no se deduce de la
+  -- cobertura vigente al consultar. NULL-able porque un borrador puede estar
+  -- todavia escribiendose; `ck_camp_billing_entity` impide que salga de ahi asi.
+  billing_legal_entity_id BIGINT UNSIGNED NULL,
   objective            VARCHAR(30)   NOT NULL DEFAULT 'awareness',
   briefing             LONGTEXT      NULL,
   briefing_file_id     BIGINT UNSIGNED NULL,
@@ -33,12 +37,14 @@ CREATE TABLE campaigns (
   UNIQUE KEY uq_camp_code (code),
   KEY ix_camp_client (client_organization_id, status),
   KEY ix_camp_brand (client_brand_id, status),
+  KEY ix_camp_legal_entity (billing_legal_entity_id),
   KEY ix_camp_status (status, starts_on),
   KEY ix_camp_currency (currency_code),
   KEY ix_camp_creator_user (created_by_user_id),
   KEY ix_camp_file (briefing_file_id),
   CONSTRAINT fk_camp_client FOREIGN KEY (client_organization_id) REFERENCES client_organizations(id) ON DELETE RESTRICT,
   CONSTRAINT fk_camp_brand FOREIGN KEY (client_brand_id) REFERENCES client_brands(id) ON DELETE RESTRICT,
+  CONSTRAINT fk_camp_legal_entity FOREIGN KEY (billing_legal_entity_id) REFERENCES legal_entities(id) ON DELETE RESTRICT,
   CONSTRAINT fk_camp_currency FOREIGN KEY (currency_code) REFERENCES currencies(code) ON DELETE RESTRICT,
   CONSTRAINT fk_camp_user FOREIGN KEY (created_by_user_id) REFERENCES users(id) ON DELETE RESTRICT,
   CONSTRAINT fk_camp_file FOREIGN KEY (briefing_file_id) REFERENCES files(id) ON DELETE RESTRICT,
@@ -48,7 +54,8 @@ CREATE TABLE campaigns (
   CONSTRAINT ck_camp_revenue CHECK (revenue_amount >= 0),
   CONSTRAINT ck_camp_rounds CHECK (included_revision_rounds BETWEEN 0 AND 10),
   -- Confirmada exige fecha: es el instante a partir del cual ya no se puede borrar.
-  CONSTRAINT ck_camp_confirmed CHECK (status IN ('draft','pending_approval','cancelled') OR confirmed_at IS NOT NULL)
+  CONSTRAINT ck_camp_confirmed CHECK (status IN ('draft','pending_approval','cancelled') OR confirmed_at IS NOT NULL),
+  CONSTRAINT ck_camp_billing_entity CHECK (status IN ('draft','pending_approval','cancelled') OR billing_legal_entity_id IS NOT NULL)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Los mercados de la campana. Una campana LATAM tiene varios.
@@ -209,3 +216,40 @@ CREATE TABLE agreement_amendments (
   CONSTRAINT ck_aa_outcome CHECK (accepted_at IS NULL OR rejected_at IS NULL),
   CONSTRAINT ck_aa_accepted CHECK (accepted_at IS NULL OR accepted_by_user_id IS NOT NULL)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ===========================================================================
+-- 7.1 - La sociedad que factura una campana confirmada no se cambia.
+--
+-- `BR-LE-002`: la entidad legal de un documento es inmutable una vez emitido.
+-- Para una campana, «emitido» se decidio que es CONFIRMADA (decision de
+-- negocio, 2026-08-25): mientras es borrador se puede corregir un dedazo, y en
+-- cuanto tiene `confirmed_at` se cierra.
+--
+-- Es un disparador y no un CHECK porque un CHECK no puede mirar el valor
+-- ANTERIOR de la fila: «no cambiar esto» es una regla sobre la transicion, no
+-- sobre el estado.
+--
+-- Y no vale dejarlo en el controlador. De este dato depende que una factura de
+-- dentro de dos anos siga sabiendo quien la emitio: tiene que sobrevivir a un
+-- UPDATE de mantenimiento, a una importacion y a la proxima pantalla que
+-- alguien escriba sin acordarse. Mismo criterio que `tg_cpm_inmutable`.
+--
+-- `<=>` y no `<>`: con `<>`, pasar de una sociedad a NULL da NULL --que no es
+-- cierto-- y el disparador dejaria pasar justo el caso de borrar el dato.
+-- ===========================================================================
+
+DELIMITER //
+
+CREATE TRIGGER `tg_camp_entidad_congelada`
+BEFORE UPDATE ON `campaigns`
+FOR EACH ROW
+BEGIN
+  IF OLD.confirmed_at IS NOT NULL
+     AND NOT (NEW.billing_legal_entity_id <=> OLD.billing_legal_entity_id)
+  THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'La sociedad que factura una campana confirmada no se cambia (BR-LE-002): anule la campana y cree otra.';
+  END IF;
+END//
+
+DELIMITER ;
