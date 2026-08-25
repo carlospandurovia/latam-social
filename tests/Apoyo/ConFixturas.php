@@ -298,11 +298,17 @@ trait ConFixturas
      * |---|---|
      * | `ck_camp_confirmed` | `confirmed_at` — el instante desde el que la campaña ya no se borra |
      * | `ck_camp_billing_entity` | `billing_legal_entity_id` — quién la factura (`BR-LE-001`, 7.1) |
+     * | `ck_camp_revenue_declarado` | un ingreso **declarado**: o importe > 0, o `is_gratis` (7.2) |
      *
      * La segunda llegó con 7.1 y dejó obsoletos tres fixtures escritos a mano
      * en `PerfilComercialTest` el mismo día que se creó. Es exactamente el
      * síntoma que describía `T-13`: *cada restricción nueva los deja obsoletos
      * de uno en uno*. Por eso este método existe y por eso vive aquí.
+     *
+     * La tercera llegó con 7.2 **y ya no rompió ningún fixture escrito a mano**:
+     * rompió este método, en un sitio, y se arregló en un sitio. Que la lista de
+     * arriba crezca es lo esperado; lo que no vuelve a pasar es que crezca en
+     * once ficheros a la vez.
      *
      * ### El nombre lleva `De` a propósito
      *
@@ -333,6 +339,35 @@ trait ConFixturas
             // falta en vez de fallar con un `3819` que nombra la restricción y
             // no lo que falta.
             'billing_legal_entity_id' => $borrador ? null : $this->entidadLegal(),
+            // Fuera de borrador el cero hay que explicarlo (`ck_camp_revenue_declarado`).
+            // Se pone importe y no `is_gratis`: una campaña gratuita es el caso
+            // raro, y un fixture por omisión tiene que parecerse al caso normal.
+            'revenue_amount' => $borrador ? 0 : 1000,
+            'is_gratis' => 0,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ], $cambios));
+    }
+
+    /**
+     * Un requisito de formato para el brief de una campaña.
+     *
+     * Con esto una campaña «puede salir de borrador» (`BR-CAMPAIGN-004`, 7.2).
+     * El formato se toma de los que ya hay sembrados en vez de crear uno: los
+     * formatos son catálogo, y una prueba que se invente uno prueba contra un
+     * catálogo que no existe en producción.
+     *
+     * @param array<string, mixed> $cambios
+     */
+    protected function requisitoDe(int $campanaId, array $cambios = []): int
+    {
+        return (int) DB::table('campaign_requirements')->insertGetId(array_merge([
+            'campaign_id' => $campanaId,
+            'campaign_market_id' => null,
+            'content_format_id' => (int) DB::table('content_formats')->where('is_active', 1)->value('id'),
+            'quantity' => 1,
+            'deadline_offset_days' => 7,
+            'permanence_days' => 30,
             'created_at' => now(),
             'updated_at' => now(),
         ], $cambios));

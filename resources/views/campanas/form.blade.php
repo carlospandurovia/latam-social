@@ -92,7 +92,23 @@
           <input id="revenue_amount" name="revenue_amount" type="number" step="0.01" min="0"
                  value="{{ old('revenue_amount', $campana->revenue_amount ?? '0') }}"
                  class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+          {{-- La casilla va DEBAJO del importe y no en otra fila: la pregunta que
+               contesta es sobre ese cero, y separarlas haria que se contestara
+               sin mirarlo. `hidden` con valor 0 para que «no marcada» llegue
+               como respuesta y no como silencio. --}}
+          <label class="mt-2 flex items-start gap-2 text-xs text-slate-600">
+            <input type="hidden" name="is_gratis" value="0">
+            <input type="checkbox" name="is_gratis" value="1" class="mt-0.5 rounded border-slate-300"
+                   @checked((int) old('is_gratis', $campana->is_gratis ?? 0) === 1)>
+            <span>
+              Campana gratuita (canje o cortesia).
+              <span class="text-slate-500">Marcarla dice que el cero es a proposito;
+              sin marcar, un cero significa que todavia falta ponerle precio y la
+              campana no podra aprobarse.</span>
+            </span>
+          </label>
           @error('revenue_amount') <p class="mt-1 text-xs text-rose-600">{{ $message }}</p> @enderror
+          @error('is_gratis') <p class="mt-1 text-xs text-rose-600">{{ $message }}</p> @enderror
         </div>
         <div>
           <label for="currency_code" class="block text-sm font-medium text-slate-700 mb-1">Moneda</label>

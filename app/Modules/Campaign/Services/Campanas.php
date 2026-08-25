@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Campaign\Services;
 
 use App\Modules\Client\Services\CoberturaFacturacion;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -81,6 +82,7 @@ final class Campanas
             'objective' => $datos['objective'],
             'status' => EstadosDeCampana::BORRADOR,
             'revenue_amount' => $datos['revenue_amount'] ?? 0,
+            'is_gratis' => (bool) ($datos['is_gratis'] ?? false),
             'currency_code' => $datos['currency_code'],
             'included_revision_rounds' => $datos['included_revision_rounds'] ?? 2,
             'min_creator_age' => $datos['min_creator_age'] ?? 0,
@@ -122,6 +124,82 @@ final class Campanas
         }
 
         DB::table('campaigns')->where('id', $campana->id)->update($cambios);
+    }
+
+    /**
+     * Por qué esta campaña **no** puede salir de borrador todavía.
+     *
+     * Devuelve `null` cuando sí puede. `BR-CAMPAIGN-004` dice que una campaña no
+     * pasa a `approved` sin *presupuesto, cliente, marca y brief definidos*, y
+     * hasta 7.2 no lo impedía nada: la regla estaba escrita en
+     * `docs/06-BUSINESS-RULES.md` y el código dejaba aprobar una campaña vacía.
+     *
+     * Cliente y marca los garantiza el esquema —son `NOT NULL` con foránea—, así
+     * que lo que queda por comprobar es lo otro:
+     *
+     * | Qué | Por qué |
+     * |---|---|
+     * | Al menos un requisito de formato | es lo mínimo que un creador necesita para decidir si acepta |
+     * | El ingreso, declarado | cero es válido, pero «regalada» y «nadie puso el precio» no son lo mismo |
+     * | La sociedad que factura | `BR-LE-001`, ya en 7.1 |
+     *
+     * **«Brief definido» = al menos un requisito** (decisión de negocio,
+     * 2026-08-25). El texto del briefing queda opcional a propósito: no se puede
+     * comprobar de verdad —un espacio en blanco lo cumpliría— así que exigirlo
+     * añadiría fricción sin añadir garantía. Los formatos sí se comprueban, y
+     * son lo que convierte «hay una campaña» en «hay algo que entregar».
+     *
+     * @return list<string> los motivos, vacío si puede salir
+     */
+    public static function loQueFaltaParaSalirDeBorrador(object $campana): array
+    {
+        $faltan = [];
+
+        if ($campana->billing_legal_entity_id === null) {
+            // El motivo lo cuenta la cobertura, no esta clase. `BR-LE-004` pide
+            // decir QUE hacer, y «no hay ninguna» y «hay dos» se arreglan en
+            // sitios distintos: repetir aqui un texto generico habria costado
+            // el «dese de alta la cobertura en Entidades legales» que la version
+            // de 7.1 si daba. Lo destapo una prueba de 7.1 al ponerse roja.
+            $faltan[] = 'no se sabe que sociedad la factura. '.self::quienFactura(
+                (int) $campana->client_organization_id,
+                (string) $campana->starts_on,
+            )->explicacion;
+        }
+
+        if (self::requisitos((int) $campana->id)->isEmpty()) {
+            $faltan[] = 'el brief no dice que hay que entregar: anada al menos un formato '
+                .'con su cantidad y sus plazos (BR-CAMPAIGN-004)';
+        }
+
+        if ((float) $campana->revenue_amount <= 0 && !(bool) $campana->is_gratis) {
+            $faltan[] = 'el ingreso es cero y nadie ha dicho si la campana es gratuita '
+                .'o si falta ponerle precio: son cosas distintas y de ahi sale el margen';
+        }
+
+        return $faltan;
+    }
+
+    /**
+     * Los requisitos del brief, con el nombre del formato y su red.
+     *
+     * @return Collection<int, \stdClass>
+     */
+    public static function requisitos(int $campanaId): Collection
+    {
+        return DB::table('campaign_requirements as r')
+            ->join('content_formats as f', 'f.id', '=', 'r.content_format_id')
+            ->leftJoin('platforms as p', 'p.id', '=', 'f.platform_id')
+            ->where('r.campaign_id', $campanaId)
+            ->orderBy('p.name')->orderBy('f.code')
+            ->get([
+                'r.id', 'r.content_format_id', 'r.quantity', 'r.deadline_offset_days',
+                'r.permanence_days', 'r.notes',
+                // `content_formats` no tiene `name`: el nombre legible del
+                // formato ES su `code` (`REEL`, `POST`, `STORY`...). Lo descubrio
+                // la primera ejecucion de las pruebas con un 1054.
+                'f.code as formato', 'p.name as red',
+            ]);
     }
 
     /**

@@ -311,10 +311,25 @@ final class CampanasTest extends TestCase
         ], $cambios);
     }
 
-    private function crear(User $quien): string
+    /**
+     * Una campaña recién creada, **con brief**.
+     *
+     * El requisito lo añade este ayudante y no cada prueba porque desde 7.2
+     * `BR-CAMPAIGN-004` impide aprobar una campaña sin él: sin esto, media
+     * docena de pruebas de 7.1 se quedarían en `pending_approval` y estarían
+     * probando el veto del brief creyendo que prueban otra cosa. Las que
+     * quieren una campaña vacía lo piden con `conBrief: false`.
+     */
+    private function crear(User $quien, bool $conBrief = true): string
     {
         $this->actingAs($quien)->post('/campanas', $this->campana());
 
-        return (string) DB::table('campaigns')->where('name', 'Lanzamiento verano')->value('uuid');
+        $fila = DB::table('campaigns')->where('name', 'Lanzamiento verano')->first(['id', 'uuid']);
+
+        if ($conBrief) {
+            $this->requisitoDe((int) $fila->id);
+        }
+
+        return (string) $fila->uuid;
     }
 }

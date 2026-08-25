@@ -1,5 +1,9 @@
 # 09 — Estado del proyecto y siguiente iteración
 
+> **Versión 1.1 — 2026-08-25.** Actualizado al cerrar 7.2. La versión 1.0
+> es de esta misma fecha y ya tenía los números de 4.11: se actualizan aquí
+> porque este documento es exactamente el que no puede quedarse atrás.
+>
 > **Versión 1.0 — 2026-08-25.** Reescrito entero.
 >
 > La versión 0.1 era del 21 de agosto y decía *«me detengo aquí; no hay código,
@@ -19,12 +23,12 @@
 
 | | |
 |---|---|
-| Tablas | 64 |
-| Migraciones | 41, verdes desde cero en MySQL 8 |
-| Pruebas de PHPUnit | **259**, 763 aserciones |
-| Aserciones de restricción (SQL) | **812** en MariaDB, **802** en MySQL 8 |
-| Puertas de calidad | 6: formato, análisis estático, fronteras, pruebas, CI al día, vigencias |
-| Decisiones registradas | hasta `DEC-088` |
+| Tablas | 65 |
+| Migraciones | 42, verdes desde cero en MySQL 8 |
+| Pruebas de PHPUnit | **300**, 927 aserciones |
+| Aserciones de restricción (SQL) | **888** en MariaDB, **878** en MySQL 8 |
+| Puertas de calidad | 6: formato, análisis estático, fronteras, pruebas, vigencias, nombres entre capas |
+| Decisiones registradas | hasta `DEC-094` |
 
 ### Lo que se puede hacer hoy por pantalla
 
@@ -34,7 +38,12 @@ perfil fiscal aprobado por dos personas distintas, medios de pago verificados) y
 **clientes** (organización, marcas, contactos con su principal, identidad fiscal
 por país con vigencia, y la sociedad que les factura según cobertura).
 
-Eso completa **7.0 del roadmap**.
+Y desde 7.1 y 7.2, **campañas**: alta con la sociedad que factura resuelta a la
+fecha de inicio y congelada al confirmar, grafo de estados con su permiso por
+transición, y un brief que dice qué hay que entregar y a qué precio — con el
+cero declarado, porque «regalada» y «sin precio» no son lo mismo.
+
+Eso completa **7.0, 7.1 y 7.2 del roadmap**.
 
 ---
 
@@ -78,29 +87,32 @@ Ninguna bloquea código hoy; todas bloquean una iteración futura concreta.
 
 ## 4. Lo que propongo como siguiente iteración
 
-**7.1 — La entidad `Campaign`: estados, transiciones, auditoría y
-`billing_legal_entity_id` congelado.**
+**7.3 — Los mercados de la campaña: en qué países se ejecuta y cuántos creadores
+en cada uno.**
 
 Por qué ésta y no otra:
 
-- **7.0 está terminado.** Es literalmente lo que sigue en el roadmap.
-- **Las tablas ya existen.** `2026_08_22_000600_create_campaign_tables` está en
-  el esquema desde la Fase 2, sin una sola pantalla encima. Es la misma
-  situación que tenía `must_change_password` antes de `T-23`: una estructura que
-  nadie lee.
-- **Desbloquea `Q-50`,** que quedó aplazada *«al construir el módulo de
-  campañas, con el caso de uso delante»*. Ese momento es ahora.
-- **`billing_legal_entity_id` congelado** es la pieza que conecta lo construido
-  en 4.5 (cobertura por país) con el dinero. Hoy la cobertura se puede consultar;
-  falta que una campaña **la fije y no la suelte**, que es lo que hace que una
-  factura emitida hace ocho meses siga sabiendo quién la emitió.
+- **Es lo que sigue en el roadmap**, y 7.2 la dejó a medias a propósito:
+  `campaign_requirements.campaign_market_id` va a `NULL` —«todos los mercados»—
+  en todos los requisitos de hoy, y `uq_creq_general` está escrito para eso.
+  Hasta que existan los mercados, un brief no puede pedir dos reels en Perú y
+  uno en Colombia.
+- **`campaign_markets` ya existe** desde la Fase 2, sin una pantalla encima. La
+  misma situación que tenía `campaigns` antes de 7.1.
+- **Es lo que hace falta para buscar creadores** (7.4): «a quién invito» empieza
+  por «en qué país», y hoy la campaña no lo dice.
+- Y arrastra una pregunta de negocio real: si una campaña LATAM se factura desde
+  **una** sociedad (`BR-LE-003`, resuelto por el país del **cliente**), ¿qué pasa
+  con los creadores de otros países? Es `Q-44` mirada desde el otro lado, y
+  conviene plantearla con el caso de uso delante.
 
 ### Lo que NO propongo, y por qué
 
 - **Facturación (F9).** Depende de `Q-40` y `Q-44`, o sea de tu contador.
 - **Portal del creador (F6).** Depende de `T-09`, o sea de tu abogado.
-- **Más endurecimiento del esquema.** Se acabó lo que había: `T-12` a `T-27`
-  están todas cerradas. Seguir buscando sería inventar trabajo.
+- **Más endurecimiento del esquema.** Queda `T-33` —`deadline_offset_days` y
+  `permanence_days` sin `CHECK`— y es media hora, pero cabe mejor dentro de 7.3,
+  que va a tocar esas mismas filas.
 
 ---
 
@@ -123,4 +135,4 @@ Tres cosas, por orden de coste para el proyecto:
    impide usar de verdad todo lo construido en las fases 3 y 4.
 2. **Pregúntale a tu contador `Q-40` y `Q-44`.** Las dos tienen respuesta corta y
    las dos bloquean el dinero.
-3. **Dime si arranco 7.1** o prefieres que use el tiempo en otra cosa.
+3. **Dime si arranco 7.3** o prefieres que use el tiempo en otra cosa.

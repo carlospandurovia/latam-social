@@ -158,8 +158,8 @@ Iterativa y exhaustiva, tal como pide la especificación. **Nada de frontend aqu
 | It. | Contenido |
 |---|---|
 | 7.0 | Clientes y marcas: alta manual de `ClientOrganization`, `ClientBrand`, `Contact`, datos fiscales por país, y **asignación de entidad legal según cobertura de facturación** (bloqueo si ningún país coincide, `BR-LE-003`/`BR-LE-004`) |
-| 7.1 | Entidad Campaign + estados + transiciones + auditoría + **`billing_legal_entity_id` congelado** |
-| 7.2 | Brief: requisitos, formatos, entregables esperados, hashtags, menciones, restricciones, assets |
+| 7.1 | ✅ **Cerrada (2026-08-25).** Entidad Campaign + estados + transiciones + auditoría + **`billing_legal_entity_id` congelado** |
+| 7.2 | ✅ **Cerrada (2026-08-25).** Brief: requisitos y formatos por campaña, con el veto de `BR-CAMPAIGN-004` al salir de borrador, e **ingreso declarado** (`is_gratis`: cero vale, pero hay que decir que es a propósito). Hashtags, menciones, restricciones y *assets* **no** entran: sin mercados (7.3) un requisito no se puede partir por país, y los *assets* dependen del módulo de archivos |
 | 7.3 | Mercados de campaña (multipaís) — modelo completo, UI mínima |
 | 7.4 | Buscador de creadores con filtros reales + shortlist |
 | 7.5 | Selección, cupos por formato, costo comprometido por creador (congelado) |

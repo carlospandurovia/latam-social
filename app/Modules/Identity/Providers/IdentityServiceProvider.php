@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Identity\Providers;
 
+use App\Modules\Identity\Console\CambiarContrasenaCommand;
 use App\Modules\Identity\Console\CrearUsuarioInternoCommand;
 use Illuminate\Support\ServiceProvider;
 
@@ -20,6 +21,7 @@ final class IdentityServiceProvider extends ServiceProvider
     {
         if ($this->app->runningInConsole()) {
             $this->commands([
+                CambiarContrasenaCommand::class,
                 CrearUsuarioInternoCommand::class,
             ]);
         }

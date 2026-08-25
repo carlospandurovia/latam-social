@@ -49,7 +49,7 @@
 | **BR-CAMPAIGN-001** | Solo son válidas las transiciones de estado declaradas en la máquina de estados. Cualquier otra se rechaza y se registra como intento. | 🟠 |
 | **BR-CAMPAIGN-002** | Solo un creador con invitación vigente y no expirada puede aceptar una campaña. | 🔴 |
 | **BR-CAMPAIGN-003** | Al aceptar, el monto acordado, los entregables y las fechas quedan congelados en la participación. Cambios posteriores exigen una **enmienda** registrada y aceptada por ambas partes. | 🔴 |
-| **BR-CAMPAIGN-004** | Una campaña no puede pasar a `approved` sin presupuesto, cliente, marca y brief definidos. | 🟠 |
+| **BR-CAMPAIGN-004** | Una campaña no puede pasar a `approved` sin presupuesto, cliente, marca y brief definidos. **Implementada en 7.2.** «Brief definido» = al menos un requisito de formato (`DEC-092`); «presupuesto» = ingreso declarado, y cero vale si alguien dice que es a propósito (`DEC-093`, `ck_camp_revenue_declarado`). Cliente y marca los garantiza el esquema. | 🟠 |
 | **BR-CAMPAIGN-005** | El costo comprometido con creadores no puede exceder el presupuesto de creadores de la campaña sin aprobación explícita de un rol autorizado, que queda auditada. | 🔴 |
 | **BR-CAMPAIGN-006** | Una invitación expira automáticamente tras el plazo configurado; una invitación expirada no puede aceptarse. | 🟠 |
 | **BR-CAMPAIGN-007** | Un creador con conflicto de marca activo (competidor, exclusividad vigente, categoría prohibida) no puede ser invitado sin anulación explícita y justificada. | 🔴 |

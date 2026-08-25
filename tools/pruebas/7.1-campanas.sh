@@ -64,10 +64,14 @@ valor "hay al menos DOS sociedades para poder probar el cambio" \
 valor "y ninguna campana de esta suite de una pasada anterior" \
   "SELECT COUNT(*) FROM campaigns WHERE code LIKE 'C71-%';" "0"
 
+# `revenue_amount` va a 1000 y no al DEFAULT 0 desde 7.2: `ck_camp_revenue_declarado`
+# exige que una campana fuera de borrador diga si el cero es a proposito, y con el
+# DEFAULT esta suite empezo a rechazar por el motivo equivocado --el de 7.2 en vez
+# del de 7.1--, que es exactamente como una asercion de rechazo se vuelve mentira.
 alta() {  # codigo, estado, entidad, confirmado
   echo "INSERT INTO campaigns (uuid,code,name,client_organization_id,client_brand_id,
-    billing_legal_entity_id,currency_code,starts_on,ends_on,status,confirmed_at,created_at)
-    VALUES (UUID(),'$1','Campana $1',$CLI,$MAR,$3,$MON,'2026-09-01','2026-09-30','$2',$4,NOW(3));"
+    billing_legal_entity_id,currency_code,revenue_amount,starts_on,ends_on,status,confirmed_at,created_at)
+    VALUES (UUID(),'$1','Campana $1',$CLI,$MAR,$3,$MON,1000.00,'2026-09-01','2026-09-30','$2',$4,NOW(3));"
 }
 
 echo ""

@@ -19,6 +19,10 @@ CREATE TABLE campaigns (
   -- Lo que se le cobra al cliente. El costo de creadores es SUMA de las
   -- participaciones y el margen es cache reconstruible (2.3 §5): aqui no van.
   revenue_amount       DECIMAL(18,4) NOT NULL DEFAULT 0,
+  -- 7.2 / BR-CAMPAIGN-004: el mismo cero responde a dos preguntas distintas
+  -- --«esta campana se regala» y «nadie le ha puesto precio»-- y de ahi sale el
+  -- margen. `ck_camp_revenue_declarado` obliga a elegir una, fuera de borrador.
+  is_gratis            TINYINT(1)    NOT NULL DEFAULT 0,
   currency_code        CHAR(3)       NOT NULL,
   -- El negocio lo fijo: 2 rondas de correccion incluidas en el precio.
   included_revision_rounds TINYINT UNSIGNED NOT NULL DEFAULT 2,
@@ -55,7 +59,11 @@ CREATE TABLE campaigns (
   CONSTRAINT ck_camp_rounds CHECK (included_revision_rounds BETWEEN 0 AND 10),
   -- Confirmada exige fecha: es el instante a partir del cual ya no se puede borrar.
   CONSTRAINT ck_camp_confirmed CHECK (status IN ('draft','pending_approval','cancelled') OR confirmed_at IS NOT NULL),
-  CONSTRAINT ck_camp_billing_entity CHECK (status IN ('draft','pending_approval','cancelled') OR billing_legal_entity_id IS NOT NULL)
+  CONSTRAINT ck_camp_billing_entity CHECK (status IN ('draft','pending_approval','cancelled') OR billing_legal_entity_id IS NOT NULL),
+  -- Fuera de borrador el cero se declara: o hay importe, o alguien dijo que se
+  -- regala. `ck_camp_revenue` (>= 0) se queda: esta es la otra mitad, no su
+  -- sustituta.
+  CONSTRAINT ck_camp_revenue_declarado CHECK (status IN ('draft','pending_approval','cancelled') OR (is_gratis = 1 AND revenue_amount = 0) OR (is_gratis = 0 AND revenue_amount > 0))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Los mercados de la campana. Una campana LATAM tiene varios.

@@ -2,6 +2,58 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 
+## [7.2 · El brief y el ingreso declarado] — 2026-08-25
+
+`BR-CAMPAIGN-004` estaba escrita desde el principio —*«una campaña no puede pasar
+a `approved` sin presupuesto, cliente, marca y brief definidos»*, 🟠— y **no la
+impedía nada**. En 7.1 se dejaba aprobar una campaña que sólo tenía sociedad
+emisora: sin decir qué había que entregar y sin que nadie hubiera puesto un
+precio.
+
+Tercer caso del mismo patrón, después de `must_change_password` (`T-23`) y
+`BR-LE-001` (7.1): una regla del documento con identificador y color que ningún
+`CHECK` y ninguna pantalla comprobaban. **Un documento de reglas no es una
+garantía: es una lista de deudas.**
+
+### Añadido
+- **El brief** — `campaign_requirements` por pantalla: qué formato, cuántas
+  piezas, para cuándo y cuánto debe seguir publicado. «Brief definido» = **al
+  menos un requisito** (`DEC-092`). El texto libre del `briefing` sigue siendo
+  opcional a propósito: un espacio en blanco cumpliría cualquier `NOT NULL`.
+- **`is_gratis` y `ck_camp_revenue_declarado`** — cero es un ingreso válido, pero
+  hay que declararlo (`DEC-093`). «Esta campaña se regala» y «nadie le ha puesto
+  precio» eran el mismo número, y ante un margen descuadrado la diferencia entre
+  las dos es la diferencia entre «salió como se planeó» y «se nos escapó».
+- **Suite `7.2-brief`** (21 aserciones) y `BriefTest` (15 pruebas).
+
+### Cambiado
+- La ficha de campaña dice **todos** los motivos que impiden salir de borrador,
+  y los dice **antes** de que nadie pulse el botón. Enterarse de uno por visita
+  es una visita por motivo.
+- `ConFixturas::campanaDe()` declara ingreso; `requisitoDe()` es nuevo.
+- `CambiarContrasenaCommand` deja de usar `App\Models\User` — `app/Models` no
+  pertenece a ninguna capa de Deptrac y la puerta de fronteras se puso en rojo.
+
+### Corregido
+- **La suite de 7.1 empezó a rechazar por el motivo de 7.2** creyendo que probaba
+  el suyo: su `alta()` no ponía importe. Una aserción de rechazo que se cumple
+  por el motivo equivocado sigue saliendo verde, y es el fallo que ya costó tres
+  aserciones en 4.5.
+- `Campanas::requisitos()` unía por `content_formats.name`, columna que no
+  existe: el nombre legible del formato **es** su `code`.
+- El veto por falta de sociedad había perdido el *«dese de alta la cobertura en
+  Entidades legales»* que `BR-LE-004` exige. Lo cazó una prueba de 7.1.
+
+### Verificación
+300 pruebas / 927 aserciones · 888 (MariaDB) y 878 (MySQL 8) aserciones de
+restricción · ocho mutaciones, las ocho en rojo · las seis puertas en verde.
+
+Una de esas mutaciones destapó que `test_la_ficha_ensena_lo_que_falta` **pasaba
+con el veto desactivado**: la frase que afirmaba también está en un texto fijo de
+la pantalla. La ejecución no lo detecta; la mutación sí.
+
+---
+
 ## [Seguridad · cambio obligatorio de contraseña (`T-23`)] — 2026-08-25
 
 Con esto quedan cerrados **los siete** hallazgos que dejó la revisión adversarial.

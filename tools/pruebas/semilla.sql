@@ -130,15 +130,21 @@ INSERT INTO legal_entity_countries (legal_entity_id,country_id,coverage_basis,va
 -- si se cogiera cualquiera, la semilla estaria fabricando el caso que 4.5 y
 -- `BR-LE-003` existen para impedir --una campana facturada por una sociedad que
 -- no cubre ese pais-- y las pruebas correrian sobre datos imposibles.
+--
+-- Y lleva importe: desde 7.2 `ck_camp_revenue_declarado` exige que una campana
+-- fuera de borrador diga si su cero es a proposito. Con el DEFAULT 0 la semilla
+-- entera dejaba de cargar, y con ella TODAS las suites. Tercera vez que una
+-- restriccion nueva alcanza a la semilla; por eso este fichero se carga primero.
 INSERT INTO campaigns (uuid,code,name,client_organization_id,client_brand_id,
-   billing_legal_entity_id,currency_code,starts_on,ends_on,status,confirmed_at,created_at)
+   billing_legal_entity_id,currency_code,revenue_amount,is_gratis,
+   starts_on,ends_on,status,confirmed_at,created_at)
  SELECT UUID(),'CMP-0001','Campana Demo',co.id,cb.id,
    (SELECT lec.legal_entity_id FROM legal_entity_countries lec
      WHERE lec.country_id = co.country_id
        AND lec.valid_from <= '2026-09-01'
        AND (lec.valid_to IS NULL OR lec.valid_to >= '2026-09-01')
      ORDER BY lec.id LIMIT 1),
-   'PEN','2026-09-01','2026-09-30','in_progress',NOW(3),NOW(3)
+   'PEN',12000.0000,0,'2026-09-01','2026-09-30','in_progress',NOW(3),NOW(3)
  FROM client_organizations co JOIN client_brands cb ON cb.client_organization_id=co.id
  WHERE co.client_code='CLI-0001' LIMIT 1;
 

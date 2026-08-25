@@ -445,6 +445,18 @@ Route::middleware('auth')->group(function (): void {
         ->whereUuid('uuid')
         ->name('campanas.update');
 
+    // El brief. `campaign.manage` y no `campaign.approve`: montar el brief es
+    // trabajo de quien arma la campana; aprobarlo es lo que firma finanzas.
+    Route::post('/campanas/{uuid}/requisitos', [CampanasController::class, 'anadirRequisito'])
+        ->middleware('permiso:campaign.manage')
+        ->whereUuid('uuid')
+        ->name('campanas.requisitos.anadir');
+
+    Route::delete('/campanas/{uuid}/requisitos/{requisito}', [CampanasController::class, 'quitarRequisito'])
+        ->middleware('permiso:campaign.manage')
+        ->whereUuid('uuid')->whereNumber('requisito')
+        ->name('campanas.requisitos.quitar');
+
     Route::post('/campanas/{uuid}/estado', [CampanasController::class, 'transicionar'])
         ->middleware('permiso:campaign.view')
         ->whereUuid('uuid')

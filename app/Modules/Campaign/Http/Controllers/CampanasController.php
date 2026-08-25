@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Campaign\Http\Controllers;
 
 use App\Modules\Campaign\Http\Requests\GuardarCampanaRequest;
+use App\Modules\Campaign\Http\Requests\GuardarRequisitoRequest;
 use App\Modules\Campaign\Services\Campanas;
 use App\Modules\Campaign\Services\EstadosDeCampana;
 use App\Shared\Audit\Bitacora;
@@ -16,6 +17,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
+use Throwable;
 
 /**
  * Campañas: alta, ficha y movimiento de estado (7.1).
@@ -84,6 +86,23 @@ final class CampanasController
                 (int) $campana->client_organization_id,
                 (string) $campana->starts_on,
             ),
+            'requisitos' => Campanas::requisitos((int) $campana->id),
+            'formatos' => DB::table('content_formats as f')
+                ->leftJoin('platforms as p', 'p.id', '=', 'f.platform_id')
+                ->where('f.is_active', 1)
+                ->orderBy('p.name')->orderBy('f.code')
+                // `default_permanence_days` viaja a la pantalla para que el
+                // formulario proponga la permanencia del formato en vez de un 30
+                // fijo: cada red tiene la suya y teclearla a mano es teclearla mal.
+                ->get(['f.id', 'f.code', 'f.default_permanence_days', 'p.name as red']),
+            // Lo que impide salir de borrador, enseñado ANTES de intentarlo:
+            // descubrirlo al pulsar el boton es enterarse tarde.
+            'faltan' => Campanas::loQueFaltaParaSalirDeBorrador($campana),
+            // Si el brief todavia se toca. Se decide AQUI y no en la plantilla:
+            // la lista de estados iniciales vive en `EstadosDeCampana` y una
+            // plantilla que la repita hay que acordarse de tocarla el dia que se
+            // anada un estado. Es la misma comprobacion que veta el `POST`.
+            'editable' => self::vetoPorNoEditable($campana) === null,
         ]);
     }
 
@@ -225,15 +244,24 @@ final class CampanasController
             abort(403, "Esta transicion exige el permiso `{$permiso}`.");
         }
 
-        // Salir de borrador sin sociedad lo rechaza `ck_camp_billing_entity` con
-        // un 45000. Se veta ANTES para poder decir por que y que hacer
-        // (`BR-LE-004`), en vez de traducir un error del motor.
-        if ($campana->billing_legal_entity_id === null
-            && !in_array($hasta, EstadosDeCampana::INICIALES, true)) {
-            return back()->with('aviso', Campanas::quienFactura(
-                (int) $campana->client_organization_id,
-                (string) $campana->starts_on,
-            )->explicacion);
+        // Salir de borrador con algo a medias lo rechazan los `CHECK` del esquema
+        // con un 45000. Se veta ANTES para poder decir QUE falta y donde se
+        // arregla, en vez de traducir un error del motor.
+        //
+        // Se dicen TODOS los motivos de una vez, no el primero: si la campana
+        // no tiene requisitos y ademas nadie decidio el precio, enterarse de lo
+        // segundo despues de arreglar lo primero es una visita mas para nada.
+        // Mismo criterio que la comprobacion previa de las migraciones.
+        if (!in_array($hasta, EstadosDeCampana::INICIALES, true)) {
+            $faltan = Campanas::loQueFaltaParaSalirDeBorrador($campana);
+
+            if ($faltan !== []) {
+                return back()->with('aviso', sprintf(
+                    'Esta campana no puede pasar a «%s» todavia (BR-CAMPAIGN-004). Falta: %s.',
+                    EstadosDeCampana::NOMBRES[$hasta],
+                    implode('; ', $faltan),
+                ));
+            }
         }
 
         Campanas::transicionar($campana, $hasta);
@@ -254,7 +282,112 @@ final class CampanasController
         ));
     }
 
+    /**
+     * Añade un requisito al brief.
+     *
+     * Sólo mientras la campaña sea editable. Una vez confirmada, lo que hay que
+     * entregar es lo que se le prometió al cliente y —cuando existan
+     * participaciones— lo que los creadores aceptaron: cambiarlo exige una
+     * enmienda (`BR-CAMPAIGN-003`), no un formulario.
+     */
+    public function anadirRequisito(GuardarRequisitoRequest $peticion, string $uuid): RedirectResponse
+    {
+        $campana = $this->campana($uuid);
+
+        if (($aviso = self::vetoPorNoEditable($campana)) !== null) {
+            return back()->with('aviso', $aviso);
+        }
+
+        /** @var array<string, mixed> $datos */
+        $datos = $peticion->validated();
+
+        // El mismo formato dos veces en la misma campana lo rechaza
+        // `uq_creq_general` con un 1062. Se traduce, no se absorbe: repetir un
+        // formato no es un valor que el sistema pueda recalcular --es que el
+        // operador queria EDITAR la fila que ya existe--.
+        try {
+            DB::table('campaign_requirements')->insert($datos + [
+                'campaign_id' => $campana->id,
+                // `campaign_market_id` NULL significa «todos los mercados»
+                // (docs 2.3 §9). Los mercados llegan en 7.3; hasta entonces
+                // todos los requisitos son generales, que es justo lo que
+                // `uq_creq_general` cubre.
+                'campaign_market_id' => null,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        } catch (Throwable $e) {
+            if (!Choque::esDe($e, 'uq_creq_general')) {
+                throw $e;
+            }
+
+            return back()->withInput()->with('aviso',
+                'Ese formato ya esta en el brief. Edite la fila que hay en vez de anadir otra: '
+                .'dos filas del mismo formato serian dos cantidades para la misma cosa.');
+        }
+
+        Bitacora::registrar(
+            accion: 'campaign.requirement_added',
+            tipoEntidad: 'campaign',
+            idEntidad: (int) $campana->id,
+            cambios: ['requisito' => ['antes' => null, 'despues' => $datos]],
+        );
+
+        return redirect()->route('campanas.show', $uuid)->with('exito', 'Requisito anadido al brief.');
+    }
+
+    /** Quita un requisito del brief. */
+    public function quitarRequisito(string $uuid, int $requisito): RedirectResponse
+    {
+        $campana = $this->campana($uuid);
+
+        if (($aviso = self::vetoPorNoEditable($campana)) !== null) {
+            return back()->with('aviso', $aviso);
+        }
+
+        $fila = DB::table('campaign_requirements')
+            ->where('id', $requisito)->where('campaign_id', $campana->id)->first();
+
+        if ($fila === null) {
+            // Y no un 404 generico: el requisito puede existir y ser de OTRA
+            // campana, y eso es lo que hay que impedir. Comprobar el par
+            // (campana, requisito) y no solo el id es la misma leccion que
+            // «no se edita la marca de otro cliente por la URL».
+            throw new NotFoundHttpException('Ese requisito no es de esta campana.');
+        }
+
+        DB::table('campaign_requirements')->where('id', $requisito)->delete();
+
+        Bitacora::registrar(
+            accion: 'campaign.requirement_removed',
+            tipoEntidad: 'campaign',
+            idEntidad: (int) $campana->id,
+            cambios: ['requisito' => ['antes' => (array) $fila, 'despues' => null]],
+        );
+
+        return redirect()->route('campanas.show', $uuid)->with('exito', 'Requisito quitado del brief.');
+    }
+
     // ------------------------------------------------------------------ apoyo
+
+    /**
+     * Por qué esta campaña ya no se edita, o `null` si sí.
+     *
+     * Se separa del `abort(409)` de `edit()` porque el brief se toca desde otra
+     * pantalla y con otro verbo: un 409 en un `POST` de formulario deja al
+     * operador en una página de error en vez de devolverlo a la ficha con el
+     * motivo.
+     */
+    private static function vetoPorNoEditable(object $campana): ?string
+    {
+        if (in_array((string) $campana->status, EstadosDeCampana::INICIALES, true)) {
+            return null;
+        }
+
+        return 'El brief de una campana confirmada no se cambia: lo que hay que entregar es lo '
+            .'que se le prometio al cliente. Cambiarlo con creadores dentro exige una enmienda '
+            .'aceptada por las dos partes (BR-CAMPAIGN-003), no un formulario.';
+    }
 
     private function campana(string $uuid): object
     {
