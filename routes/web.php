@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Modules\Client\Http\Controllers\ClientesController;
 use App\Modules\Core\Http\Controllers\BitacoraController;
 use App\Modules\Core\Http\Controllers\CatalogosController;
 use App\Modules\Core\Http\Controllers\PanelController;
@@ -141,6 +142,38 @@ Route::middleware('auth')->group(function (): void {
         ->middleware('permiso:creator.tax.annul')
         ->whereUuid('uuid')->whereNumber('id')
         ->name('creadores.fiscal.anular');
+
+    // ---- Clientes (iteración 4.1, hoja de ruta 7.0) ----------------------
+    //
+    // `client.view` para mirar, `client.manage` para tocar. Hasta ahora
+    // `client.manage` estaba declarado y no lo tenia NINGUN rol: el permiso
+    // existia y nadie podia crear un cliente.
+    Route::get('/clientes', [ClientesController::class, 'index'])
+        ->middleware('permiso:client.view')
+        ->name('clientes.index');
+
+    Route::get('/clientes/nuevo', [ClientesController::class, 'create'])
+        ->middleware('permiso:client.manage')
+        ->name('clientes.create');
+
+    Route::post('/clientes', [ClientesController::class, 'store'])
+        ->middleware('permiso:client.manage')
+        ->name('clientes.store');
+
+    Route::get('/clientes/{uuid}', [ClientesController::class, 'show'])
+        ->middleware('permiso:client.view')
+        ->whereUuid('uuid')
+        ->name('clientes.show');
+
+    Route::get('/clientes/{uuid}/editar', [ClientesController::class, 'edit'])
+        ->middleware('permiso:client.manage')
+        ->whereUuid('uuid')
+        ->name('clientes.edit');
+
+    Route::put('/clientes/{uuid}', [ClientesController::class, 'update'])
+        ->middleware('permiso:client.manage')
+        ->whereUuid('uuid')
+        ->name('clientes.update');
 
     // ---- Cuentas sociales (iteración 3.7, BR-CREATOR-003/004/005) --------
     //

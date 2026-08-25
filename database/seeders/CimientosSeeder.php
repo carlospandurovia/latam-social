@@ -246,7 +246,11 @@ final class CimientosSeeder extends Seeder
                 // un creador y cuando puede trabajar. Eso NO abre sus datos
                 // fiscales ni su cuenta bancaria, que siguen en otro permiso.
                 'creator.rate.manage',
-                'client.view', 'content.review', 'catalog.view',
+                // 4.1: quien monta la campana da de alta al cliente para el
+                // que la monta. `client.manage` estaba declarado desde 3.1 y no
+                // lo tenia NINGUN rol, asi que el permiso existia y nadie podia
+                // crear un cliente.
+                'client.view', 'client.manage', 'content.review', 'catalog.view',
             ],
             'finance' => [
                 'finance.view', 'finance.payout.create', 'finance.payout.approve',

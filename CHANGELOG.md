@@ -2,6 +2,60 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 
+## [Fase 4 · 4.1 — Clientes] — 2026-08-25
+
+Primera mitad de la iteración `7.0` de la hoja de ruta. Con esto empieza la otra
+mitad del negocio: hasta ahora el sistema sabía todo del creador y nada de a
+quién se le factura.
+
+### Lo que faltaba
+`client_organizations` existía desde la fase 2 con sus reglas puestas, pero **no
+había ni una ruta**. Y `client.manage` estaba declarado desde 3.1 **sin que
+ningún rol lo tuviera**: el permiso existía, el middleware lo comprobaba, y nadie
+podía crear un cliente. No fallaba nada porque nadie lo intentaba.
+
+### Añadido
+- Listado, alta, ficha y edición de clientes, con bitácora.
+- `CoberturaFacturacion`: qué sociedad factura a un país **en una fecha**. La
+  fecha es un parámetro y no `now()` porque `BR-LE-003` dice «en la fecha de la
+  operación», y una campaña que se factura en marzo se rige por la cobertura de
+  marzo.
+- `client.manage` para `campaign_manager`: quien monta la campaña da de alta al
+  cliente para el que la monta.
+
+### `DEC-073` — dónde se bloquea, que no era obvio
+`BR-LE-004` manda bloquear si nadie puede facturar, pero no dice qué operación.
+Un **prospecto se apunta en cualquier país** —un cliente potencial donde todavía
+no cubrimos es una oportunidad legítima, y prohibirla obliga a llevarla en una
+hoja aparte—; pasar a **`active` exige cobertura**, porque `active` significa «se
+le puede facturar» y sin sociedad eso es falso. El esquema ya apuntaba a esa
+respuesta: `status` nace en `prospect`.
+
+### Una prueba que casi nace saltada
+`test_no_se_activa_un_cliente_al_que_nadie_puede_facturar` buscaba un país sin
+cobertura con un `whereNotIn`… y no encontraba ninguno: el seeder activa seis
+países y cubre los seis. **Habría quedado en *skipped*, que en un informe parece
+verde.** Se arregla activando Argentina, que no es un truco: es el caso real —
+`BR-LE-004` existe para el día que el negocio se abre a un país nuevo y todavía
+no hay quien facture allí. La prueba además afirma su propia premisa antes de
+empezar.
+
+### Y una deuda que se cobra sola
+El resolver elige por país **y por fecha**. Hasta 3.10 dos sociedades podían
+cubrir el mismo país en periodos solapados, y ese empate era una factura emitida
+por la sociedad equivocada. Desde `tg_lec_sin_solape_*` no puede pasar, así que
+el resolver consulta sin desempatar — y aun así comprueba: si apareciera más de
+una, lo dice en vez de elegir.
+
+### Anotado
+`Q-51`: el mensaje de `BR-LE-004` manda a declarar la cobertura «en Entidades
+legales», y **esa pantalla no existe** — hoy la única forma es el seeder o SQL a
+mano. Un mensaje accionable que apunta a una pantalla inexistente es la mitad de
+accionable.
+
+654 aserciones SQL en verde; las pruebas de esta iteración van en la próxima
+ejecución de PHPUnit.
+
 ## [3.13 en PHPUnit: dos fallos míos, y el gate que no los vio] — 2026-08-24
 
 La cadena completa dejó `2 failed, 148 passed`. Los dos eran de `terms_versions`

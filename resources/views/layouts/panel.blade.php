@@ -29,6 +29,7 @@
           ['Panel', 'panel', 'panel', null],
           ['Solicitudes', 'solicitudes.index', 'solicitudes', 'creator.approve'],
           ['Creadores', 'creadores.index', 'creadores', 'creator.view'],
+          ['Clientes', 'clientes.index', 'clientes', 'client.view'],
           ['Bitácora', 'bitacora', 'bitacora', 'audit.view'],
         ];
         $catalogos = [

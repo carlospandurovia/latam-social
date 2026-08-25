@@ -876,6 +876,27 @@ con motivo obligatorio en la bitácora—.
 
 ### DEC-072 — `creator_addresses` queda fuera de la regla de periodos
 
+### DEC-073 — Un prospecto se apunta en cualquier país; activarlo exige cobertura
+
+**Contexto.** `BR-LE-004` dice que si ninguna sociedad cubre el país del cliente
+la operación se bloquea con un mensaje accionable. Faltaba decidir **qué
+operación**.
+
+**Decisión.** Dar de alta o mantener un cliente como `prospect` no exige
+cobertura. Pasarlo a `active` sí.
+
+**Por qué.** Un cliente potencial en un país que todavía no cubrimos es una
+oportunidad comercial legítima; prohibir apuntarla obliga a llevarla en una hoja
+aparte, que es justo lo que este sistema viene a eliminar. Pero `active`
+significa «se le puede facturar», y sin sociedad que cubra su país eso es falso.
+
+**Confirmación.** El esquema ya apuntaba a esta respuesta: `status` nace en
+`prospect` por defecto, no en `active`.
+
+**Consecuencia.** La ficha del cliente muestra quién le facturaría **siempre**,
+también mientras es prospecto, para que la falta de cobertura se vea el día que
+se apunta y no el día que hay que cobrar.
+
 **Contexto.** De las cinco tablas con histórico sin blindar, cuatro necesitaban
 la regla. `creator_addresses` no.
 
@@ -945,6 +966,7 @@ nada en lugar de blindar las cinco de una pasada.
 | **Q-47** | ⚠️ **Abierto por la iteración 3.6.** `BR-CREATOR-014` fija un **periodo de gracia de 30 días** antes de rechazar a un creador por falta de datos fiscales, y dice «configurable». ¿Configurable **globalmente** (una constante de despliegue) o **por creador**, como `payment_term_days`? No lo invento: son dos modelos de datos distintos. Hasta que se responda, el periodo de gracia no está implementado | Iteración de rechazo de creadores |
 | **T-12** | 📋 **`creator_tax_profiles` cierra el perfil anterior con `valid_to = valid_from` del nuevo**, o sea que se solapan un día. `uq_ctp_current` garantiza un solo perfil *vigente*, pero el histórico fiscal tiene el mismo defecto que `H-16` cerró en tarifas: «qué régimen aplicaba el 1 de mayo» puede tener dos respuestas. En un historial fiscal eso se paga en una declaración. Encontrado al escribir 3.9; merece iteración propia, no colarlo aquí | Antes de la primera declaración con dos regímenes |
 | **T-16** | ✅ *(hecho en 3.12)* **`creator_tax_profiles` se puede borrar con un `DELETE`.** Lo llevan `payouts`, `invoices`, `ledger_entries`, `creator_payment_methods` y cinco tablas más, pero ésta no. Anular (`3.11`) existe justamente para no destruir el histórico —guarda quién, cuándo y por qué—, y todo eso se va con un `DELETE`. Salió al escribir la suite de 3.11: la aserción que iba a escribir habría dicho «el DELETE funciona», o sea habría fijado el hueco como si fuera lo correcto, que es el mismo error que `PerfilFiscalTest` cometió con `T-12`. Hace falta `tg_ctp_no_delete` y revisar si alguna otra tabla de histórico está igual | Antes de la primera declaración que se apoye en este histórico |
+| **Q-51** | ❓ **No hay pantalla de entidades legales.** El mensaje de `BR-LE-004` le dice al operador que declare la cobertura «en Entidades legales», y ese sitio **no existe**: hoy la única forma es el seeder o SQL a mano. Un mensaje accionable que manda a una pantalla inexistente es solo la mitad de accionable. Hace falta CRUD de sociedades y de su cobertura por país con vigencia — es la iteración `4.5b` de la hoja de ruta | Justo después de 4.2 |
 | **Q-50** | ❓ **¿`campaign_creators`, `agreement_amendments`, `domain_events` y `status_transitions` son evidencia?** Se quedaron fuera de `3.12` a propósito. `campaign_creators` lleva `agreed_amount` —el precio pactado, congelado—, y borrar una participación borraría el precio con ella; pero el módulo de campañas no está construido y decidir ahora si una participación se borra o se cancela sería adivinar. Los otros dos son rastros de auditoría de alto volumen, donde puede hacer falta purga por antigüedad. Que lo decida la iteración que los construya, con el caso de uso delante | Al construir el módulo de campañas |
 | **T-15** | ✅ *(hecho en 3.11)* **No existe anular un perfil fiscal aprobado.** `superseded` significa *reemplazado* —o sea que estuvo vigente— y `rejected` significa que se rechazó en revisión, antes de aprobarse. No hay forma de decir «esto se aprobó y no debió aprobarse nunca». Lo destapó `test_para_un_menor_el_perfil_del_creador_no_cuenta` al ponerse en rojo con `DEC-071`: un perfil fiscal a nombre de un menor no fue válido ni un día, pero la única salida hoy es cerrarlo la víspera del correcto, y eso deja en el histórico un periodo cubierto por un perfil que no valía. Hace falta decidir el mecanismo (¿un estado `annulled`? ¿un `voided_at` con motivo y autor?) y quién puede hacerlo — es la misma conversación que `Q-48` | Cuando haya que corregir un perfil aprobado por error |
 | **T-14** | ✅ *(hecho en 3.10)* **Los cuatro disparadores de 3.9 siguen escritos a mano.** `creator_rates` y `creator_availability` imponen la misma regla que ahora genera `App\Shared\Database\Periodo`, pero con SQL tecleado. Son doce líneas duplicadas cuatro veces, y un arreglo futuro habría que aplicarlo en dos sitios. Migrarlos es mecánico y la suite de 3.9 (23 aserciones) lo verifica sin depender de PHPUnit. Se deja para su propia iteración porque 3.9 todavía no tiene la suite de PHPUnit confirmada en verde | Cuando 3.9 esté en verde |
