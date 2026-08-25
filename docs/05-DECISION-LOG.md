@@ -919,6 +919,24 @@ nada en lugar de blindar las cinco de una pasada.
 
 ---
 
+### DEC-074 — Al dar de alta un cliente se crea su primera marca
+
+**Contexto.** Al revisar 4.1 surgió la pregunta de si cliente y marca no son lo
+mismo. El modelo los distingue por tres razones sólidas —`uq_cb_name` es por
+cliente, el conflicto de marca de `BR-CAMPAIGN-007` se coteja por categorías de
+la **marca**, y la factura sale del cliente y no de la marca—, pero para un
+cliente de una sola marca esa distinción es papeleo puro.
+
+**Decisión.** El alta de cliente crea automáticamente una marca con su mismo
+nombre, visible y editable, y lo dice en el mensaje de éxito.
+
+**Por qué.** Que el modelo distinga no obliga a que la pantalla lo imponga. El
+caso simple cuesta un formulario, el complejo sigue siendo posible, y nadie tiene
+que entender la diferencia hasta que le hace falta.
+
+**Consecuencia.** Un cliente nunca está sin marcas, así que `campaigns`
+—que tiene `client_brand_id NOT NULL`— siempre tiene a dónde apuntar.
+
 ## Decisiones pendientes de información del negocio
 
 | # | Pregunta | Bloquea |

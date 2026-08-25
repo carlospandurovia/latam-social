@@ -6,6 +6,7 @@ namespace App\Modules\Client\Http\Controllers;
 
 use App\Modules\Client\Http\Requests\GuardarClienteRequest;
 use App\Modules\Client\Services\CoberturaFacturacion;
+use App\Modules\Client\Services\Marcas;
 use App\Shared\Audit\Bitacora;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -95,10 +96,16 @@ final class ClientesController
         return view('clientes.show', [
             'cliente' => $cliente,
             'cobertura' => CoberturaFacturacion::resolver((int) $cliente->country_id),
-            'marcas' => DB::table('client_brands')
-                ->where('client_organization_id', $cliente->id)
-                ->orderBy('name')
-                ->get(['uuid', 'name', 'slug', 'status', 'website']),
+            'marcas' => DB::table('client_brands as cb')
+                ->where('cb.client_organization_id', $cliente->id)
+                ->orderBy('cb.name')
+                ->get(['cb.uuid', 'cb.name', 'cb.slug', 'cb.status', 'cb.website',
+                    DB::raw('(SELECT COUNT(*) FROM client_brand_categories x WHERE x.client_brand_id = cb.id) as categorias')])
+                ->map(function (object $m): object {
+                    $m->categorias = (int) $m->categorias;
+
+                    return $m;
+                }),
             'fiscales' => DB::table('client_tax_profiles as ctp')
                 ->join('countries as p', 'p.id', '=', 'ctp.country_id')
                 ->where('ctp.client_organization_id', $cliente->id)
@@ -128,21 +135,40 @@ final class ClientesController
         }
 
         $uuid = (string) Str::uuid();
+        $clienteId = 0;
 
-        DB::table('client_organizations')->insert($datos + [
-            'uuid' => $uuid,
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
+        DB::transaction(function () use ($datos, $uuid, &$clienteId): void {
+            $clienteId = (int) DB::table('client_organizations')->insertGetId($datos + [
+                'uuid' => $uuid,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            // Su primera marca, con su mismo nombre (`DEC-074`).
+            //
+            // El modelo distingue cliente de marca por buenas razones —ver
+            // `Marcas`—, pero para un cliente de una sola marca pedir dos altas
+            // es papeleo puro, y esos van a ser la mayoria al principio.
+            //
+            // Se crea aqui, editable y visible, y el mensaje de exito la
+            // menciona: el caso simple cuesta UN formulario, el complejo sigue
+            // siendo posible, y nadie tiene que entender la diferencia hasta
+            // que le hace falta.
+            Marcas::crear($clienteId, (string) $datos['commercial_name']);
+        });
 
         Bitacora::registrar(
             accion: 'client.created',
             tipoEntidad: 'client_organization',
-            idEntidad: (int) DB::table('client_organizations')->where('uuid', $uuid)->value('id'),
+            idEntidad: $clienteId,
             cambios: ['cliente' => ['antes' => null, 'despues' => $datos['commercial_name']]],
         );
 
-        return redirect()->route('clientes.show', $uuid)->with('exito', 'Cliente dado de alta.');
+        return redirect()->route('clientes.show', $uuid)->with(
+            'exito',
+            "Cliente dado de alta, con su primera marca «{$datos['commercial_name']}». "
+            .'Si vende varias marcas, anadalas desde su ficha: una campana se hace para una marca.',
+        );
     }
 
     public function update(GuardarClienteRequest $request, string $uuid): RedirectResponse

@@ -34,20 +34,37 @@
       </div>
 
       <div class="bg-white rounded-xl border border-slate-200 p-5">
-        <h2 class="text-sm font-medium text-slate-700">Marcas</h2>
+        <div class="flex items-start justify-between">
+          <h2 class="text-sm font-medium text-slate-700">Marcas</h2>
+          @can('client.manage')
+            <a href="{{ route('marcas.create', $cliente->uuid) }}" class="text-xs text-marca-700 hover:underline">Añadir marca</a>
+          @endcan
+        </div>
+        <p class="mt-1 text-xs text-slate-500">Una campaña se hace para una marca, no para el cliente.</p>
         @forelse ($marcas as $m)
-          <div class="mt-3 flex items-center justify-between border-t border-slate-100 pt-3 text-sm">
+          <div class="mt-3 flex items-start justify-between border-t border-slate-100 pt-3 text-sm">
             <div>
-              <div class="text-slate-800">{{ $m->name }}</div>
+              <div class="text-slate-800">
+                @can('client.manage')
+                  <a href="{{ route('marcas.edit', [$cliente->uuid, $m->uuid]) }}" class="text-marca-700 hover:underline">{{ $m->name }}</a>
+                @else
+                  {{ $m->name }}
+                @endcan
+              </div>
               <div class="text-xs text-slate-400">{{ $m->slug }}</div>
+              {{-- Sin categorías la detección de conflictos (BR-CAMPAIGN-007)
+                   no puede hacerse para esta marca. Se avisa donde se ve, no
+                   solo en el formulario de edición. --}}
+              @if ($m->categorias === 0)
+                <div class="mt-1 text-xs text-amber-700">Sin categorías: no se detectarán conflictos de marca.</div>
+              @else
+                <div class="mt-1 text-xs text-slate-500">{{ $m->categorias }} {{ $m->categorias === 1 ? 'categoría' : 'categorías' }}</div>
+              @endif
             </div>
             <span class="text-xs text-slate-500">{{ $m->status }}</span>
           </div>
         @empty
-          <p class="mt-3 text-sm text-slate-400">
-            Todavía no tiene marcas. Una campaña se hace <em>para una marca</em>, no para el cliente,
-            así que hará falta al menos una.
-          </p>
+          <p class="mt-3 text-sm text-slate-400">Todavía no tiene marcas.</p>
         @endforelse
       </div>
     </div>

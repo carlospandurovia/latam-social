@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Modules\Client\Http\Controllers\ClientesController;
+use App\Modules\Client\Http\Controllers\MarcasController;
 use App\Modules\Core\Http\Controllers\BitacoraController;
 use App\Modules\Core\Http\Controllers\CatalogosController;
 use App\Modules\Core\Http\Controllers\PanelController;
@@ -174,6 +175,30 @@ Route::middleware('auth')->group(function (): void {
         ->middleware('permiso:client.manage')
         ->whereUuid('uuid')
         ->name('clientes.update');
+
+    // ---- Marcas del cliente (iteración 4.2) ------------------------------
+    //
+    // Cuelgan del cliente en la URL y en la comprobacion: `MarcasController`
+    // exige que la marca sea DE ESE cliente, no solo que exista.
+    Route::get('/clientes/{uuid}/marcas/nueva', [MarcasController::class, 'create'])
+        ->middleware('permiso:client.manage')
+        ->whereUuid('uuid')
+        ->name('marcas.create');
+
+    Route::post('/clientes/{uuid}/marcas', [MarcasController::class, 'store'])
+        ->middleware('permiso:client.manage')
+        ->whereUuid('uuid')
+        ->name('marcas.store');
+
+    Route::get('/clientes/{uuid}/marcas/{marca}/editar', [MarcasController::class, 'edit'])
+        ->middleware('permiso:client.manage')
+        ->whereUuid('uuid')->whereUuid('marca')
+        ->name('marcas.edit');
+
+    Route::put('/clientes/{uuid}/marcas/{marca}', [MarcasController::class, 'update'])
+        ->middleware('permiso:client.manage')
+        ->whereUuid('uuid')->whereUuid('marca')
+        ->name('marcas.update');
 
     // ---- Cuentas sociales (iteración 3.7, BR-CREATOR-003/004/005) --------
     //

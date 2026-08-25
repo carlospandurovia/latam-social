@@ -2,6 +2,41 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 
+## [Fase 4 · 4.2 — Marcas] — 2026-08-25
+
+Esta iteración nace de una pregunta de revisión: *«¿clientes y marcas no son lo
+mismo?»*. La respuesta correcta tenía **dos mitades**, y quedarse en la primera
+habría dado un sistema correcto y molesto de usar.
+
+**El modelo distingue con razón** —`uq_cb_name` es por cliente, el conflicto de
+`BR-CAMPAIGN-007` se coteja por categorías de la *marca*, y la factura sale del
+cliente porque una marca no tiene RUC— **pero para un cliente de una sola marca
+esa distinción es papeleo puro.**
+
+### `DEC-074`
+El alta de cliente crea **su primera marca con el mismo nombre**, visible y
+editable, y lo dice en el mensaje. Que el modelo distinga no obliga a que la
+pantalla lo imponga.
+
+### Añadido
+- Alta y edición de marcas, con categorías, colgadas del cliente en la URL y en
+  la comprobación: `MarcasController` exige que la marca sea **de ese cliente**,
+  no solo que exista.
+- `Marcas::slugUnico()`. El slug es único **globalmente** y quien da de alta un
+  cliente no lo eligió ni sabe qué hay cogido en otros: se desambigua solo
+  (`acme`, `acme-2`). Y **solo se rehace si cambia el nombre** — regenerarlo
+  porque alguien corrigió el sitio web rompería un enlace.
+- La ficha del cliente marca en ámbar las marcas **sin categorías**: eso no es un
+  campo vacío, es la detección de conflictos apagada para esa marca.
+
+### Verificado antes de escribir las pruebas
+Las cuatro unicidades, ejecutadas contra el esquema real: `ACME` en el cliente A
+acepta; `ACME` en otro cliente con slug distinto acepta; `ACME` repetida en el
+mismo cliente rechaza (`uq_cb_name`); mismo slug en cualquier cliente rechaza
+(`uq_cb_slug`).
+
+654 aserciones SQL en verde.
+
 ## [Fase 4 · 4.1 — Clientes] — 2026-08-25
 
 Primera mitad de la iteración `7.0` de la hoja de ruta. Con esto empieza la otra
