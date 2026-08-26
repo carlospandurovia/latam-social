@@ -115,7 +115,12 @@ final class SolicitudesTest extends TestCase
      */
     public function test_la_casilla_de_confirmacion_no_salta_la_comprobacion(): void
     {
-        $this->creadorPendiente(['uuid' => (string) Str::uuid(), 'display_name' => 'ana2', 'document_type' => 'CE', 'document_number' => '999']);
+        // El choque es por CORREO, no por documento: el documento es otro a
+        // proposito. El correo se fija a mano porque es el mismo que trae la
+        // solicitud, y desde 7.4 el apoyo genera uno distinto por creador. Sin
+        // fijarlo, esta prueba dejaba de provocar el choque que dice provocar.
+        $this->creadorPendiente(['uuid' => (string) Str::uuid(), 'display_name' => 'ana2',
+            'email' => 'ana@ejemplo.test', 'document_type' => 'CE', 'document_number' => '999']);
 
         $this->actingAs($this->usuarioCon('admin'))
             ->post("/solicitudes/{$this->uuid}/aprobar", $this->alta(['confirma_revision' => '1']))

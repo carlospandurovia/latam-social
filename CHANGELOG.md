@@ -2,6 +2,102 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 
+## [7.4 · El buscador de creadores y la lista corta] — 2026-08-26
+
+Primera pantalla que **lee el modelo del creador entero**: cuatro iteraciones de
+la Fase 3 lo construyeron —país, categorías, formatos, tarifas, redes
+verificadas, restricciones, agenda— sin que nada lo leyera de una vez.
+
+La decisión que le da forma: **los filtros no se teclean, salen de la campaña**.
+Los mercados, los formatos del brief, la edad mínima y las categorías de la marca
+ya están aplicados cuando la pantalla abre. Un buscador con quince casillas
+vacías obliga al operador a recordar cuatro reglas a la vez, que es no recordar
+ninguna.
+
+### Añadido
+- **Buscador de candidatos** por campaña, con filtros duros (derivados) y blandos
+  (tecleados), y un interruptor de **«ver también los descartados, con el
+  motivo»**: contesta «¿por qué no me sale Fulano?» sin abrir la base.
+- **Lista corta** en `campaign_creators` con `status = 'shortlisted'` — el valor
+  por omisión de la columna desde la Fase 2, que nadie había escrito nunca.
+- **`ListaCorta::vetoParaAnadir()`** — revalida `BR-CREATOR-006` con la misma
+  clase que decide la activación, más los filtros de la campaña, y dice **todos**
+  los motivos de una vez.
+- **Media `BR-CAMPAIGN-007`** (`DEC-100`): la categoría que el creador declaró que
+  no trabaja ya excluye. Era 🔴 y no la comprobaba nada.
+- **`tg_ccr_campana_cerrada_ins` / `_upd`** (`DEC-102`): nadie entra en una campaña
+  cerrada, y una participación que ya estaba sólo se puede cancelar.
+- **Coste estimado** por candidato. Nulo con su motivo cuando no se puede
+  calcular — nulo **no es cero**, y no se convierte de moneda porque nadie
+  mantiene los tipos de cambio todavía.
+
+### Corregido
+- **`ConFixturas` usaba documento y correo fijos** para todos los creadores. 7.4
+  es la primera iteración que necesita varios a la vez, y el segundo daba un
+  `1062`. Ahora varían por llamada, y las tres pruebas que dependían de los
+  literales ahora **afirman contra la fila**: una prueba que se rompe al cambiar
+  un fixture no estaba afirmando lo que decía.
+- **`verificar-pantallas.py` acusaba en falso** — no entendía un `foreach` de PHP
+  dentro de un bloque `@php`. Una puerta que acusa en falso se acaba ignorando.
+
+### Anotado
+- **`T-34`** — `BR-CREATOR-012` dice «con tutela activa», y `min_creator_age` es
+  una columna de `campaigns` que no menciona la tutela. Se aplica a todos; hay que
+  corregir el texto de la regla, no el código.
+
+### Verificación
+339 pruebas / 1.145 aserciones · 980 (MariaDB) y 970 (MySQL 8) aserciones de
+restricción · diez mutaciones, las diez en rojo · las seis puertas en verde.
+
+**Dos mutaciones sobrevivieron a la primera versión de las pruebas**, las dos
+sobre el solape de agenda: la prueba tenía el borde izquierdo y no el derecho. El
+error de un día —once apariciones en este proyecto— entrando por el lado que
+nadie miraba.
+
+---
+
+## [7.3 · Los mercados de la campaña] — 2026-08-25
+
+`N-03` —*«el brief de mercado **reemplaza** al general, no se mezcla»*— estaba
+escrita en `docs/fase-2/2.3-NORMALIZACION.md` desde la Fase 2 y **nada la
+implementaba**. Con un agravante sobre 7.1 y 7.2: `N-03` es la **única excepción
+consciente** de todo el modelo, el único sitio donde un `NULL` significa
+*«todos»* en vez de *«no aplica»*. Una excepción que nadie implementa es una
+excepción que alguien va a interpretar mal.
+
+### Añadido
+- **Los mercados por pantalla** — en qué países corre la campaña y con cuántos
+  creadores. Al menos uno para salir de borrador (`DEC-095`), y **añadir sí,
+  quitar no** con la campaña confirmada (`DEC-096`): ampliar es comercial, quitar
+  puede dejar fuera a creadores ya invitados.
+- **`Mercados::briefEfectivo()`** — `N-03`, por fin en código. Y la pantalla del
+  mercado dice con palabras si lo que se ve es propio o heredado, porque la
+  lectura equivocada («se suman») es la que la regla existe para descartar.
+- **Foráneas compuestas** `(campaign_market_id, campaign_id)` (`DEC-098`). Una
+  foránea a `campaign_markets(id)` a secas sólo comprueba que el mercado exista:
+  nada impedía un requisito de la campaña A colgado del mercado de la campaña B.
+- **`ck_cm_target`** — `NULL` es «sin cupo fijado» y vale; cero no dice nada.
+- **`ck_creq_deadline` y `ck_creq_permanence`** (`T-33`, cerrada). `permanence_days`
+  es lo que se le exige al creador: un 100.000 son 273 años, y entraba.
+- **Suite `7.3-mercados`** (26 aserciones) y `MercadosTest` (18 pruebas).
+
+### Corregido
+- **Una aserción de la suite salía verde por un `1093` de MySQL 8.** Un `DELETE`
+  con subconsulta sobre la misma tabla, que MariaDB permite y MySQL rechaza: la
+  aserción esperaba `RECHAZO` y lo obtenía **por el motivo equivocado**, midiendo
+  el error del motor en vez de la foránea.
+- **`recolectar-esquema.php` no tenía `dropForeign`, `dropUnique` ni `dropIndex`.**
+  Caían en `__call` sin hacer nada, así que una migración que sustituye una
+  foránea dejaba las **dos** grabadas y el esquema reconstruido decía algo que la
+  base no dice. No había dado la cara porque ninguna migración anterior había
+  sustituido una foránea. Su `foreign()` tampoco aceptaba arrays.
+
+### Verificación
+318 pruebas / 1.045 aserciones · 940 (MariaDB) y 930 (MySQL 8) aserciones de
+restricción · siete mutaciones, las siete en rojo · las seis puertas en verde.
+
+---
+
 ## [7.2 · El brief y el ingreso declarado] — 2026-08-25
 
 `BR-CAMPAIGN-004` estaba escrita desde el principio —*«una campaña no puede pasar

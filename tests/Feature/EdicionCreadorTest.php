@@ -32,7 +32,14 @@ final class EdicionCreadorTest extends TestCase
         Permisos::olvidar();
 
         $this->uuid = (string) Str::uuid();
-        $this->creadorId = $this->creadorPendiente(['uuid' => $this->uuid, 'locale' => 'es', 'timezone' => 'America/Lima']);
+        // `display_name` se fija AQUI porque `formulario()` lo reenvia tal cual
+        // para probar «guardar sin cambios». Desde 7.4 el apoyo lo genera
+        // distinto en cada creador --hacian falta varios a la vez-- y un nombre
+        // por omision distinto convertia ese caso en un cambio real.
+        $this->creadorId = $this->creadorPendiente([
+            'uuid' => $this->uuid, 'display_name' => 'anatorres',
+            'locale' => 'es', 'timezone' => 'America/Lima',
+        ]);
     }
 
     /** @return array<string, mixed> */
@@ -120,6 +127,15 @@ final class EdicionCreadorTest extends TestCase
      */
     public function test_los_campos_de_identidad_se_ignoran_aunque_se_envien(): void
     {
+        // Se lee ANTES y se compara contra lo leido, en vez de contra dos
+        // literales. Lo que esta prueba afirma es que esos campos NO CAMBIAN, y
+        // escribir el valor a mano ataba la prueba a los datos por omision del
+        // apoyo --que desde 7.4 varian en cada creador para no chocar con
+        // `uq_creators_email`--. Una prueba que se rompe al cambiar un fixture
+        // no estaba afirmando lo que decia.
+        $antes = DB::table('creators')->where('uuid', $this->uuid)
+            ->first(['email', 'document_number', 'first_name']);
+
         $this->actingAs($this->usuarioCon('admin'))
             ->put("/creadores/{$this->uuid}", $this->formulario([
                 'city' => 'Arequipa',
@@ -133,9 +149,9 @@ final class EdicionCreadorTest extends TestCase
         $creador = DB::table('creators')->where('uuid', $this->uuid)->first();
 
         $this->assertSame('Arequipa', $creador->city, 'El campo legítimo sí debía cambiar.');
-        $this->assertSame('ana@ejemplo.test', $creador->email);
-        $this->assertSame('40000001', $creador->document_number);
-        $this->assertSame('Ana', $creador->first_name);
+        $this->assertSame($antes->email, $creador->email);
+        $this->assertSame($antes->document_number, $creador->document_number);
+        $this->assertSame($antes->first_name, $creador->first_name);
         // Lo que se prueba es que el estado NO se movio, no cual es. El estado
         // solo cambia por la puerta de activacion (3.5), nunca por el formulario
         // de contacto.

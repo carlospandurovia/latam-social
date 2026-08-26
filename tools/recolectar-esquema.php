@@ -126,17 +126,28 @@ class Columna {
 
 class ForaneaBuilder {
     private array $d;
-    public function __construct(public string $tabla, string $columna, ?string $nombre) {
-        $this->d = ['columna'=>$columna, 'nombre'=>$nombre, 'referencia'=>null, 'tabla_destino'=>null, 'onDelete'=>null];
+    /**
+     * `$columna` y `references()` aceptan ARRAY desde 7.3.
+     *
+     * Laravel los admite para declarar una foranea COMPUESTA --`foreign([a,b])
+     * ->references([x,y])`-- y este doble solo aceptaba `string`. La migracion
+     * 000720 lo reventaba con un TypeError, y el sintoma era «no pude leer las
+     * migraciones»: una comprobacion entera caida por una firma de mas.
+     *
+     * Se normaliza a lista para que una foranea simple y una compuesta de una
+     * sola columna se comparen igual.
+     */
+    public function __construct(public string $tabla, array|string $columna, ?string $nombre) {
+        $this->d = ['columna'=>(array) $columna, 'nombre'=>$nombre, 'referencia'=>null, 'tabla_destino'=>null, 'onDelete'=>null];
     }
-    public function references(string $c): static { $this->d['referencia'] = $c; return $this->guardar(); }
+    public function references(array|string $c): static { $this->d['referencia'] = (array) $c; return $this->guardar(); }
     public function on(string $t): static { $this->d['tabla_destino'] = $t; return $this->guardar(); }
     public function restrictOnDelete(): static { $this->d['onDelete'] = 'RESTRICT'; return $this->guardar(); }
     public function cascadeOnDelete(): static { $this->d['onDelete'] = 'CASCADE'; return $this->guardar(); }
     public function nullOnDelete(): static { $this->d['onDelete'] = 'SET NULL'; return $this->guardar(); }
     public function __call($n, $a): static { return $this; }
     private function guardar(): static {
-        $k = $this->d['nombre'] ?? ($this->tabla.'_'.$this->d['columna'].'_foreign');
+        $k = $this->d['nombre'] ?? ($this->tabla.'_'.implode('_', $this->d['columna']).'_foreign');
         \Recolector::$tablas[$this->tabla]['fk'][$k] = $this->d; return $this; }
 }
 
@@ -175,8 +186,16 @@ class Blueprint {
         \Recolector::$tablas[$this->tabla]['unicos'][$nombre ?? '?'] = (array) $cols; }
     public function primary($cols, ?string $nombre = null): void {
         \Recolector::$tablas[$this->tabla]['indices']['PRIMARY'] = (array) $cols; }
-    public function foreign(string $col, ?string $nombre = null): ForaneaBuilder {
+    public function foreign(array|string $col, ?string $nombre = null): ForaneaBuilder {
         return new ForaneaBuilder($this->tabla, $col, $nombre); }
+    // Sin estos, una migracion que sustituye una foranea por otra deja las DOS
+    // grabadas y el esquema reconstruido dice algo que la base no dice.
+    public function dropForeign($nombre): void {
+        unset(\Recolector::$tablas[$this->tabla]['fk'][is_array($nombre) ? '?' : $nombre]); }
+    public function dropUnique($nombre): void {
+        unset(\Recolector::$tablas[$this->tabla]['unicos'][is_array($nombre) ? '?' : $nombre]); }
+    public function dropIndex($nombre): void {
+        unset(\Recolector::$tablas[$this->tabla]['indices'][is_array($nombre) ? '?' : $nombre]); }
     public function dropColumn($c): void {
         foreach ((array) $c as $x) unset(\Recolector::$tablas[$this->tabla]['columnas'][$x]); }
     public function __call($n, $a) { return new Columna($this->tabla, (string)($a[0] ?? '?')); }

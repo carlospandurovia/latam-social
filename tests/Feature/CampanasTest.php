@@ -328,6 +328,10 @@ final class CampanasTest extends TestCase
 
         if ($conBrief) {
             $this->requisitoDe((int) $fila->id);
+            // Y un mercado: desde 7.3 tampoco se aprueba una campana que no diga
+            // en que paises corre. Segunda vez que el ayudante absorbe una
+            // restriccion nueva en un sitio en vez de en media docena.
+            $this->mercadoDe((int) $fila->id, $this->paisPE);
         }
 
         return (string) $fila->uuid;

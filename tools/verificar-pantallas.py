@@ -236,9 +236,20 @@ def variables_que_usa_la_plantilla(ruta):
         for v in re.findall(r"\$([A-Za-z_]\w*)", m.group(1)):
             definidas.add(v)
     # @php $x = ... @endphp  y  @php($x = ...)
+    #
+    # Se miran DOS cosas dentro del bloque: las asignaciones y los `foreach` de
+    # PHP puro. Lo segundo faltaba, y el sintoma fue una acusacion falsa en
+    # `candidatos.blade.php` (7.4): un `foreach ($motivos as $clave => $texto)`
+    # dentro de un `@php` hacia que `$texto` pareciera una variable que el
+    # controlador no pasa. Una puerta que acusa en falso se acaba ignorando, y
+    # eso es peor que no tenerla.
     for m in re.finditer(r"@php(.*?)@endphp|@php\((.*?)\)", texto, re.S):
-        for v in re.findall(r"\$([A-Za-z_]\w*)\s*=", (m.group(1) or '') + (m.group(2) or '')):
+        cuerpo = (m.group(1) or '') + (m.group(2) or '')
+        for v in re.findall(r"\$([A-Za-z_]\w*)\s*=", cuerpo):
             definidas.add(v)
+        for f in re.finditer(r"\bforeach\s*\(.*?\bas\b\s*(.*?)\)", cuerpo, re.S):
+            for v in re.findall(r"\$([A-Za-z_]\w*)", f.group(1)):
+                definidas.add(v)
     # funciones flecha y closures: fn ($x) => ... / function ($x)
     for m in re.finditer(r"\bfn\s*\((.*?)\)|\bfunction\s*\((.*?)\)", texto):
         for v in re.findall(r"\$([A-Za-z_]\w*)", (m.group(1) or '') + (m.group(2) or '')):

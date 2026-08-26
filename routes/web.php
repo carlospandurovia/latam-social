@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Modules\Campaign\Http\Controllers\CampanasController;
+use App\Modules\Campaign\Http\Controllers\CandidatosController;
 use App\Modules\Client\Http\Controllers\ClientesController;
 use App\Modules\Client\Http\Controllers\ContactosController;
 use App\Modules\Client\Http\Controllers\MarcasController;
@@ -456,6 +457,43 @@ Route::middleware('auth')->group(function (): void {
         ->middleware('permiso:campaign.manage')
         ->whereUuid('uuid')->whereNumber('requisito')
         ->name('campanas.requisitos.quitar');
+
+    // Los mercados (7.3). `anadirMercado` NO exige que la campana sea borrador:
+    // ampliar a un pais nuevo se puede con la campana viva; quitarlo no, y eso
+    // lo veta el servicio y lo impide `tg_cm_no_quitar_confirmada` en la base.
+    Route::post('/campanas/{uuid}/mercados', [CampanasController::class, 'anadirMercado'])
+        ->middleware('permiso:campaign.manage')
+        ->whereUuid('uuid')
+        ->name('campanas.mercados.anadir');
+
+    Route::delete('/campanas/{uuid}/mercados/{mercado}', [CampanasController::class, 'quitarMercado'])
+        ->middleware('permiso:campaign.manage')
+        ->whereUuid('uuid')->whereNumber('mercado')
+        ->name('campanas.mercados.quitar');
+
+    // Ver el brief efectivo de un mercado es VER, no gestionar: es lo que un
+    // revisor de contenido necesita mirar para saber que se pidio en ese pais.
+    Route::get('/campanas/{uuid}/mercados/{mercado}', [CampanasController::class, 'mercado'])
+        ->middleware('permiso:campaign.view')
+        ->whereUuid('uuid')->whereNumber('mercado')
+        ->name('campanas.mercados.ver');
+
+    // Los candidatos (7.4). Buscar es VER --un revisor puede mirar a quien se
+    // esta considerando-- pero armar la lista corta es gestionar.
+    Route::get('/campanas/{uuid}/candidatos', [CandidatosController::class, 'index'])
+        ->middleware('permiso:campaign.view')
+        ->whereUuid('uuid')
+        ->name('campanas.candidatos');
+
+    Route::post('/campanas/{uuid}/candidatos', [CandidatosController::class, 'anadir'])
+        ->middleware('permiso:campaign.manage')
+        ->whereUuid('uuid')
+        ->name('campanas.candidatos.anadir');
+
+    Route::delete('/campanas/{uuid}/candidatos/{participacion}', [CandidatosController::class, 'quitar'])
+        ->middleware('permiso:campaign.manage')
+        ->whereUuid('uuid')->whereNumber('participacion')
+        ->name('campanas.candidatos.quitar');
 
     Route::post('/campanas/{uuid}/estado', [CampanasController::class, 'transicionar'])
         ->middleware('permiso:campaign.view')

@@ -358,13 +358,25 @@ final class BriefTest extends TestCase
         ], $cambios);
     }
 
-    /** @param array<string, mixed> $cambios */
+    /**
+     * Un borrador **con mercado**.
+     *
+     * El mercado va aqui porque desde 7.3 sin el la campana no sale de borrador,
+     * y estas pruebas hablan del brief y del precio: si les faltara el mercado
+     * estarian probando el veto de 7.3 creyendo que prueban el suyo. Es
+     * exactamente lo que le paso a la suite de 7.1 al llegar 7.2.
+     *
+     * @param array<string, mixed> $cambios
+     */
     private function campanaEnBorrador(array $cambios = [], ?User $quien = null): string
     {
         $this->actingAs($quien ?? $this->usuarioCon('campaign_manager'))
             ->post('/campanas', $this->datos($cambios));
 
-        return (string) DB::table('campaigns')->where('name', 'Lanzamiento verano')->value('uuid');
+        $fila = DB::table('campaigns')->where('name', 'Lanzamiento verano')->first(['id', 'uuid']);
+        $this->mercadoDe((int) $fila->id, $this->paisPE);
+
+        return (string) $fila->uuid;
     }
 
     /** @param array<string, mixed> $cambios */

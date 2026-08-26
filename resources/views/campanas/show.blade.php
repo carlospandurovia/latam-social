@@ -35,6 +35,123 @@
         </dl>
       </div>
 
+      {{-- El paso siguiente, donde se ve. Solo cuando la campana ya puede
+           salir de borrador: buscar creadores para una campana sin brief ni
+           mercados es buscar sin saber que se busca. --}}
+      @can('campaign.manage')
+        @if ($faltan === [])
+          <div class="rounded-xl border border-marca-200 bg-marca-50 p-4 flex items-center justify-between gap-4">
+            <p class="text-sm text-marca-900">
+              Esta campaña ya tiene brief, mercados y precio. El paso siguiente es elegir a quién invitar.
+            </p>
+            <a href="{{ route('campanas.candidatos', $campana->uuid) }}"
+               class="shrink-0 rounded-lg bg-marca-500 px-4 py-2 text-sm font-medium text-white hover:bg-marca-600">
+              Buscar creadores
+            </a>
+          </div>
+        @endif
+      @endcan
+
+      {{-- LOS MERCADOS. Van antes del brief porque el brief se puede partir por
+           mercado y no al revés: sin países declarados, «para México» no existe
+           como opción. --}}
+      <div class="bg-white rounded-xl border border-slate-200 p-5">
+        <h2 class="text-sm font-medium text-slate-700 mb-3">Dónde se ejecuta</h2>
+
+        @if ($mercados->isEmpty())
+          <p class="text-sm text-amber-800">
+            La campaña todavía no dice en qué países se ejecuta. Sin al menos un mercado no puede
+            salir de borrador: de ahí sale a quién se puede invitar.
+          </p>
+        @else
+          <table class="w-full text-sm mb-4">
+            <thead class="text-slate-500">
+              <tr>
+                <th class="text-left font-medium pb-2">País</th>
+                <th class="text-left font-medium pb-2">Brief</th>
+                <th class="text-right font-medium pb-2">Creadores</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+              @foreach ($mercados as $m)
+                <tr>
+                  <td class="py-2">
+                    <a href="{{ route('campanas.mercados.ver', [$campana->uuid, $m->id]) }}"
+                       class="text-marca-600 hover:underline">{{ $m->pais }}</a>
+                    <span class="text-xs text-slate-400">{{ $m->iso2 }}</span>
+                  </td>
+                  <td class="py-2">
+                    {{-- `N-03`: si el mercado tiene requisitos propios, NO hereda
+                         los generales. Decirlo aquí evita la lectura de que se
+                         suman, que es la que la regla existe para descartar. --}}
+                    @if (in_array($m->id, $conBriefPropio, true))
+                      <span class="rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-600">propio</span>
+                    @else
+                      <span class="text-xs text-slate-500">el general</span>
+                    @endif
+                  </td>
+                  <td class="py-2 text-right">
+                    {{ $m->target_creators ?? '—' }}
+                  </td>
+                  <td class="py-2 text-right">
+                    @can('campaign.manage')
+                      <form method="POST"
+                            action="{{ route('campanas.mercados.quitar', [$campana->uuid, $m->id]) }}">
+                        @csrf @method('DELETE')
+                        <button class="text-xs text-rose-600 hover:underline">Quitar</button>
+                      </form>
+                    @endcan
+                  </td>
+                </tr>
+              @endforeach
+            </tbody>
+          </table>
+        @endif
+
+        {{-- Añadir SÍ se puede con la campaña confirmada: ampliar a un país nuevo
+             es comercial y no rompe lo prometido. Quitar no, y de eso se encarga
+             el veto del servicio. --}}
+        @can('campaign.manage')
+          @if ($paises->isNotEmpty())
+            <form method="POST" action="{{ route('campanas.mercados.anadir', $campana->uuid) }}"
+                  class="border-t border-slate-100 pt-4 grid gap-3 sm:grid-cols-4 items-end">
+              @csrf
+              <div class="sm:col-span-2">
+                <label for="country_id" class="block text-xs text-slate-600 mb-1">País</label>
+                <select id="country_id" name="country_id"
+                        class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm">
+                  @foreach ($paises as $p)
+                    <option value="{{ $p->id }}">{{ $p->name }}</option>
+                  @endforeach
+                </select>
+              </div>
+              <div>
+                <label for="target_creators" class="block text-xs text-slate-600 mb-1">
+                  Creadores <span class="text-slate-400">(opcional)</span>
+                </label>
+                <input id="target_creators" name="target_creators" type="number" min="1" max="999"
+                       value="{{ old('target_creators') }}" placeholder="sin fijar"
+                       class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm">
+              </div>
+              <div>
+                <button class="w-full rounded-lg bg-marca-500 px-3 py-2 text-sm font-medium text-white hover:bg-marca-600">
+                  Añadir
+                </button>
+              </div>
+            </form>
+
+            @foreach (['country_id', 'target_creators'] as $campo)
+              @error($campo) <p class="mt-2 text-xs text-rose-600">{{ $message }}</p> @enderror
+            @endforeach
+          @else
+            <p class="border-t border-slate-100 pt-4 text-xs text-slate-500">
+              Todos los países del catálogo ya son mercados de esta campaña.
+            </p>
+          @endif
+        @endcan
+      </div>
+
       {{-- EL BRIEF. Lo primero de la columna porque es lo que decide si la
            campaña puede salir de borrador (`BR-CAMPAIGN-004`). --}}
       <div class="bg-white rounded-xl border border-slate-200 p-5">
@@ -51,6 +168,7 @@
             <thead class="text-slate-500">
               <tr>
                 <th class="text-left font-medium pb-2">Formato</th>
+                <th class="text-left font-medium pb-2">Para</th>
                 <th class="text-right font-medium pb-2">Cantidad</th>
                 <th class="text-right font-medium pb-2">Entrega</th>
                 <th class="text-right font-medium pb-2">Permanencia</th>
@@ -64,6 +182,13 @@
                     {{ $r->red ? $r->red.' · ' : '' }}{{ $r->formato }}
                     @if ($r->notes)
                       <p class="text-xs text-slate-500">{{ $r->notes }}</p>
+                    @endif
+                  </td>
+                  <td class="py-2">
+                    @if ($r->campaign_market_id === null)
+                      <span class="text-xs text-slate-500">todos los mercados</span>
+                    @else
+                      <span class="rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-600">{{ $r->mercado }}</span>
                     @endif
                   </td>
                   <td class="py-2 text-right">{{ $r->quantity }}</td>
@@ -93,7 +218,7 @@
                que se anada uno. --}}
           @if ($editable)
             <form method="POST" action="{{ route('campanas.requisitos.anadir', $campana->uuid) }}"
-                  class="border-t border-slate-100 pt-4 grid gap-3 sm:grid-cols-5 items-end">
+                  class="border-t border-slate-100 pt-4 grid gap-3 sm:grid-cols-6 items-end">
               @csrf
               <div class="sm:col-span-2">
                 <label for="content_format_id" class="block text-xs text-slate-600 mb-1">Formato</label>
@@ -102,6 +227,21 @@
                   @foreach ($formatos as $f)
                     <option value="{{ $f->id }}" data-permanencia="{{ $f->default_permanence_days }}">
                       {{ $f->red ? $f->red.' · ' : '' }}{{ $f->code }}
+                    </option>
+                  @endforeach
+                </select>
+              </div>
+              <div>
+                <label for="campaign_market_id" class="block text-xs text-slate-600 mb-1">Para</label>
+                <select id="campaign_market_id" name="campaign_market_id"
+                        class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm">
+                  {{-- Vacío = «todos los mercados» (`N-03`). Es la única vez que
+                       un valor ausente SIGNIFICA algo en este modelo, así que se
+                       dice con palabras en vez de con un guión. --}}
+                  <option value="">Todos los mercados</option>
+                  @foreach ($mercados as $m)
+                    <option value="{{ $m->id }}" @selected((int) old('campaign_market_id') === (int) $m->id)>
+                      Solo {{ $m->pais }}
                     </option>
                   @endforeach
                 </select>
@@ -124,7 +264,7 @@
                        value="{{ old('permanence_days', $formatos->first()->default_permanence_days ?? 30) }}"
                        class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm">
               </div>
-              <div class="sm:col-span-4">
+              <div class="sm:col-span-5">
                 <label for="notes" class="block text-xs text-slate-600 mb-1">Notas <span class="text-slate-400">(opcional)</span></label>
                 <input id="notes" name="notes" value="{{ old('notes') }}" maxlength="255"
                        class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm">
@@ -136,7 +276,7 @@
               </div>
             </form>
 
-            @foreach (['content_format_id', 'quantity', 'deadline_offset_days', 'permanence_days', 'notes'] as $campo)
+            @foreach (['content_format_id', 'campaign_market_id', 'quantity', 'deadline_offset_days', 'permanence_days', 'notes'] as $campo)
               @error($campo) <p class="mt-2 text-xs text-rose-600">{{ $message }}</p> @enderror
             @endforeach
           @endif

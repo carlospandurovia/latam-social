@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace App\Modules\Campaign\Http\Controllers;
 
 use App\Modules\Campaign\Http\Requests\GuardarCampanaRequest;
+use App\Modules\Campaign\Http\Requests\GuardarMercadoRequest;
 use App\Modules\Campaign\Http\Requests\GuardarRequisitoRequest;
 use App\Modules\Campaign\Services\Campanas;
 use App\Modules\Campaign\Services\EstadosDeCampana;
+use App\Modules\Campaign\Services\Mercados;
 use App\Shared\Audit\Bitacora;
 use App\Shared\Auth\Permisos;
 use App\Shared\Database\Choque;
@@ -87,6 +89,13 @@ final class CampanasController
                 (string) $campana->starts_on,
             ),
             'requisitos' => Campanas::requisitos((int) $campana->id),
+            'mercados' => Mercados::de((int) $campana->id),
+            'paises' => Mercados::paisesDisponibles((int) $campana->id),
+            // Cuales tienen brief PROPIO. Dos mercados con el mismo brief se ven
+            // igual sin poder saber si es que heredan el general o que alguien
+            // escribio lo mismo dos veces, y eso cambia que pasa al editar el
+            // general (`N-03`: reemplaza, no mezcla).
+            'conBriefPropio' => Mercados::conBriefPropio((int) $campana->id),
             'formatos' => DB::table('content_formats as f')
                 ->leftJoin('platforms as p', 'p.id', '=', 'f.platform_id')
                 ->where('f.is_active', 1)
@@ -366,6 +375,116 @@ final class CampanasController
         );
 
         return redirect()->route('campanas.show', $uuid)->with('exito', 'Requisito quitado del brief.');
+    }
+
+    /**
+     * Añade un mercado a la campaña.
+     *
+     * A diferencia del brief, **sí se puede con la campaña confirmada**
+     * (decisión de negocio, 2026-08-25): ampliar a un país nuevo es comercial y
+     * no rompe nada de lo prometido. Lo que no se puede es quitar, y eso lo
+     * impide `tg_cm_no_quitar_confirmada` en la base.
+     */
+    public function anadirMercado(GuardarMercadoRequest $peticion, string $uuid): RedirectResponse
+    {
+        $campana = $this->campana($uuid);
+
+        /** @var array<string, mixed> $datos */
+        $datos = $peticion->validated();
+
+        // El mismo pais dos veces lo rechaza `uq_cm_campaign_country`. Se
+        // traduce y no se absorbe: repetir un pais no es un valor que el
+        // sistema pueda recalcular --es que el operador queria cambiar el cupo
+        // del que ya esta--. Es `DEC-087` otra vez.
+        try {
+            DB::table('campaign_markets')->insert($datos + [
+                'campaign_id' => $campana->id,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        } catch (Throwable $e) {
+            if (!Choque::esDe($e, 'uq_cm_campaign_country')) {
+                throw $e;
+            }
+
+            return back()->withInput()->with('aviso',
+                'Ese pais ya es un mercado de esta campana. Cambie su cupo en la fila que hay en '
+                .'vez de anadirlo otra vez.');
+        }
+
+        Bitacora::registrar(
+            accion: 'campaign.market_added',
+            tipoEntidad: 'campaign',
+            idEntidad: (int) $campana->id,
+            cambios: ['mercado' => ['antes' => null, 'despues' => $datos]],
+        );
+
+        return redirect()->route('campanas.show', $uuid)->with('exito', 'Mercado anadido.');
+    }
+
+    /**
+     * Quita un mercado de la campaña.
+     *
+     * Los dos motivos por los que puede no poderse —campaña confirmada, o el
+     * mercado tiene cosas colgando— se dicen **antes** de intentarlo. El segundo
+     * lo rechazaría la foránea con un `1451` que habla de una fila padre y nombra
+     * un índice: cierto, y de ninguna ayuda.
+     */
+    public function quitarMercado(string $uuid, int $mercado): RedirectResponse
+    {
+        $campana = $this->campana($uuid);
+
+        // El par (campana, mercado) y no solo el id: el mercado puede existir y
+        // ser de OTRA campana, y eso es lo que hay que impedir.
+        $fila = DB::table('campaign_markets')
+            ->where('id', $mercado)->where('campaign_id', $campana->id)->first();
+
+        if ($fila === null) {
+            throw new NotFoundHttpException('Ese mercado no es de esta campana.');
+        }
+
+        if (($aviso = Mercados::vetoParaQuitar($campana, $mercado)) !== null) {
+            return back()->with('aviso', $aviso);
+        }
+
+        DB::table('campaign_markets')->where('id', $mercado)->delete();
+
+        Bitacora::registrar(
+            accion: 'campaign.market_removed',
+            tipoEntidad: 'campaign',
+            idEntidad: (int) $campana->id,
+            cambios: ['mercado' => ['antes' => (array) $fila, 'despues' => null]],
+        );
+
+        return redirect()->route('campanas.show', $uuid)->with('exito', 'Mercado quitado.');
+    }
+
+    /**
+     * El brief efectivo de un mercado, aplicando `N-03`.
+     *
+     * Pantalla propia y no una pestaña de la ficha porque es la respuesta a una
+     * pregunta distinta: la ficha dice *qué se ha escrito*, y ésta dice **qué le
+     * toca a este país** — que con la regla de reemplazo no es lo mismo.
+     */
+    public function mercado(string $uuid, int $mercado): View
+    {
+        $campana = $this->campana($uuid);
+
+        $fila = DB::table('campaign_markets as m')
+            ->join('countries as p', 'p.id', '=', 'm.country_id')
+            ->where('m.id', $mercado)->where('m.campaign_id', $campana->id)
+            ->first(['m.id', 'm.target_creators', 'p.name as pais', 'p.iso2']);
+
+        if ($fila === null) {
+            throw new NotFoundHttpException('Ese mercado no es de esta campana.');
+        }
+
+        return view('campanas.mercado', [
+            'campana' => $campana,
+            'mercado' => $fila,
+            'brief' => Mercados::briefEfectivo((int) $campana->id, $mercado),
+            'propio' => in_array($mercado, Mercados::conBriefPropio((int) $campana->id), true),
+        ]);
     }
 
     // ------------------------------------------------------------------ apoyo

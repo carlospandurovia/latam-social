@@ -160,8 +160,8 @@ Iterativa y exhaustiva, tal como pide la especificación. **Nada de frontend aqu
 | 7.0 | Clientes y marcas: alta manual de `ClientOrganization`, `ClientBrand`, `Contact`, datos fiscales por país, y **asignación de entidad legal según cobertura de facturación** (bloqueo si ningún país coincide, `BR-LE-003`/`BR-LE-004`) |
 | 7.1 | ✅ **Cerrada (2026-08-25).** Entidad Campaign + estados + transiciones + auditoría + **`billing_legal_entity_id` congelado** |
 | 7.2 | ✅ **Cerrada (2026-08-25).** Brief: requisitos y formatos por campaña, con el veto de `BR-CAMPAIGN-004` al salir de borrador, e **ingreso declarado** (`is_gratis`: cero vale, pero hay que decir que es a propósito). Hashtags, menciones, restricciones y *assets* **no** entran: sin mercados (7.3) un requisito no se puede partir por país, y los *assets* dependen del módulo de archivos |
-| 7.3 | Mercados de campaña (multipaís) — modelo completo, UI mínima |
-| 7.4 | Buscador de creadores con filtros reales + shortlist |
+| 7.3 | ✅ **Cerrada (2026-08-25).** Mercados de campaña (multipaís): al menos uno para salir de borrador, foráneas **compuestas** para que el mercado sea de su campaña, `N-03` implementada (el brief de mercado reemplaza al general) y **añadir sí, quitar no** con la campaña confirmada. Cierra `T-33` |
+| 7.4 | ✅ **Cerrada (2026-08-26).** Buscador con los filtros derivados de la campaña (mercados, formatos del brief, edad mínima, categorías de la marca), interruptor de descartados con el motivo, coste estimado, y lista corta en `campaign_creators` con el mercado derivado del país. Media `BR-CAMPAIGN-007` implementada. Abre `T-34` |
 | 7.5 | Selección, cupos por formato, costo comprometido por creador (congelado) |
 | 7.6 | Invitaciones: envío, expiración, aceptación, rechazo con motivo, preguntas |
 | 7.7 | Panel de seguimiento de la campaña (quién va en qué estado) — **la pantalla más usada del sistema** |

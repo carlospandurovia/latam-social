@@ -1,5 +1,9 @@
 # 09 — Estado del proyecto y siguiente iteración
 
+> **Versión 1.3 — 2026-08-26.** Actualizado al cerrar 7.4.
+>
+> **Versión 1.2 — 2026-08-25.** Actualizado al cerrar 7.3.
+>
 > **Versión 1.1 — 2026-08-25.** Actualizado al cerrar 7.2. La versión 1.0
 > es de esta misma fecha y ya tenía los números de 4.11: se actualizan aquí
 > porque este documento es exactamente el que no puede quedarse atrás.
@@ -24,11 +28,11 @@
 | | |
 |---|---|
 | Tablas | 65 |
-| Migraciones | 42, verdes desde cero en MySQL 8 |
-| Pruebas de PHPUnit | **300**, 927 aserciones |
-| Aserciones de restricción (SQL) | **888** en MariaDB, **878** en MySQL 8 |
+| Migraciones | 45, verdes desde cero en MySQL 8 |
+| Pruebas de PHPUnit | **339**, 1.145 aserciones |
+| Aserciones de restricción (SQL) | **980** en MariaDB, **970** en MySQL 8 |
 | Puertas de calidad | 6: formato, análisis estático, fronteras, pruebas, vigencias, nombres entre capas |
-| Decisiones registradas | hasta `DEC-094` |
+| Decisiones registradas | hasta `DEC-102` |
 
 ### Lo que se puede hacer hoy por pantalla
 
@@ -43,7 +47,14 @@ fecha de inicio y congelada al confirmar, grafo de estados con su permiso por
 transición, y un brief que dice qué hay que entregar y a qué precio — con el
 cero declarado, porque «regalada» y «sin precio» no son lo mismo.
 
-Eso completa **7.0, 7.1 y 7.2 del roadmap**.
+Y desde 7.3, en qué países corre cada campaña, con su cupo de creadores y con un
+brief que se puede especializar por mercado.
+
+Y desde 7.4, buscar a quién invitar: el buscador aplica solo los mercados, los
+formatos del brief, la edad mínima y las categorías de la marca, y la lista corta
+veta a quien no cumple `BR-CREATOR-006`.
+
+Eso completa **7.0 a 7.4 del roadmap**.
 
 ---
 
@@ -87,32 +98,36 @@ Ninguna bloquea código hoy; todas bloquean una iteración futura concreta.
 
 ## 4. Lo que propongo como siguiente iteración
 
-**7.3 — Los mercados de la campaña: en qué países se ejecuta y cuántos creadores
-en cada uno.**
+**Volver a la Fase 4 — colas, correo y el registro de integraciones — antes de
+seguir con 7.5 y 7.6.**
 
-Por qué ésta y no otra:
+Esto es un cambio de orden, y lo propongo a sabiendas:
 
-- **Es lo que sigue en el roadmap**, y 7.2 la dejó a medias a propósito:
-  `campaign_requirements.campaign_market_id` va a `NULL` —«todos los mercados»—
-  en todos los requisitos de hoy, y `uq_creq_general` está escrito para eso.
-  Hasta que existan los mercados, un brief no puede pedir dos reels en Perú y
-  uno en Colombia.
-- **`campaign_markets` ya existe** desde la Fase 2, sin una pantalla encima. La
-  misma situación que tenía `campaigns` antes de 7.1.
-- **Es lo que hace falta para buscar creadores** (7.4): «a quién invito» empieza
-  por «en qué país», y hoy la campaña no lo dice.
-- Y arrastra una pregunta de negocio real: si una campaña LATAM se factura desde
-  **una** sociedad (`BR-LE-003`, resuelto por el país del **cliente**), ¿qué pasa
-  con los creadores de otros países? Es `Q-44` mirada desde el otro lado, y
-  conviene plantearla con el caso de uso delante.
+- **7.6 (invitaciones) no se puede construir sin correo.** «Enviar, expirar,
+  aceptar, rechazar» empieza por enviar, y `F4.9` —plantillas en base de datos,
+  registro de envíos, reintentos— no existe. Construir 7.5 y llegar a 7.6 con
+  ese hueco delante es descubrirlo dos iteraciones más tarde.
+- **`F4.8` (colas) bloquea lo mismo** y además las exportaciones de 10.7.
+- **`F4.6b` (integraciones) está bloqueado por `2.7`**, que no tiene ni documento
+  ni tablas. Es prerrequisito de la **F12 entera** y de la facturación
+  electrónica. Cuanto más tarde se mire, más caro.
+- Y hay tres cosas más que dependen de correo y hoy se hacen a mano: el enlace
+  de contraseña al aprobar un creador (`5.9`), la recuperación de contraseña
+  (`4.1`) y el aviso al creador cuando cambian sus datos fiscales (`T-10`).
+
+**Si prefieres seguir el orden del roadmap**, lo siguiente sería 7.5 —selección,
+cupos por formato y costo comprometido congelado—, que sí se puede hacer entera
+sin correo. Es una decisión tuya y las dos son defendibles: 7.5 avanza el valor
+visible; la Fase 4 quita un bloqueo que sólo va a crecer.
 
 ### Lo que NO propongo, y por qué
 
 - **Facturación (F9).** Depende de `Q-40` y `Q-44`, o sea de tu contador.
 - **Portal del creador (F6).** Depende de `T-09`, o sea de tu abogado.
-- **Más endurecimiento del esquema.** Queda `T-33` —`deadline_offset_days` y
-  `permanence_days` sin `CHECK`— y es media hora, pero cabe mejor dentro de 7.3,
-  que va a tocar esas mismas filas.
+- **Más endurecimiento del esquema.** `T-33` se cerró en 7.3 y no queda ninguna
+  otra anotada. Seguir buscando sería inventar trabajo; lo que sí sigue saliendo
+  son reglas del documento sin código detrás, y ésas aparecen solas al construir
+  la pantalla que las necesita.
 
 ---
 
@@ -135,4 +150,4 @@ Tres cosas, por orden de coste para el proyecto:
    impide usar de verdad todo lo construido en las fases 3 y 4.
 2. **Pregúntale a tu contador `Q-40` y `Q-44`.** Las dos tienen respuesta corta y
    las dos bloquean el dinero.
-3. **Dime si arranco 7.3** o prefieres que use el tiempo en otra cosa.
+3. **Dime si vuelvo a la Fase 4 o sigo con 7.5.** Es la única decisión de orden que tengo delante.

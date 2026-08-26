@@ -75,9 +75,17 @@ CREATE TABLE campaign_markets (
   created_at   DATETIME(3)   NULL,
   updated_at   DATETIME(3)   NULL,
   UNIQUE KEY uq_cm_campaign_country (campaign_id, country_id),
+  -- 7.3: redundante como clave --`id` ya es PRIMARY-- y necesaria como DESTINO.
+  -- MySQL exige que las columnas referidas por una foranea sean prefijo de
+  -- algun indice, y de aqui cuelgan las foraneas COMPUESTAS que impiden que un
+  -- requisito o una participacion apunten al mercado de otra campana.
+  UNIQUE KEY uq_cm_id_campaign (id, campaign_id),
   KEY ix_cm_country (country_id),
   CONSTRAINT fk_cm_campaign FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE RESTRICT,
-  CONSTRAINT fk_cm_country FOREIGN KEY (country_id) REFERENCES countries(id) ON DELETE RESTRICT
+  CONSTRAINT fk_cm_country FOREIGN KEY (country_id) REFERENCES countries(id) ON DELETE RESTRICT,
+  -- 7.3: NULL es «sin cupo fijado» y es legitimo. Cero no dice nada: «corre en
+  -- Colombia con cero creadores» no es un objetivo, es un mercado de mas.
+  CONSTRAINT ck_cm_target CHECK (target_creators IS NULL OR target_creators >= 1)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 2.3 N-03: campaign_market_id NULL = todos los mercados. Si existe alguno
@@ -111,9 +119,19 @@ CREATE TABLE campaign_requirements (
   KEY ix_creq_market (campaign_market_id),
   KEY ix_creq_format (content_format_id),
   CONSTRAINT fk_creq_campaign FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE RESTRICT,
-  CONSTRAINT fk_creq_market FOREIGN KEY (campaign_market_id) REFERENCES campaign_markets(id) ON DELETE RESTRICT,
+  -- 7.3: COMPUESTA. Una foranea a `campaign_markets(id)` a secas solo comprueba
+  -- que el mercado exista, no que sea de ESTA campana: un requisito de la
+  -- campana A podia colgar del mercado «Mexico» de la campana B. Y el NULL con
+  -- significado sobrevive: en MySQL una foranea compuesta con un componente
+  -- NULL no se comprueba, asi que «todos los mercados» pasa igual que antes.
+  CONSTRAINT fk_creq_market_campaign FOREIGN KEY (campaign_market_id, campaign_id) REFERENCES campaign_markets(id, campaign_id) ON DELETE RESTRICT,
   CONSTRAINT fk_creq_format FOREIGN KEY (content_format_id) REFERENCES content_formats(id) ON DELETE RESTRICT,
-  CONSTRAINT ck_creq_quantity CHECK (quantity >= 1)
+  CONSTRAINT ck_creq_quantity CHECK (quantity >= 1),
+  -- 7.3 / T-33: hasta aqui los acotaba SOLO el formulario, y una regla que solo
+  -- vive en la pantalla se la salta cualquier importacion. `permanence_days` es
+  -- lo que se le exige al creador: un 100.000 son 273 anos.
+  CONSTRAINT ck_creq_deadline CHECK (deadline_offset_days BETWEEN 0 AND 365),
+  CONSTRAINT ck_creq_permanence CHECK (permanence_days BETWEEN 0 AND 3650)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- La participacion: donde vive el compromiso economico CONGELADO.
@@ -151,7 +169,10 @@ CREATE TABLE campaign_creators (
   KEY ix_ccr_currency (currency_code),
   CONSTRAINT fk_ccr_campaign FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE RESTRICT,
   CONSTRAINT fk_ccr_creator FOREIGN KEY (creator_id) REFERENCES creators(id) ON DELETE RESTRICT,
-  CONSTRAINT fk_ccr_market FOREIGN KEY (campaign_market_id) REFERENCES campaign_markets(id) ON DELETE RESTRICT,
+  -- 7.3: COMPUESTA, por lo mismo que en `campaign_requirements`. Aqui pesa mas:
+  -- un creador aceptado apuntando al mercado de otra campana es un pago que se
+  -- atribuye al pais equivocado.
+  CONSTRAINT fk_ccr_market_campaign FOREIGN KEY (campaign_market_id, campaign_id) REFERENCES campaign_markets(id, campaign_id) ON DELETE RESTRICT,
   CONSTRAINT fk_ccr_guardian FOREIGN KEY (payee_guardian_id) REFERENCES creator_guardians(id) ON DELETE RESTRICT,
   CONSTRAINT fk_ccr_currency FOREIGN KEY (currency_code) REFERENCES currencies(code) ON DELETE RESTRICT,
   CONSTRAINT ck_cc_status CHECK (status IN ('shortlisted','invited','accepted','declined','expired','in_production','delivered','approved','published','verified','completed','cancelled')),
@@ -257,6 +278,70 @@ BEGIN
   THEN
     SIGNAL SQLSTATE '45000'
       SET MESSAGE_TEXT = 'La sociedad que factura una campana confirmada no se cambia (BR-LE-002): anule la campana y cree otra.';
+  END IF;
+END//
+
+-- ===========================================================================
+-- 7.3 / BR-CAMPAIGN-003: de una campana confirmada se ANADE un mercado, no se
+-- quita.
+--
+-- Ampliar a un pais nuevo es una decision comercial normal y no rompe nada de
+-- lo prometido. Quitar si: puede dejar fuera a creadores ya invitados o
+-- aceptados, y eso exige una enmienda aceptada por las dos partes.
+--
+-- Mira `campaigns` y no una columna propia porque el congelado de un mercado no
+-- es un hecho del mercado: es un hecho de la campana a la que pertenece.
+-- ===========================================================================
+
+CREATE TRIGGER `tg_cm_no_quitar_confirmada`
+BEFORE DELETE ON `campaign_markets`
+FOR EACH ROW
+BEGIN
+  IF EXISTS (SELECT 1 FROM `campaigns`
+              WHERE `id` = OLD.`campaign_id` AND `confirmed_at` IS NOT NULL)
+  THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'De una campana confirmada no se quita un mercado (BR-CAMPAIGN-003): puede dejar fuera a creadores ya invitados. Anadir si se puede.';
+  END IF;
+END//
+
+-- ===========================================================================
+-- 7.4: nadie entra en una campana CERRADA, y una participacion que ya estaba
+-- solo se puede cancelar.
+--
+-- `campaign_creators` existe desde la Fase 2 y hasta 7.4 nadie habia escrito una
+-- fila. Una participacion en una campana terminada devenga en el ledger contra
+-- un periodo ya liquidado, sale en el reporte «reproducible» del cliente y
+-- cuenta en el Creator Score por un trabajo que nunca existio.
+--
+-- Disparador y no CHECK porque la condicion esta en OTRA tabla (`campaigns`).
+-- Y tambien en UPDATE porque cerrar la campana y mover al creador son dos
+-- operaciones distintas, y la segunda puede llegar despues.
+-- ===========================================================================
+
+CREATE TRIGGER `tg_ccr_campana_cerrada_ins`
+BEFORE INSERT ON `campaign_creators`
+FOR EACH ROW
+BEGIN
+  IF EXISTS (SELECT 1 FROM `campaigns`
+              WHERE `id` = NEW.`campaign_id` AND `closed_at` IS NOT NULL)
+  THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'No se anaden creadores a una campana cerrada: lo que se entrego ahi ya se conto. Si hay que sumar a alguien, es una campana nueva.';
+  END IF;
+END//
+
+CREATE TRIGGER `tg_ccr_campana_cerrada_upd`
+BEFORE UPDATE ON `campaign_creators`
+FOR EACH ROW
+BEGIN
+  IF NEW.`status` <> 'cancelled'
+     AND NOT (NEW.`status` <=> OLD.`status`)
+     AND EXISTS (SELECT 1 FROM `campaigns`
+                  WHERE `id` = NEW.`campaign_id` AND `closed_at` IS NOT NULL)
+  THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'La participacion de una campana cerrada solo se puede cancelar, no avanzar.';
   END IF;
 END//
 

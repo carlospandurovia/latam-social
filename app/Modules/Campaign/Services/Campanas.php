@@ -139,6 +139,7 @@ final class Campanas
      *
      * | Qué | Por qué |
      * |---|---|
+     * | Al menos un mercado | sin país no se sabe a quién se puede invitar (7.3) |
      * | Al menos un requisito de formato | es lo mínimo que un creador necesita para decidir si acepta |
      * | El ingreso, declarado | cero es válido, pero «regalada» y «nadie puso el precio» no son lo mismo |
      * | La sociedad que factura | `BR-LE-001`, ya en 7.1 |
@@ -172,6 +173,11 @@ final class Campanas
                 .'con su cantidad y sus plazos (BR-CAMPAIGN-004)';
         }
 
+        if (Mercados::de((int) $campana->id)->isEmpty()) {
+            $faltan[] = 'la campana no dice en que paises se ejecuta: anada al menos un mercado '
+                .'(BR-CAMPAIGN-004). De ahi sale a quien se puede invitar';
+        }
+
         if ((float) $campana->revenue_amount <= 0 && !(bool) $campana->is_gratis) {
             $faltan[] = 'el ingreso es cero y nadie ha dicho si la campana es gratuita '
                 .'o si falta ponerle precio: son cosas distintas y de ahi sale el margen';
@@ -181,7 +187,14 @@ final class Campanas
     }
 
     /**
-     * Los requisitos del brief, con el nombre del formato y su red.
+     * **Todos** los requisitos del brief, generales y de mercado.
+     *
+     * Los generales primero: es el orden en que se leen —«esto vale para todos,
+     * y además México pide esto otro»— y el que hace visible de un vistazo que
+     * un mercado con brief propio **no hereda** el general (`N-03`).
+     *
+     * Para saber qué le toca de verdad a UN mercado está
+     * `Mercados::briefEfectivo()`, que es donde vive la regla de reemplazo.
      *
      * @return Collection<int, \stdClass>
      */
@@ -190,15 +203,19 @@ final class Campanas
         return DB::table('campaign_requirements as r')
             ->join('content_formats as f', 'f.id', '=', 'r.content_format_id')
             ->leftJoin('platforms as p', 'p.id', '=', 'f.platform_id')
+            ->leftJoin('campaign_markets as m', 'm.id', '=', 'r.campaign_market_id')
+            ->leftJoin('countries as pais', 'pais.id', '=', 'm.country_id')
             ->where('r.campaign_id', $campanaId)
-            ->orderBy('p.name')->orderBy('f.code')
+            ->orderByRaw('r.campaign_market_id IS NOT NULL')
+            ->orderBy('pais.name')->orderBy('p.name')->orderBy('f.code')
             ->get([
                 'r.id', 'r.content_format_id', 'r.quantity', 'r.deadline_offset_days',
                 'r.permanence_days', 'r.notes',
                 // `content_formats` no tiene `name`: el nombre legible del
                 // formato ES su `code` (`REEL`, `POST`, `STORY`...). Lo descubrio
                 // la primera ejecucion de las pruebas con un 1054.
-                'f.code as formato', 'p.name as red',
+                'r.campaign_market_id',
+                'f.code as formato', 'p.name as red', 'pais.name as mercado',
             ]);
     }
 

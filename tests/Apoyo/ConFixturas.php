@@ -127,6 +127,104 @@ trait ConFixturas
         ], $cambios));
     }
 
+    /**
+     * Deja a un creador **operativamente completo**: `BR-CREATOR-006` entera.
+     *
+     * Es lo que 7.4 vino a necesitar: la lista corta veta a quien no cumple, así
+     * que casi toda prueba que meta a alguien en una campaña necesita primero un
+     * creador que pase las seis condiciones.
+     *
+     * ### Y no contradice lo que dice la cabecera de este archivo
+     *
+     * `creadorActivo()` sigue escribiendo lo que la **base** acepta como activo,
+     * y `ActivacionCreadorTest` sigue recorriendo las pantallas de verdad. Esto
+     * es otra cosa: escribe las **evidencias** que la regla exige, saltándose las
+     * pantallas a propósito, porque quien lo usa no está probando la activación
+     * — la está dando por hecha para probar otra cosa.
+     *
+     * Quien lo llame debe comprobar el resultado con `CompletitudOperativa` y
+     * fallar en voz alta si no cumple. Un apoyo que se cree completo sin serlo
+     * convierte «el veto no salta» en una prueba verde que no prueba nada, y ese
+     * es exactamente el modo de fallo que este proyecto ya ha pagado tres veces.
+     *
+     * Sólo sirve para creadores **mayores de edad**: la tutela de un menor
+     * arrastra perfil fiscal y cuenta del tutor, y montarlo aquí escondería la
+     * mitad interesante de `BR-CREATOR-010`.
+     */
+    protected function completar(int $creadorId): void
+    {
+        $capturador = (int) $this->usuarioCon('campaign_manager')->id;
+        $verificador = (int) $this->usuarioCon('finance')->id;
+        $paisId = (int) DB::table('creators')->where('id', $creadorId)->value('country_id');
+
+        DB::table('social_accounts')->insert([
+            'uuid' => (string) Str::uuid(),
+            'creator_id' => $creadorId,
+            'platform_id' => DB::table('platforms')->where('is_active', 1)->value('id'),
+            'handle' => 'cuenta'.$creadorId,
+            'profile_url' => 'https://ejemplo.test/cuenta'.$creadorId,
+            'verification_status' => 'verified',
+            'verification_method' => 'manual_review',
+            'verified_by_user_id' => $verificador,
+            'verified_at' => now()->subDay(),
+            'is_primary' => 1,
+            'is_active' => 1,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        // `valid_from` en el pasado: «vigente» exige que YA HAYA EMPEZADO
+        // (`T-21`). Con la fecha de hoy la prueba pasaria, y con la de manana
+        // fallaria por un motivo que nadie relacionaria con este apoyo.
+        DB::table('creator_tax_profiles')->insert([
+            'creator_id' => $creadorId,
+            'holder_type' => 'creator',
+            'country_id' => $paisId,
+            'tax_regime_code' => 'RER',
+            'tax_id_type' => 'RUC',
+            'tax_id_number' => '10'.str_pad((string) (400000000 + $creadorId), 9, '0', STR_PAD_LEFT),
+            'issued_document_type' => 'factura',
+            'withholding_status' => 'not_applicable',
+            'created_by_user_id' => $capturador,
+            'status' => 'approved',
+            // Capturador y aprobador DISTINTOS: `ck_ctp_segregation`, que es la
+            // separacion de funciones del dinero (`BR-FIN-005`).
+            'approved_by_user_id' => $verificador,
+            'approved_at' => now()->subDay(),
+            'valid_from' => now()->subMonth()->toDateString(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->medioDePago($creadorId, '19100000000'.$creadorId, [
+            'status' => 'verified',
+            'eligible_from' => now()->subDay(),
+            'is_default' => 1,
+        ]);
+
+        $version = DB::table('terms_versions')
+            ->where('audience', 'creator')->whereNull('effective_to')->value('id')
+            ?? $this->publicarTerminos();
+
+        // `ck_terms_acceptances_backing`: una aceptacion que NO llego por el
+        // portal exige quien la registro Y el papel que lo respalda. Es la regla
+        // que impide que alguien teclee «acepto» en nombre de otro sin dejar
+        // rastro. `admin` ni siquiera es un canal valido --lo son portal, email,
+        // whatsapp, paper y phone-- y el 3819 lo dijo antes de que nadie lo
+        // teclease en produccion.
+        DB::table('terms_acceptances')->insert([
+            'uuid' => (string) Str::uuid(),
+            'subject_type' => 'creator',
+            'subject_id' => $creadorId,
+            'terms_version_id' => $version,
+            'accepted_at' => now(),
+            'channel' => 'email',
+            'recorded_by_user_id' => $capturador,
+            'evidence_file_id' => $this->archivoDeIdentidad('aceptacion-'.$creadorId.'.pdf'),
+            'created_at' => now(),
+        ]);
+    }
+
     /** Una fila de `files` con pinta de documento de identidad. */
     protected function archivoDeIdentidad(string $nombre = 'dni.pdf'): int
     {
@@ -350,9 +448,32 @@ trait ConFixturas
     }
 
     /**
+     * Un mercado para una campaña.
+     *
+     * Desde 7.3 una campaña necesita **al menos uno** para salir de borrador
+     * (`BR-CAMPAIGN-004`), así que casi cualquier prueba que apruebe una campaña
+     * pasa por aquí. Sin `$paisId` toma el primero del catálogo: qué país sea da
+     * igual salvo que la prueba diga lo contrario, y elegirlo a mano en cada
+     * sitio es la forma de que dejen de coincidir.
+     */
+    /** @param array<string, mixed> $cambios */
+    protected function mercadoDe(int $campanaId, ?int $paisId = null, array $cambios = []): int
+    {
+        return (int) DB::table('campaign_markets')->insertGetId(array_merge([
+            'campaign_id' => $campanaId,
+            'country_id' => $paisId ?? (int) DB::table('countries')->orderBy('id')->value('id'),
+            'target_creators' => 5,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ], $cambios));
+    }
+
+    /**
      * Un requisito de formato para el brief de una campaña.
      *
      * Con esto una campaña «puede salir de borrador» (`BR-CAMPAIGN-004`, 7.2).
+     * Por omisión es **general** —`campaign_market_id` a `null`, «todos los
+     * mercados» (`N-03`)—; para uno de mercado se pasa en `$cambios`.
      * El formato se toma de los que ya hay sembrados en vez de crear uno: los
      * formatos son catálogo, y una prueba que se invente uno prueba contra un
      * catálogo que no existe en producción.
@@ -375,23 +496,39 @@ trait ConFixturas
 
     // ------------------------------------------------------------------ apoyo
 
+    /** Cuantos creadores lleva creados esta prueba, para no repetir documento ni correo. */
+    private static int $creadoresCreados = 0;
+
     /**
+     * Los datos por omision de un creador.
+     *
+     * `document_number` y `email` **varian en cada llamada**. `uq_creators_email`
+     * y `uq_creators_identity` son unicos entre los creadores no anonimizados, y
+     * con valores fijos la segunda llamada daba un `1062` que hablaba de un
+     * indice --no de que la prueba necesitaba DOS creadores--. Salio en 7.4, que
+     * es la primera iteracion que crea varios a la vez.
+     *
+     * `display_name` tambien cambia, aunque no sea unico: dos «anatorres» en una
+     * lista de candidatos hacen ilegible cualquier fallo.
+     *
      * @param array<string, mixed> $cambios
      * @return array<string, mixed>
      */
     private static function datosDeCreador(array $cambios): array
     {
+        $n = ++self::$creadoresCreados;
+
         return array_merge([
             'uuid' => (string) Str::uuid(),
             'first_name' => 'Ana',
             'last_name' => 'Torres',
-            'display_name' => 'anatorres',
+            'display_name' => 'creador'.str_pad((string) $n, 3, '0', STR_PAD_LEFT),
             'birth_date' => '1998-05-12',
-            'email' => 'ana@ejemplo.test',
+            'email' => 'creador'.$n.'@ejemplo.test',
             'country_id' => DB::table('countries')->where('iso2', 'PE')->value('id'),
             'document_country_code' => 'PE',
             'document_type' => 'DNI',
-            'document_number' => '40000001',
+            'document_number' => str_pad((string) (40000000 + $n), 8, '0', STR_PAD_LEFT),
             'status' => 'pending',
             'payment_term_days' => 30,
             'preferred_currency_code' => 'PEN',
