@@ -113,6 +113,43 @@ return new class extends Migration
     }
 
     /**
+     * Deshace `up()` en orden inverso.
+     *
+     * **No existía**, y eso es un defecto y no una omisión razonada: la clase
+     * base de Laravel no declara `down()`, así que `php artisan migrate:rollback`
+     * moría aquí con un error fatal —no con un mensaje— y se llevaba por delante
+     * la vuelta atrás de todo lo posterior. Lo destapó `verificar-ddl-crudo.py`,
+     * que ejecuta de verdad el `down()` y el `up()` de cada migración contra una
+     * copia del esquema; era la única de las cuarenta que no tenía ninguno.
+     *
+     * `is_gratis` se pierde al volver atrás, y no hay forma de que no: el
+     * esquema anterior no tiene dónde guardar la diferencia entre «gratis» y
+     * «nadie fijó el precio». Volver atrás de esta migración es aceptar eso.
+     */
+    public function down(): void
+    {
+        Periodo::quitar('creator_availability', 'cav_sin_solape');
+        Periodo::quitar('creator_rates', 'crate_sin_solape');
+
+        Restriccion::quitar('creator_rates', 'ck_creator_rates_amount');
+        Restriccion::comprobacion(
+            tabla: 'creator_rates',
+            nombre: 'ck_creator_rates_amount',
+            expresion: 'amount >= 0',
+            columnas: ['amount'],
+            mensaje: 'Una tarifa no puede ser negativa.',
+        );
+
+        DB::statement("ALTER TABLE creator_rates ALTER COLUMN source SET DEFAULT 'self_declared'");
+        DB::statement('ALTER TABLE creator_rates DROP FOREIGN KEY fk_crate_author');
+        DB::statement('ALTER TABLE creator_rates DROP KEY ix_creator_rates_author');
+
+        Schema::table('creator_rates', function (Blueprint $table): void {
+            $table->dropColumn(['created_by_user_id', 'is_gratis']);
+        });
+    }
+
+    /**
      * Se comprueba TODO antes de tocar el esquema, y se dice de una vez.
      *
      * Misma lección que `000490`: una migración que revienta a mitad deja el

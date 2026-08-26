@@ -13,6 +13,11 @@ final class DatabaseSeeder extends Seeder
         $this->call([
             CimientosSeeder::class,
             UsuarioAdminSeeder::class,
+            // 4.13: sin plantilla no sale el aviso, y `Correo::enviar()` revienta
+            // a proposito cuando no la encuentra. Dejarlo a que alguien corra
+            // `correos:publicar` en cada entorno es el modo de fallo que ya
+            // demostro `DEC-085`.
+            PlantillasDeCorreoSeeder::class,
         ]);
     }
 }

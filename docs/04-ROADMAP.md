@@ -98,7 +98,7 @@ Iterativa y exhaustiva, tal como pide la especificación. **Nada de frontend aqu
 ### F4 — Core técnico
 | It. | Contenido | Notas |
 |---|---|---|
-| 4.1 | Identidad: usuarios, login, logout, recuperación, verificación de email, sesiones | Con rate limiting y bloqueo progresivo |
+| 4.1 | ✅ **Cerrada (2026-08-26)**, junto con `5.9`: comparten la única pieza difícil. Recuperación por enlace de un solo uso, 1 h, con la **misma respuesta exista o no el correo** (`DEC-115`), la URL **sin el token dentro** (`DEC-117`) y límite doble —por IP en la ruta y por correo en el controlador—. Login, logout y rate limiting existían desde 3.1; la verificación de correo sigue pendiente. Ver `docs/fase-5/5.9-ENLACE-DE-CONTRASENA.md` |
 | 4.2 | RBAC: roles, permisos, políticas de recurso, tests de autorización negativos | La base de toda la seguridad |
 | 4.3 | Ámbito de acceso externo: `client_organization_id` y `creator_id` aplicados por política de recurso | Sin `tenant_id` (`DEC-002`) |
 | 4.3b | MFA/TOTP obligatorio para roles con permisos financieros | `BR-SEC-005`. Barato ahora, caro de retrofitear |
@@ -110,7 +110,7 @@ Iterativa y exhaustiva, tal como pide la especificación. **Nada de frontend aqu
 | 4.7 | File Manager sobre S3 + validación por contenido + URLs firmadas | |
 | 4.8 | Colas, scheduler, workers, Horizon | |
 | 4.9 | ✅ **Cerrada (2026-08-26), adelantada.** Plantillas versionadas con vigencia (una publicada no se edita), registro de envíos que guarda la **huella** del cuerpo y no el cuerpo (`DEC-106`), caída de idioma anotada (`DEC-107`) y tres reintentos con `failed` visible (`DEC-108`). Desbloquea 7.6, 5.9, 4.1 y `T-10` |
-| 4.10 | Notification Center in-app + preferencias | |
+| 4.10 | Notification Center in-app + preferencias. **Nota (4.13):** el bus de eventos de dominio ya existe (`App\Shared\Eventos` + `domain_events`); el centro de notificaciones es otro oyente sobre el mismo bus | |
 | 4.11 | Manejo de errores, logging estructurado, páginas de error, health check | |
 | 4.12 | Layout de admin, navegación, búsqueda básica, tabla estándar con filtros/orden/paginación | Reutilizable en todos los módulos |
 | 4.13 | **QA de fase + Phase Review Report** | |
@@ -133,7 +133,7 @@ Iterativa y exhaustiva, tal como pide la especificación. **Nada de frontend aqu
 | 5.6 | **Importación masiva CSV/Excel** con mapeo, previsualización, validación, resumen y reversión | ✅ **(adelantado)** |
 | 5.7 | Bandeja de revisión + ficha 360 + notas internas | ✅ |
 | 5.8 | Máquina de estados + aprobar/rechazar/solicitar información con motivos tipificados | ✅ |
-| 5.9 | Aprobación → creación de usuario + enlace seguro de contraseña + emails | ✅ |
+| 5.9 | ✅ **Cerrada (2026-08-26).** Aprobar una solicitud crea la cuenta del creador —con un hash de 32 bytes aleatorios que nadie conoce: no se puede entrar hasta usar el enlace—, escribe `creators.user_id` y manda el enlace de 72 h (`DEC-113`). Destapó que `/panel` enseñaba los totales internos a cualquier autenticado (`DEC-118`) |
 | 5.10 | Blacklist | ✅ |
 | 5.11 | QA de fase + Phase Review Report | ✅ |
 

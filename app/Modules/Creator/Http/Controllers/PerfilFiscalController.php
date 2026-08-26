@@ -9,6 +9,7 @@ use App\Modules\Creator\Http\Requests\AprobarPerfilFiscalRequest;
 use App\Modules\Creator\Http\Requests\GuardarPerfilFiscalRequest;
 use App\Shared\Audit\Bitacora;
 use App\Shared\Database\Vigencia;
+use App\Shared\Eventos\Eventos;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -139,10 +140,30 @@ final class PerfilFiscalController
             ],
         );
 
+        // `BR-CREATOR-007`: se avisa AL CAPTURAR, no al aprobar. Es lo unico que
+        // le da al creador margen para decir «yo no fui» mientras el cambio
+        // todavia se puede parar (decision de negocio, 2026-08-26).
+        //
+        // Se levanta un EVENTO, no se llama al correo: `deptrac.yaml` no deja
+        // que Creator conozca Communication, y eso es lo que impide que un SMTP
+        // caido tumbe la captura de un dato fiscal.
+        Eventos::ocurrio(
+            nombre: 'creator.tax_profile_captured',
+            tipoEntidad: 'creator',
+            idEntidad: (int) $creador->id,
+            payload: [
+                'correo' => (string) $creador->email,
+                'nombre' => (string) $creador->display_name,
+                'idioma' => (string) ($creador->locale ?? ''),
+                'fecha' => now()->toDateString(),
+            ],
+        );
+
         return redirect()
             ->route('creadores.fiscal', $uuid)
             ->with('exito', 'Perfil capturado. Queda PENDIENTE: tiene que aprobarlo otra persona, '
-                .'y al aprobarlo habrá que decidir la retención (DEC-048).');
+                .'y al aprobarlo habrá que decidir la retención (DEC-048). '
+                .'Se le ha avisado al creador de que alguien registro un cambio (BR-CREATOR-007).');
     }
 
     public function aprobar(AprobarPerfilFiscalRequest $request, string $uuid, int $id): RedirectResponse

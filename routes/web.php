@@ -22,6 +22,7 @@ use App\Modules\Creator\Http\Controllers\RedesSocialesController;
 use App\Modules\Creator\Http\Controllers\SolicitudesController;
 use App\Modules\Identity\Http\Controllers\AccesoController;
 use App\Modules\Identity\Http\Controllers\PasswordController;
+use App\Modules\Identity\Http\Controllers\RecuperacionController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -41,6 +42,34 @@ Route::middleware('guest')->group(function (): void {
         ->middleware('throttle:5,1')
         ->name('entrar');
 });
+
+// ---- Enlaces de contrasena (`4.1`, y la otra mitad de `5.9`) ---------------
+//
+// FUERA del grupo `guest` a proposito. Un enlace de alta o de recuperacion tiene
+// que funcionar tambien para quien ya tiene una sesion abierta --el caso tipico
+// es la cuenta compartida de un ordenador prestado--, y `guest` lo mandaria al
+// panel sin decirle por que.
+//
+// El limite por IP es la primera barrera; `RecuperacionController` pone ademas
+// uno por correo, que es el que impide inundar un buzon concreto desde IPs
+// distintas.
+Route::get('/recuperar', [RecuperacionController::class, 'pedir'])->name('recuperar');
+Route::post('/recuperar', [RecuperacionController::class, 'enviar'])
+    ->middleware('throttle:5,1')
+    ->name('recuperar.enviar');
+
+// La ruta que lleva el token. Lo unico que hace es guardarlo en la sesion y
+// redirigir a `recuperar.formulario`, que ya no lo lleva: ver la cabecera del
+// controlador.
+Route::get('/contrasena/nueva/{token}', [RecuperacionController::class, 'usar'])
+    ->middleware('throttle:20,1')
+    ->where('token', '[a-f0-9]{64}')
+    ->name('recuperar.usar');
+Route::get('/contrasena/nueva', [RecuperacionController::class, 'formulario'])
+    ->name('recuperar.formulario');
+Route::post('/contrasena/nueva', [RecuperacionController::class, 'fijar'])
+    ->middleware('throttle:10,1')
+    ->name('recuperar.fijar');
 
 Route::middleware('auth')->group(function (): void {
     Route::post('/salir', [AccesoController::class, 'salir'])->name('salir');

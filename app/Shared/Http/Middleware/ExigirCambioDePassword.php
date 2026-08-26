@@ -32,6 +32,7 @@ use Symfony\Component\HttpFoundation\Response;
  * | `contrasena` (GET) | es el sitio al que redirige; redirigirla sería un bucle |
  * | `contrasena.cambiar` (PUT) | si no pasa, no hay forma de quitar la marca |
  * | `salir` | nadie debe quedar atrapado en una sesión que no puede cerrar |
+ * | `recuperar*` (`4.1`) | un enlace válido tiene que valer aunque haya sesión abierta |
  *
  * Se comparan **nombres de ruta**, no URLs: una URL escrita a mano aquí se
  * desincroniza en cuanto alguien renombra la ruta, y el síntoma sería el bucle.
@@ -39,7 +40,14 @@ use Symfony\Component\HttpFoundation\Response;
 final class ExigirCambioDePassword
 {
     /** @var list<string> */
-    private const LIBRES = ['contrasena', 'contrasena.cambiar', 'salir'];
+    private const LIBRES = [
+        'contrasena', 'contrasena.cambiar', 'salir',
+        // `4.1`: quien llega con un enlace valido puede usarlo aunque tenga la
+        // marca puesta. Es la misma logica --sin estas, la unica salida seria
+        // saber la contrasena que precisamente no sabe--.
+        'recuperar', 'recuperar.enviar', 'recuperar.usar',
+        'recuperar.formulario', 'recuperar.fijar',
+    ];
 
     public function handle(Request $request, Closure $next): Response
     {

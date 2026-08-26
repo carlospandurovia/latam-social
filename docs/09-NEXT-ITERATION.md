@@ -1,5 +1,9 @@
 # 09 — Estado del proyecto y siguiente iteración
 
+> **Versión 1.7 — 2026-08-26.** Actualizado al cerrar `5.9` + `4.1`.
+>
+> **Versión 1.6 — 2026-08-26.** Actualizado al cerrar 4.13 (`T-10`).
+>
 > **Versión 1.5 — 2026-08-26.** Actualizado al cerrar `F4.9` (el correo).
 >
 > **Versión 1.4 — 2026-08-26.** Actualizado al cerrar 7.5.
@@ -31,12 +35,12 @@
 
 | | |
 |---|---|
-| Tablas | 67 |
-| Migraciones | 47, verdes desde cero en MySQL 8 |
-| Pruebas de PHPUnit | **380**, 1.265 aserciones |
-| Aserciones de restricción (SQL) | **1.070** en MariaDB, **1.060** en MySQL 8 |
+| Tablas | 68 |
+| Migraciones | 48, verdes desde cero en MySQL 8 — y **con vuelta atrás completa**, que hasta hoy no existía |
+| Pruebas de PHPUnit | **427**, 1.429 aserciones |
+| Aserciones de restricción (SQL) | **1.118** en MariaDB, **1.108** en MySQL 8 |
 | Puertas de calidad | 6: formato, análisis estático, fronteras, pruebas, vigencias, nombres entre capas |
-| Decisiones registradas | hasta `DEC-108` |
+| Decisiones registradas | hasta `DEC-118` |
 
 ### Lo que se puede hacer hoy por pantalla
 
@@ -61,10 +65,19 @@ veta a quien no cumple `BR-CREATOR-006`.
 Y desde 7.5, el dinero: presupuesto de creadores, veto de sobrecosto con
 autorización auditada, y monto acordado congelado al aceptar.
 
-Y desde `F4.9`, el correo: plantillas versionadas, registro de envíos auditable
-y reintentos. Es lo que desbloquea 7.6, 5.9, 4.1 y `T-10`.
+Y desde `F4.9` el correo —plantillas versionadas, registro auditable,
+reintentos— y desde 4.13 su primer uso real: **el creador recibe un aviso cuando
+alguien toca sus datos fiscales o su medio de pago**, mientras el cambio todavía
+se puede parar. Eso cerró `T-10` y la mitad que faltaba de `BR-CREATOR-007`.
 
-Eso completa **7.0 a 7.5 del roadmap**, más `F4.9` adelantada.
+Y desde `5.9` + `4.1`, **la contraseña**: aprobar a un creador le crea su cuenta
+y le manda un enlace de 72 h para elegirla —nadie más la ve nunca— y cualquiera
+puede recuperar la suya desde `/recuperar`, con una hora de plazo y la misma
+respuesta exista o no el correo. Es la primera vez que entra al sistema alguien
+que no es del equipo, y eso destapó que la portada le enseñaba los totales
+internos a cualquier autenticado.
+
+Eso completa **7.0 a 7.5 del roadmap**, más `F4.9`, `5.9` y `4.1`.
 
 ---
 
@@ -78,9 +91,8 @@ o sin abrir un módulo nuevo.
 |---|---|---|---|
 | `T-09` | Publicar la **primera versión real de los términos del creador** | **Tu abogado** | 🔴 **Ningún creador puede activarse.** La pantalla lo dice explícitamente |
 | `Q-40` | Con qué **tasa** se retiene a un creador no domiciliado | **Tu contador** | Un perfil fiscal con retención sin decidir no se puede aprobar (`DEC-048`) |
-| `DEC-085` | Ejecutar los dos `GRANT` en el servidor de producción | **Tú, al desplegar** | La bitácora es truncable por la aplicación hasta que se haga |
+| `DEC-085` | Ejecutar los dos `GRANT` en el servidor de producción | **Tú, al desplegar** | La bitácora es truncable por la aplicación hasta que se haga. **Pasos en `docs/18-RUNBOOK-DESPLIEGUE.md` §3.1** |
 | `Q-44` | ¿Los servicios a un cliente **no domiciliado** son exportación de servicios (sin IGV) o van al 18 %? | **Tu contador** | El modelo admite las cuatro opciones y no fuerza ninguna |
-| `T-10` | Aviso al creador cuando cambian sus datos fiscales (`BR-CREATOR-007`) | Fase de Communication | La pantalla se lo recuerda al operador para que lo haga a mano |
 
 Los tres primeros son de verdad urgentes. `T-09` es el más caro de todos: **todo
 el trabajo de adquisición de creadores está construido y probado, y no se puede
@@ -108,32 +120,29 @@ Ninguna bloquea código hoy; todas bloquean una iteración futura concreta.
 
 ## 4. Lo que propongo como siguiente iteración
 
-**Enganchar el correo a lo que ya estaba esperándolo**, antes de seguir con 7.6.
+**`7.6` — las invitaciones.**
 
-`F4.9` dejó el aparato construido y probado, pero **no lo usa nadie todavía**.
-Hay cuatro consumidores esperando y tres son de una tarde:
+Es lo único de la Fase 7 que ya no tiene nada delante. `7.4` deja la lista corta
+—a quién se quiere invitar—, `7.5` deja el monto acordado —cuánto se le paga— y
+`F4.9` deja el correo. Falta el paso que convierte las tres cosas en una
+conversación con el creador: mandarle la invitación, que la acepte o la rechace, y
+que el rechazo tenga motivo.
 
-| Qué | Regla | Qué pasa hoy |
-|---|---|---|
-| `T-10` — aviso al creador cuando cambian sus datos fiscales | `BR-CREATOR-007` 🔴 | la pantalla se lo recuerda al operador para que lo haga a mano |
-| `5.9` — enlace de contraseña al aprobar un creador | — | por comando, y se la dicta por teléfono |
-| `4.1` — recuperación de contraseña | — | no existe |
-| `7.6` — invitaciones | `BR-CAMPAIGN-006` | bloqueada |
-
-Los tres primeros cierran huecos que ya están abiertos y validan el aparato
-contra usos reales antes de apoyar 7.6 encima. `T-10` además cierra media
-`BR-CREATOR-007`, que es 🔴 y lleva desde la Fase 3 sin nadie que la cumpla.
-
-Después de eso, **7.6** ya se puede construir entera.
+Y trae una decisión de negocio de verdad: **qué pasa cuando una invitación
+caduca**. Un creador que no contesta no es lo mismo que uno que dice que no, y el
+cupo del mercado (`target_creators`) tiene que saber la diferencia.
 
 ### Lo que NO propongo, y por qué
 
-- **Facturación (F9).** Depende de `Q-40` y `Q-44`, o sea de tu contador.
-- **Portal del creador (F6).** Depende de `T-09`, o sea de tu abogado.
-- **Más endurecimiento del esquema.** `T-33` se cerró en 7.3 y no queda ninguna
-  otra anotada. Seguir buscando sería inventar trabajo; lo que sí sigue saliendo
-  son reglas del documento sin código detrás, y ésas aparecen solas al construir
-  la pantalla que las necesita.
+- **El portal del creador (`F6`).** Sigue bloqueado por `T-09`. Ahora el creador
+  ya puede entrar —tiene cuenta y contraseña— y lo que ve es una sala de espera.
+  Abrirle el portal sin términos publicados sería abrirle una puerta a un sitio
+  donde no puede aceptar nada.
+- **Facturación (`F9`).** Depende de `Q-40` y `Q-44`, o sea de tu contador.
+- **`T-36` — el enlace para usuarios internos.** Es media hora y cierra del todo
+  `BR-SEC-004`, pero toca `usuarios:crear`, que tiene su propio flujo. Va detrás
+  de `7.6` salvo que prefieras lo contrario: hoy sigue habiendo un momento en el
+  que dos personas conocen la credencial de quien aprueba perfiles fiscales.
 
 ---
 
@@ -156,4 +165,8 @@ Tres cosas, por orden de coste para el proyecto:
    impide usar de verdad todo lo construido en las fases 3 y 4.
 2. **Pregúntale a tu contador `Q-40` y `Q-44`.** Las dos tienen respuesta corta y
    las dos bloquean el dinero.
-3. **Nada urgente esta vez.** El correo ya no bloquea. Sigue faltando la cuenta de SMTP (`Q-20`) para que los avisos salgan de verdad: hasta entonces se escriben en el log y el flujo se puede probar entero.
+3. **La cuenta de SMTP (`Q-20`) sube de prioridad.** Ya no es sólo para los
+   avisos: desde `5.9`, **sin correo saliente un creador aprobado no puede
+   estrenar su cuenta** — su contraseña viaja en un correo y en ningún otro
+   sitio. Hasta entonces el enlace se escribe en `storage/logs` y el flujo se
+   puede probar entero, pero eso no sirve con una persona real.

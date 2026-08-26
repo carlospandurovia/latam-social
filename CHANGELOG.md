@@ -2,6 +2,128 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 
+## [5.9 + 4.1 · El enlace seguro de contraseña] — 2026-08-26
+
+Dos iteraciones del plan que comparten lo único difícil: un token de un solo uso,
+con caducidad, imposible de adivinar y que **no queda guardado en ningún sitio del
+que se pueda recuperar**. Construirlas por separado habría sido escribir esa pieza
+dos veces.
+
+Antes de esto, `usuarios:crear` tecleaba la contraseña y alguien la dictaba por
+teléfono, y olvidarla era una llamada más un comando.
+
+### Añadido
+- **`password_links`** — la tabla número 68 y la **decimotercera columna puerta**
+  del esquema. Guarda `token_sha256`, nunca el token (`DEC-114`): quien lea esta
+  tabla no puede entrar en ninguna cuenta.
+- **Alta 72 h, recuperación 1 h** (`DEC-113`). El de alta llega sin avisar y puede
+  caer un viernes por la noche; el de recuperación lo pide alguien que está
+  delante de la pantalla ahora.
+- **`/recuperar`**, con la **misma respuesta exista o no el correo** (`DEC-115`) —
+  afirmado byte a byte en la prueba— y límite doble: por IP en la ruta y **por
+  correo** en el controlador, que es el que impide inundar un buzón concreto desde
+  IPs distintas.
+- **La URL no lleva el token** (`DEC-117`): la ruta del correo lo guarda en la
+  sesión y redirige a una URL limpia. Una URL con un token dentro viaja en la
+  cabecera `Referer` a cualquier recurso externo, y estas pantallas cargan
+  tipografías de un dominio de terceros.
+- **Aprobar un creador le crea la cuenta** y escribe `creators.user_id` — una
+  columna que existía desde la Fase 3 y no escribía nadie. La cuenta nace con el
+  hash de 32 bytes aleatorios que no se guardan, no se muestran y no se devuelven:
+  no se puede entrar en ella hasta usar el enlace.
+- **Usar el enlace cierra las sesiones abiertas** y rota `remember_token`. Poner
+  una contraseña nueva y dejar viva la sesión de quien entró con la vieja es no
+  haber hecho nada.
+
+### Corregido
+- **`/panel` enseñaba los totales internos a cualquier autenticado** (`DEC-118`).
+  Nadie lo había pensado porque hasta hoy **todos los usuarios eran internos**;
+  `5.9` crea la primera cuenta que no lo es. Un rol sin permisos no protege una
+  pantalla que no pide ninguno.
+- **`VARBINARY` faltaba en el reconocedor de tipos de `generar-triggers.py`.** El
+  `CHECK` que nombraba `used_ip` se generaba como un disparador con el
+  identificador suelto. Se vio porque MySQL grita; el hueco existía desde la Fase 2
+  en `audit_logs.ip_address` y `creator_identity_verifications.ip_address` (`T-37`).
+- **`2026_08_22_000495` no tenía `down()`.** La única de las cuarenta migraciones
+  sin él: `php artisan migrate:rollback` moría ahí con un error fatal y se llevaba
+  por delante la vuelta atrás de todo lo posterior.
+
+### Cambiado
+- **`SESSION_DRIVER=database` pasa a ser requisito de seguridad**, no preferencia
+  (`.env.example` decía `redis`). Con otro almacén las sesiones no se pueden
+  cerrar; el servicio lo **avisa en el log** en vez de fallar en silencio.
+- `BR-SEC-004` deja de ser una regla sin código detrás — para las cuentas de
+  creador. Sigue sin cumplirse para los usuarios internos (`T-36`).
+
+### Verificación
+427 pruebas / 1.429 aserciones · 1.118 (MariaDB) y 1.108 (MySQL 8) aserciones de
+restricción · 20 mutaciones, 20 detectadas tras dos correcciones · las seis
+puertas en verde.
+
+**Las dos mutaciones que sobrevivieron enseñaron algo.** Una era código
+equivalente, y se arregló *haciéndolo dejar de serlo*: «no hay token en la sesión»
+y «el token no vale» piden cosas distintas de la persona. La otra destapó que mi
+propia prueba era un **falso verde** —comparaba el identificador de sesión antes y
+después, y el cliente de PHPUnit ya lo cambia solo—.
+
+---
+
+## [4.13 · El aviso al creador cuando cambian sus datos sensibles] — 2026-08-26
+
+Cierra **`T-10`** y la mitad que faltaba de **`BR-CREATOR-007`** (🔴). La
+aprobación interna existía desde 3.6 y 3.8; la **notificación** no — *«la
+pantalla se lo recuerda al operador para que lo haga a mano»*, que es otra forma
+de decir que no se hacía.
+
+### El problema, que es de arquitectura
+Creator sabe que el dato cambió, Communication sabe enviar, y **`deptrac.yaml` no
+deja que se conozcan**. No es burocracia: si Creator importara Communication, un
+SMTP caído podría tumbar la captura de un dato fiscal.
+
+La respuesta ya estaba diseñada y sin usar. **`domain_events` existe desde 2.4 y
+no tenía una sola fila** — mismo patrón que `campaign_creators` antes de 7.4.
+
+### Añadido
+- **`App\Shared\Eventos`** (`DEC-112`): el hecho se **guarda antes** de
+  despacharlo, para que conste aunque el oyente reviente. Creator levanta un
+  nombre y un array; Communication recibe un nombre y un array. Ninguno importa
+  al otro.
+- **Aviso al capturar, no al aprobar** (`DEC-109`) — es lo único que le da al
+  creador margen para decir «yo no fui» mientras el cambio se puede parar.
+- **El correo no lleva el dato dentro** (`DEC-110`). Sin número, sin banco, sin
+  RUC: se lee en buzones que no controlamos, y ése es justo el escenario del que
+  nos defendemos.
+- **Si el aviso no sale, el cambio sigue** (`DEC-111`), pero el fallo se ve.
+- **Las plantillas van en un seeder**, idempotente y con fecha de vigencia fija.
+  Sin plantilla no sale el aviso, y dejarlo a que alguien la publique en cada
+  entorno es el modo de fallo que `DEC-085` ya demostró.
+
+### Verificación
+390 pruebas / 1.302 aserciones · 1.070 y 1.060 aserciones de restricción · siete
+mutaciones, las siete en rojo · las seis puertas en verde, **Deptrac incluido** —
+que el grafo siga acíclico es parte del resultado, no un trámite.
+
+---
+
+## [Runbook de despliegue] — 2026-08-26
+
+`docs/18-RUNBOOK-DESPLIEGUE.md`. Los pasos de despliegue estaban viviendo en
+conversaciones, y `DEC-085` —los dos `GRANT` que protegen la bitácora— lleva
+desde el 25 de agosto marcado como «falta ejecutarlo» sin más garantía que la
+memoria de alguien.
+
+Recoge: los **dos** crones que hacen falta (la cola y el scheduler **no son lo
+mismo**, y `schedule:run` no procesa la cola), las dos banderas de
+`queue:work` sin las cuales el cron de cada minuto apila procesos hasta tumbar
+el servidor, el orden de despliegue con `queue:restart` incluido, la trampa de
+`config:cache` con `env()`, y las comprobaciones posteriores.
+
+Y dice **lo que todavía no cubre** —copias restauradas, monitorización, vuelta
+atrás— para que no parezca completo cuando no lo está. Anotado como `T-35`: un
+runbook que nadie ha seguido es una hipótesis, no un procedimiento.
+
+---
+
 ## [4.9 · El correo] — 2026-08-26
 
 **Se adelanta a propósito, rompiendo el orden del roadmap.** 7.6 no se podía
