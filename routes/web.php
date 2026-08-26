@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Modules\Campaign\Http\Controllers\CampanasController;
 use App\Modules\Campaign\Http\Controllers\CandidatosController;
+use App\Modules\Campaign\Http\Controllers\InvitacionController;
 use App\Modules\Client\Http\Controllers\ClientesController;
 use App\Modules\Client\Http\Controllers\ContactosController;
 use App\Modules\Client\Http\Controllers\MarcasController;
@@ -70,6 +71,30 @@ Route::get('/contrasena/nueva', [RecuperacionController::class, 'formulario'])
 Route::post('/contrasena/nueva', [RecuperacionController::class, 'fijar'])
     ->middleware('throttle:10,1')
     ->name('recuperar.fijar');
+
+// ---- La invitacion del creador (`7.6`) --------------------------------------
+//
+// La primera parte del sistema hecha para alguien de FUERA. Sin `auth` y sin
+// `guest`: el creador no necesita entrar --su portal (`F6`) esta bloqueado por
+// `T-09`-- y la autorizacion es el token, que vale una sola vez.
+//
+// Mismo tratamiento que el enlace de contrasena: la ruta que lleva el token lo
+// guarda en la sesion y redirige a una URL limpia (`DEC-117`).
+Route::get('/invitacion/{token}', [InvitacionController::class, 'ver'])
+    ->middleware('throttle:20,1')
+    ->where('token', '[a-f0-9]{64}')
+    ->name('invitacion.ver');
+Route::get('/invitacion', [InvitacionController::class, 'oferta'])->name('invitacion.oferta');
+Route::post('/invitacion/aceptar', [InvitacionController::class, 'aceptar'])
+    ->middleware('throttle:10,1')
+    ->name('invitacion.aceptar');
+Route::post('/invitacion/rechazar', [InvitacionController::class, 'rechazar'])
+    ->middleware('throttle:10,1')
+    ->name('invitacion.rechazar');
+Route::get('/invitacion/estado/gracias', [InvitacionController::class, 'gracias'])
+    ->name('invitacion.gracias');
+Route::get('/invitacion/estado/no-disponible', [InvitacionController::class, 'caducada'])
+    ->name('invitacion.caducada');
 
 Route::middleware('auth')->group(function (): void {
     Route::post('/salir', [AccesoController::class, 'salir'])->name('salir');
@@ -531,6 +556,19 @@ Route::middleware('auth')->group(function (): void {
         ->middleware('permiso:campaign.manage')
         ->whereUuid('uuid')->whereNumber('participacion')
         ->name('campanas.candidatos.monto');
+
+    // 7.6: invitar tiene permiso propio. Editar una campana es trabajo interno;
+    // invitar es el momento en que un compromiso economico sale de la empresa y
+    // llega a una persona.
+    Route::post('/campanas/{uuid}/candidatos/{participacion}/invitar', [CandidatosController::class, 'invitar'])
+        ->middleware('permiso:campaign.invite')
+        ->whereUuid('uuid')->whereNumber('participacion')
+        ->name('campanas.candidatos.invitar');
+
+    Route::post('/campanas/{uuid}/candidatos/{participacion}/anular-invitacion', [CandidatosController::class, 'anularInvitacion'])
+        ->middleware('permiso:campaign.invite')
+        ->whereUuid('uuid')->whereNumber('participacion')
+        ->name('campanas.candidatos.anular');
 
     Route::post('/campanas/{uuid}/sobrecosto', [CandidatosController::class, 'autorizarSobrecosto'])
         ->middleware('permiso:campaign.approve')

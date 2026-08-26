@@ -2,6 +2,53 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 
+## [7.6 · La invitación a una campaña] — 2026-08-26
+
+`invitations` existía desde la Fase 2 y **no tenía una sola fila**. Tercera vez que
+pasa —`campaign_creators` antes de 7.4, `domain_events` antes de 4.13— y las tres
+veces la estructura estaba bien pensada.
+
+### Añadido
+- **El creador contesta él, por enlace de un solo uso** (`DEC-119`). Su portal
+  sigue bloqueado por `T-09`; la alternativa era que un operador tecleara «dijo que
+  sí por WhatsApp», y eso convierte una aceptación en la palabra de un tercero.
+- **Plazo fijo por campaña** (`DEC-120`), de 1 hora a 30 días, con
+  `invitaciones:caducar` cada diez minutos desde el planificador.
+- **Rechazo con motivo de lista cerrada**, y **reinvitar dejando constancia de las
+  dos rondas** (`DEC-121`).
+- **`App\Shared\Eventos\CorreoPedido`** (`DEC-123`): pedir un correo sin conocer a
+  Communication. Sube desde Identity, donde en `5.9` funcionaba de milagro —Identity
+  está en la lista de dependencias permitidas de Communication; Campaign no—.
+- **`App\Shared\Http\EnlaceEnSesion`**: el token no se queda en la URL, ahora en un
+  solo sitio para las dos pantallas públicas.
+
+### Corregido
+- **`BR-CREATOR-008` tenía una ventana abierta** (`DEC-122`). El precio se congela
+  **al aceptar**; entre el envío y la respuesta `agreed_amount` se podía mover. Al
+  creador le llegaba «te pagamos 1.500», alguien lo bajaba a 900, y aceptaba 900
+  **sin haberlo visto nunca**. La invitación copia el importe y
+  `tg_ccr_monto_con_invitacion` lo bloquea mientras haya una oferta encima.
+- **Un fallo intermitente en los fixtures, escondido desde 4.9** (`T-39`).
+  `eligible_from` y `verified_at` de un medio de pago salían de dos `now()`
+  distintos; cuando caían a los dos lados de un segundo, `ck_cpm_eligible_after`
+  rechazaba el `INSERT`. Salió una vez en 471 pruebas, en una clase que no tiene
+  nada que ver con medios de pago.
+- **«Caducada» y «te mandamos otra» decían lo mismo.** En la tabla las dos muertes
+  son un `revoked_at`, y a quien se pasaba del plazo se le mandaba a buscar en su
+  buzón un correo más reciente que no existe.
+
+### Verificación
+471 pruebas / 1.607 aserciones · 1.182 (MariaDB) y 1.172 (MySQL 8) aserciones de
+restricción · 16 mutaciones, 16 detectadas tras una corrección · las seis puertas
+en verde.
+
+**Una aserción de la suite SQL salía verde por el motivo equivocado**: ponía 900
+sobre una fila que ya tenía 900 —sin cambio no se dispara ningún disparador— y
+además las participaciones de la semilla están aceptadas, donde manda la regla de
+7.5 y no la de esta iteración.
+
+---
+
 ## [5.9 + 4.1 · El enlace seguro de contraseña] — 2026-08-26
 
 Dos iteraciones del plan que comparten lo único difícil: un token de un solo uso,

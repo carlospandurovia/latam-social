@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use App\Models\User;
-use App\Modules\Identity\Eventos\EnlaceDeContrasenaEmitido;
 use App\Modules\Identity\Services\Cuentas;
 use App\Modules\Identity\Services\EnlacesDeContrasena;
 use App\Shared\Auth\Permisos;
+use App\Shared\Eventos\CorreoPedido;
 use Database\Seeders\CimientosSeeder;
 use Database\Seeders\PlantillasDeCorreoSeeder;
 use Illuminate\Database\QueryException;
@@ -648,7 +648,7 @@ final class EnlaceContrasenaTest extends TestCase
 
     public function test_la_cuenta_del_creador_lleva_su_rol(): void
     {
-        Event::fake([EnlaceDeContrasenaEmitido::class]);
+        Event::fake([CorreoPedido::class]);
 
         $cuenta = Cuentas::paraCreador('creador@example.test', 'Ana Creadora');
 
@@ -658,7 +658,11 @@ final class EnlaceContrasenaTest extends TestCase
             ->value('r.code');
 
         $this->assertSame('creator', $rol);
-        Event::assertDispatched(EnlaceDeContrasenaEmitido::class);
+        Event::assertDispatched(
+            CorreoPedido::class,
+            fn (CorreoPedido $e): bool => $e->codigo === 'user.password_initial'
+                && $e->destinatario === 'creador@example.test',
+        );
     }
 
     // ------------------------------------------ la fuga que abria esta iteracion

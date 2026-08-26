@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace App\Modules\Identity\Services;
 
-use App\Modules\Identity\Eventos\EnlaceDeContrasenaEmitido;
 use App\Shared\Audit\Bitacora;
+use App\Shared\Eventos\CorreoPedido;
 use App\Shared\Eventos\Eventos;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
@@ -58,6 +58,15 @@ final class EnlacesDeContrasena
 {
     /** Cuánto vive cada tipo de enlace, en horas (`DEC-113`). */
     public const HORAS = ['initial' => 72, 'reset' => 1];
+
+    /**
+     * Qué propósito produce qué plantilla. Explícito, no derivado del nombre:
+     * una convención es justo lo que hace que un renombrado silencioso deje de
+     * mandar correos sin que falle nada.
+     *
+     * @var array<string, string>
+     */
+    private const PLANTILLAS = ['initial' => 'user.password_initial', 'reset' => 'user.password_reset'];
 
     /**
      * Por qué un enlace no sirve. En texto, porque estos motivos se enseñan.
@@ -137,16 +146,23 @@ final class EnlacesDeContrasena
             ],
         );
 
-        // Y el token, sólo por memoria, a quien sepa enviarlo.
-        Event::dispatch(new EnlaceDeContrasenaEmitido(
-            usuarioId: $usuarioId,
+        // Y el token, sólo por memoria, a quien sepa enviarlo. `CorreoPedido`
+        // vive en `Shared` y **no se persiste**: es la única forma de que el
+        // enlace llegue al correo sin quedar guardado en `domain_events`.
+        Event::dispatch(new CorreoPedido(
+            codigo: self::PLANTILLAS[$proposito],
             destinatario: (string) $usuario->email,
-            nombre: (string) $usuario->name,
-            proposito: $proposito,
-            enlace: route('recuperar.usar', ['token' => $token]),
-            caduca: $caduca->format('d/m/Y H:i'),
-            horas: $horas,
+            variables: [
+                'nombre' => (string) $usuario->name,
+                // El enlace ya montado: Communication no conoce --ni tiene por
+                // que conocer-- los nombres de ruta de Identity.
+                'enlace' => route('recuperar.usar', ['token' => $token]),
+                'caduca' => $caduca->format('d/m/Y H:i'),
+                'horas' => $horas,
+            ],
             idioma: (string) ($usuario->locale ?: 'es'),
+            tipoRelacionado: 'user',
+            idRelacionado: $usuarioId,
         ));
 
         return $token;

@@ -106,6 +106,28 @@ final class PlantillasDeCorreoSeeder extends Seeder
                 ."siendo valida y este enlace caduca solo. Si le pasa mas veces, avisenos.\n\n"
                 .'LATAM Social',
             ],
+            // ---- `7.6`: la invitacion a una campana --------------------------
+            //
+            // Lleva DENTRO lo que el creador necesita para decidir --campana e
+            // importe-- porque de eso va el correo. Lo que no lleva es nada
+            // interno: ni el ingreso del cliente, ni lo que cobran los demas,
+            // ni el presupuesto (`BR-SEC-001`).
+            [
+                'campaign.invitation',
+                'Te queremos invitar a una campana',
+                "Hola {{ nombre }}:\n\n"
+                ."Tenemos una campana que creemos que te encaja: {{ campana }}.\n\n"
+                ."Lo que cobrarias: {{ importe }}.\n\n"
+                ."Aqui estan las fechas y el detalle, y ahi mismo puedes aceptar o decir que\n"
+                ."no puedes:\n\n"
+                ."{{ enlace }}\n\n"
+                ."Tienes {{ horas }} horas (hasta el {{ caduca }}). Pasado ese plazo la\n"
+                ."invitacion caduca sola y no pasa nada: si te interesa mas adelante,\n"
+                ."escribenos.\n\n"
+                ."Decir que no tambien nos sirve, y mucho: nos evita insistir y nos ayuda a\n"
+                ."proponerte cosas que si te encajen.\n\n"
+                .'LATAM Social',
+            ],
             [
                 'creator.payment_method_changed',
                 'Se registro un cambio en sus datos de pago',

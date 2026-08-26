@@ -1,5 +1,7 @@
 # 09 — Estado del proyecto y siguiente iteración
 
+> **Versión 1.8 — 2026-08-26.** Actualizado al cerrar `7.6`.
+>
 > **Versión 1.7 — 2026-08-26.** Actualizado al cerrar `5.9` + `4.1`.
 >
 > **Versión 1.6 — 2026-08-26.** Actualizado al cerrar 4.13 (`T-10`).
@@ -36,11 +38,11 @@
 | | |
 |---|---|
 | Tablas | 68 |
-| Migraciones | 48, verdes desde cero en MySQL 8 — y **con vuelta atrás completa**, que hasta hoy no existía |
-| Pruebas de PHPUnit | **427**, 1.429 aserciones |
-| Aserciones de restricción (SQL) | **1.118** en MariaDB, **1.108** en MySQL 8 |
+| Migraciones | 49, verdes desde cero en MySQL 8 y con vuelta atrás completa |
+| Pruebas de PHPUnit | **471**, 1.607 aserciones |
+| Aserciones de restricción (SQL) | **1.182** en MariaDB, **1.172** en MySQL 8 |
 | Puertas de calidad | 6: formato, análisis estático, fronteras, pruebas, vigencias, nombres entre capas |
-| Decisiones registradas | hasta `DEC-118` |
+| Decisiones registradas | hasta `DEC-123` |
 
 ### Lo que se puede hacer hoy por pantalla
 
@@ -77,7 +79,13 @@ respuesta exista o no el correo. Es la primera vez que entra al sistema alguien
 que no es del equipo, y eso destapó que la portada le enseñaba los totales
 internos a cualquier autenticado.
 
-Eso completa **7.0 a 7.5 del roadmap**, más `F4.9`, `5.9` y `4.1`.
+Y desde `7.6`, **la conversación con el creador**: se le manda una invitación con
+su importe dentro, la contesta él mismo desde un enlace de un solo uso, y si no
+contesta el plazo la cierra sola y devuelve el dinero al presupuesto. Rechazar no
+cierra la puerta: se puede volver a preguntar con otra oferta, y quedan las dos
+rondas.
+
+Eso completa **7.0 a 7.6 del roadmap**, más `F4.9`, `5.9` y `4.1`.
 
 ---
 
@@ -120,29 +128,30 @@ Ninguna bloquea código hoy; todas bloquean una iteración futura concreta.
 
 ## 4. Lo que propongo como siguiente iteración
 
-**`7.6` — las invitaciones.**
+Aquí hay una bifurcación de verdad, y la decisión es tuya.
 
-Es lo único de la Fase 7 que ya no tiene nada delante. `7.4` deja la lista corta
-—a quién se quiere invitar—, `7.5` deja el monto acordado —cuánto se le paga— y
-`F4.9` deja el correo. Falta el paso que convierte las tres cosas en una
-conversación con el creador: mandarle la invitación, que la acepte o la rechace, y
-que el rechazo tenga motivo.
+**`7.7` — el brief operativo y las entregas.** Es lo siguiente del roadmap: el
+creador aceptó, ahora hay que decirle qué entregar y cuándo, y recibirlo. Es la
+continuación natural y no depende de nadie.
 
-Y trae una decisión de negocio de verdad: **qué pasa cuando una invitación
-caduca**. Un creador que no contesta no es lo mismo que uno que dice que no, y el
-cupo del mercado (`target_creators`) tiene que saber la diferencia.
+**Pero antes conviene mirar tres cosas pequeñas que ya estorban**, y que juntas
+son una iteración:
+
+| # | Qué | Por qué ahora |
+|---|---|---|
+| `T-36` | `usuarios:crear` sigue tecleando la contraseña | cierra `BR-SEC-004` del todo; la pieza ya existe |
+| `T-38` | el creador no puede preguntar antes de contestar | una duda sin canal se convierte en un rechazo, y ese rechazo entra en las estadísticas como si fuera una opinión sobre la oferta |
+| — | nadie avisa al equipo cuando un creador contesta | hoy hay que mirar la pantalla; el hecho ya está en `domain_events` |
+
+Las tres son media hora cada una y las tres se notan en cuanto haya una campaña
+real. Yo iría por ahí antes de abrir `7.7`, pero no es una decisión técnica.
 
 ### Lo que NO propongo, y por qué
 
-- **El portal del creador (`F6`).** Sigue bloqueado por `T-09`. Ahora el creador
-  ya puede entrar —tiene cuenta y contraseña— y lo que ve es una sala de espera.
-  Abrirle el portal sin términos publicados sería abrirle una puerta a un sitio
-  donde no puede aceptar nada.
+- **El portal del creador (`F6`).** Sigue bloqueado por `T-09`. Con `5.9` y `7.6`
+  el creador ya puede poner su contraseña y contestar invitaciones **sin portal**,
+  que era la mitad de lo que el portal iba a darle.
 - **Facturación (`F9`).** Depende de `Q-40` y `Q-44`, o sea de tu contador.
-- **`T-36` — el enlace para usuarios internos.** Es media hora y cierra del todo
-  `BR-SEC-004`, pero toca `usuarios:crear`, que tiene su propio flujo. Va detrás
-  de `7.6` salvo que prefieras lo contrario: hoy sigue habiendo un momento en el
-  que dos personas conocen la credencial de quien aprueba perfiles fiscales.
 
 ---
 

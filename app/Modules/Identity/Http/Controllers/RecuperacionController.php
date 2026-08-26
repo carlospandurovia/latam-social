@@ -7,6 +7,7 @@ namespace App\Modules\Identity\Http\Controllers;
 use App\Modules\Identity\Http\Requests\FijarPasswordRequest;
 use App\Modules\Identity\Http\Requests\PedirEnlaceRequest;
 use App\Modules\Identity\Services\EnlacesDeContrasena;
+use App\Shared\Http\EnlaceEnSesion;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -53,8 +54,11 @@ use Illuminate\View\View;
  */
 final class RecuperacionController
 {
-    /** Dónde vive el token mientras dura el trámite. */
-    private const CLAVE = 'enlace_contrasena';
+    // El token no se queda en la URL. El mecanismo --y el porque-- viven en
+    // `Shared`, porque `7.6` hace exactamente lo mismo con el enlace de una
+    // invitacion y seis lineas de seguridad repetidas son seis lineas que un dia
+    // se arreglan en un sitio.
+    use EnlaceEnSesion;
 
     public function pedir(): View
     {
@@ -98,26 +102,14 @@ final class RecuperacionController
             );
         }
 
-        // Antes de meter nada en la sesion, sesion NUEVA Y VACIA. Ver la
-        // cabecera de la clase.
-        //
-        // `invalidate()` y no `regenerate()`: el segundo cambia el
-        // identificador pero **conserva el contenido**, y aqui el contenido es
-        // justo lo que sobra. Quien haya conseguido plantar una cookie de sesion
-        // en el navegador de la victima puede haber dejado cosas dentro; y si el
-        // navegador venia con una sesion autenticada de otra persona --el
-        // ordenador prestado, que es un caso real y no un ataque--, seguir con
-        // ella mientras se pone la contrasena de una tercera cuenta es un lio
-        // que no tiene por que existir.
-        $peticion->session()->invalidate();
-        $peticion->session()->put(self::CLAVE, $token);
+        $this->guardarToken($peticion, $token);
 
         return redirect()->route('recuperar.formulario');
     }
 
     public function formulario(Request $peticion): View|RedirectResponse
     {
-        $token = (string) $peticion->session()->get(self::CLAVE, '');
+        $token = $this->tokenDeSesion($peticion);
         // «No hay token en la sesion» y «el token no vale» son dos cosas
         // distintas y la persona tiene que hacer algo distinto en cada una:
         // volver a abrir el enlace, o pedir otro. Devolver el mismo texto para
@@ -128,7 +120,7 @@ final class RecuperacionController
             : EnlacesDeContrasena::validar($token);
 
         if (!$resultado['ok']) {
-            $peticion->session()->forget(self::CLAVE);
+            $this->olvidarToken($peticion);
 
             return redirect()->route('recuperar')->with(
                 'fallo',
@@ -152,7 +144,7 @@ final class RecuperacionController
 
     public function fijar(FijarPasswordRequest $peticion): RedirectResponse
     {
-        $token = (string) $peticion->session()->get(self::CLAVE, '');
+        $token = $this->tokenDeSesion($peticion);
 
         if ($token === '') {
             return redirect()->route('recuperar')
@@ -164,10 +156,8 @@ final class RecuperacionController
 
         $resultado = EnlacesDeContrasena::consumir($token, $datos['password'], $peticion->ip());
 
-        // Se olvida SIEMPRE, salga bien o mal. Un token que se queda en la
-        // sesion despues de usarse es una segunda oportunidad que no deberia
-        // existir, y si fallo es que ya no sirve.
-        $peticion->session()->forget(self::CLAVE);
+        // Se olvida SIEMPRE, salga bien o mal.
+        $this->olvidarToken($peticion);
 
         if (!$resultado['ok']) {
             return redirect()->route('recuperar')->with(
@@ -193,6 +183,11 @@ final class RecuperacionController
      * los casos, porque entonces sería cuestión de tiempo que un `if` acabara
      * enseñándolos.
      */
+    protected function claveDeSesion(): string
+    {
+        return 'enlace_contrasena';
+    }
+
     private function emitirSiExiste(string $email): void
     {
         $usuario = DB::table('users')

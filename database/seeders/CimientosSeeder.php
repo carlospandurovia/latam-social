@@ -167,6 +167,12 @@ final class CimientosSeeder extends Seeder
             // separación que `DEC-044` impone en la base para los perfiles
             // fiscales y los medios de pago.
             ['campaign.approve',       'Campaign', 'Aprobar una campaña: fija el ingreso y congela la sociedad emisora'],
+            // 7.6: invitar tiene permiso propio, y no va dentro de
+            // `campaign.manage`. Editar una campaña es trabajo interno;
+            // invitar es el momento en que un compromiso económico sale de
+            // la empresa y llega a una persona. Misma división que
+            // `creator.verify` frente a `creator.activate`.
+            ['campaign.invite',        'Campaign', 'Invitar creadores a una campaña y anular invitaciones'],
             ['creator.view',           'Creator',  'Ver creadores'],
             ['creator.approve',        'Creator',  'Aprobar o rechazar solicitudes de creador'],
             ['creator.manage',         'Creator',  'Editar los datos de contacto y comerciales del creador'],
@@ -264,7 +270,7 @@ final class CimientosSeeder extends Seeder
         // hay atajo en el código: ver `App\Shared\Auth\Permisos`.
         $matriz = [
             'campaign_manager' => [
-                'campaign.view', 'campaign.manage', 'campaign.view_margin',
+                'campaign.view', 'campaign.manage', 'campaign.view_margin', 'campaign.invite',
                 'creator.view', 'creator.manage', 'creator.approve',
                 // DEC-060: el mismo rol verifica y activa. El equipo de
                 // reclutamiento es pequeno y exigir dos personas por creador

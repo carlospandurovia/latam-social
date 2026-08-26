@@ -7,8 +7,8 @@ namespace App\Modules\Communication\Providers;
 use App\Modules\Communication\Console\ProbarCorreoCommand;
 use App\Modules\Communication\Console\PublicarPlantillaCommand;
 use App\Modules\Communication\Listeners\AvisarCambioSensible;
-use App\Modules\Communication\Listeners\EnviarEnlaceDeContrasena;
-use App\Modules\Identity\Eventos\EnlaceDeContrasenaEmitido;
+use App\Modules\Communication\Listeners\EnviarCorreoPedido;
+use App\Shared\Eventos\CorreoPedido;
 use App\Shared\Eventos\EventoOcurrido;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
@@ -40,9 +40,12 @@ final class CommunicationServiceProvider extends ServiceProvider
     {
         Event::listen(EventoOcurrido::class, AvisarCambioSensible::class);
 
-        // `5.9` y `4.1`: este SI es un evento de Identity con tipo propio, y no
-        // un `EventoOcurrido` generico. La razon esta en el propio evento: su
-        // payload lleva el token en claro y `EventoOcurrido` se PERSISTE.
-        Event::listen(EnlaceDeContrasenaEmitido::class, EnviarEnlaceDeContrasena::class);
+        // `5.9`, `4.1` y `7.6`: los correos cuyo contenido NO se puede guardar
+        // --llevan un token en claro dentro-- no pasan por `EventoOcurrido`,
+        // que persiste su payload. Van por `CorreoPedido`, que vive en `Shared`
+        // para que lo pueda levantar cualquier modulo: en `5.9` vivio una
+        // iteracion dentro de Identity y funciono de milagro --Identity esta en
+        // la lista de arriba--; Campaign, que lo necesita igual en `7.6`, no.
+        Event::listen(CorreoPedido::class, EnviarCorreoPedido::class);
     }
 }

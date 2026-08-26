@@ -217,6 +217,12 @@ php artisan correos:probar tu@correo   # la salida de correo funciona
 Y a mano:
 
 1. Entrar al panel. Si sale un error con trazas, `APP_DEBUG` sigue en `true`.
+1a. **Comprobar que el planificador corre.** Desde `7.6` hay un comando que
+   depende de él —`invitaciones:caducar`, cada diez minutos— y si su línea de
+   cron no está puesta **nada avisa**: las invitaciones sin contestar se quedan
+   vivas para siempre, su importe sigue comprometido y el cupo del mercado nunca
+   se libera. Se ve mirando `storage/logs/planificador.log`; vacío significa que
+   no corre.
 1b. **Probar `/recuperar` con tu propio correo.** Es la comprobación que recorre
    más capas de una vez: cola, SMTP, plantilla y `APP_URL`. Si el enlace que
    llega empieza por `http://localhost`, `APP_URL` está mal y ninguna cuenta

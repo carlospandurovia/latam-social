@@ -13,4 +13,8 @@ return [
     App\Modules\Identity\Providers\IdentityServiceProvider::class,
     App\Modules\Creator\Providers\CreatorServiceProvider::class,
     App\Modules\Communication\Providers\CommunicationServiceProvider::class,
+    // 7.6: ademas de su comando, este declara el planificador que cierra las
+    // invitaciones vencidas. Sin el, una invitacion sin contestar deja su
+    // importe comprometido y su plaza del cupo ocupada para siempre.
+    App\Modules\Campaign\Providers\CampaignServiceProvider::class,
 ];

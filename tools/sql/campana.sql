@@ -23,6 +23,10 @@ CREATE TABLE campaigns (
   -- --«esta campana se regala» y «nadie le ha puesto precio»-- y de ahi sale el
   -- margen. `ck_camp_revenue_declarado` obliga a elegir una, fuera de borrador.
   is_gratis            TINYINT(1)    NOT NULL DEFAULT 0,
+  -- 7.6: cuantas horas tiene un creador para contestar una invitacion. El
+  -- plazo vive en la CAMPANA y no en cada invitacion: un solo numero que
+  -- explicar y un solo sitio donde cambiarlo.
+  invitation_hours     SMALLINT UNSIGNED NOT NULL DEFAULT 72,
   -- 7.5 / BR-CAMPAIGN-005: el OTRO lado del margen. La regla nombraba «el
   -- presupuesto de creadores de la campana» y esta columna no existia: no es que
   -- nadie comprobara la regla, es que el dato que nombra no estaba en el modelo.
@@ -80,6 +84,10 @@ CREATE TABLE campaigns (
   -- sustituta.
   CONSTRAINT ck_camp_revenue_declarado CHECK (status IN ('draft','pending_approval','cancelled') OR (is_gratis = 1 AND revenue_amount = 0) OR (is_gratis = 0 AND revenue_amount > 0)),
   CONSTRAINT ck_camp_creator_budget CHECK (creator_budget_amount >= 0),
+  -- De una hora a treinta dias. El limite de abajo evita una invitacion que
+  -- nace caducada; el de arriba, el teclazo que deja un compromiso economico
+  -- abierto tres anos.
+  CONSTRAINT ck_camp_invitation_hours CHECK (invitation_hours BETWEEN 1 AND 720),
   -- Las tres columnas de la autorizacion van juntas o no van. Una firma sin
   -- explicacion no responde «por que esta campana se paso» dentro de un ano.
   -- Misma forma que `ck_inv_responded`.
@@ -215,24 +223,59 @@ CREATE TABLE invitations (
   id                  BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
   uuid                CHAR(36)      NOT NULL,
   campaign_creator_id BIGINT UNSIGNED NOT NULL,
+  -- 7.6: quien invito. Una invitacion es un compromiso economico con una
+  -- persona; «alguien la mando» no es una respuesta.
+  invited_by_user_id  BIGINT UNSIGNED NULL,
   channel             VARCHAR(15)   NOT NULL DEFAULT 'email',
   -- Token de acceso al enlace firmado. Se guarda su HASH, nunca el token.
   token_hash          CHAR(64)      NOT NULL,
   sent_at             DATETIME(3)   NOT NULL,
   expires_at          DATETIME(3)   NOT NULL,
+  -- 7.6: el importe CON EL QUE SALIO la invitacion.
+  --
+  -- BR-CREATOR-008 congela el precio al ACEPTAR (tg_ccr_compromiso, 7.5), y
+  -- entre el envio y la respuesta `agreed_amount` se podia mover: al creador le
+  -- llegaba «te pagamos 1.500», alguien lo bajaba a 900, y el creador aceptaba
+  -- 900 sin haberlo visto nunca. Aqui queda lo que se le ofrecio, y
+  -- `tg_ccr_monto_con_invitacion` impide moverlo mientras la invitacion viva.
+  amount_snapshot     DECIMAL(18,4) NOT NULL DEFAULT 0,
+  currency_snapshot   CHAR(3)       NULL,
   opened_at           DATETIME(3)   NULL,
   responded_at        DATETIME(3)   NULL,
   response            VARCHAR(10)   NULL,
+  -- Lista cerrada para poder contestar «.por que nos dicen que no?». No decide
+  -- quien se puede reinvitar: eso se descarto expresamente.
+  decline_reason      VARCHAR(20)   NULL,
+  decline_note        VARCHAR(255)  NULL,
+  responded_ip        VARBINARY(16) NULL,
+  -- Anulada: la sustituyo otra, o el comando de caducidad la cerro. NO es lo
+  -- mismo que contestada, y por eso son dos columnas (misma leccion que
+  -- `password_links` en 5.9).
+  revoked_at          DATETIME(3)   NULL,
+  revoked_reason      VARCHAR(40)   NULL,
   created_at          DATETIME(3)   NULL,
+  updated_at          DATETIME(3)   NULL,
+  -- La decimocuarta puerta: una invitacion VIVA por participacion.
+  viva_gate TINYINT UNSIGNED
+    GENERATED ALWAYS AS (CASE WHEN responded_at IS NULL AND revoked_at IS NULL THEN 1 ELSE NULL END) STORED,
   UNIQUE KEY uq_inv_uuid (uuid),
   UNIQUE KEY uq_inv_token (token_hash),
   KEY ix_inv_participation (campaign_creator_id, sent_at),
   KEY ix_inv_expires (expires_at, responded_at),
+  KEY ix_inv_invitador (invited_by_user_id),
+  UNIQUE KEY uq_inv_viva (viva_gate, campaign_creator_id),
   CONSTRAINT fk_inv_participation FOREIGN KEY (campaign_creator_id) REFERENCES campaign_creators(id) ON DELETE RESTRICT,
+  CONSTRAINT fk_inv_invitador FOREIGN KEY (invited_by_user_id) REFERENCES users(id) ON DELETE RESTRICT,
   CONSTRAINT ck_inv_channel CHECK (channel IN ('email','whatsapp','sms','in_app','manual')),
   CONSTRAINT ck_inv_response CHECK (response IS NULL OR response IN ('accepted','declined')),
   CONSTRAINT ck_inv_dates CHECK (expires_at > sent_at),
-  CONSTRAINT ck_inv_responded CHECK ((response IS NULL) = (responded_at IS NULL))
+  CONSTRAINT ck_inv_responded CHECK ((response IS NULL) = (responded_at IS NULL)),
+  CONSTRAINT ck_inv_decline CHECK ((response = 'declined' AND decline_reason IS NOT NULL) OR (response <> 'declined' AND decline_reason IS NULL) OR (response IS NULL AND decline_reason IS NULL)),
+  CONSTRAINT ck_inv_reason_valido CHECK (decline_reason IS NULL OR decline_reason IN ('amount','dates','brand','workload','other')),
+  CONSTRAINT ck_inv_responded_ip CHECK (responded_at IS NULL OR responded_ip IS NOT NULL),
+  CONSTRAINT ck_inv_revoked CHECK (revoked_at IS NULL OR revoked_reason IS NOT NULL),
+  CONSTRAINT ck_inv_terminal CHECK (responded_at IS NULL OR revoked_at IS NULL),
+  CONSTRAINT ck_inv_amount CHECK (amount_snapshot >= 0)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- BR-CAMPAIGN-003: cambiar monto, entregables o fechas es una ENMIENDA que las
@@ -379,6 +422,18 @@ END//
 -- importe seria contradecir aquella decision.
 -- ===========================================================================
 
+CREATE TRIGGER `tg_ccr_monto_con_invitacion`
+BEFORE UPDATE ON `campaign_creators`
+FOR EACH ROW
+BEGIN
+  IF NOT (NEW.`agreed_amount` <=> OLD.`agreed_amount`)
+     AND EXISTS (SELECT 1 FROM `invitations`
+                  WHERE `campaign_creator_id` = OLD.`id` AND `viva_gate` = 1)
+  THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'No se cambia el monto de una participacion con una invitacion viva (BR-CREATOR-008): el creador esta mirando la cifra anterior. Anule la invitacion y mandele otra.';
+  END IF;
+END//
 CREATE TRIGGER `tg_ccr_compromiso`
 BEFORE UPDATE ON `campaign_creators`
 FOR EACH ROW
