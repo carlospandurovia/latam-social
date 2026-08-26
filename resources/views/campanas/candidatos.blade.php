@@ -131,6 +131,33 @@
                       @endif
                     </div>
                   @endif
+
+                  {{-- `T-38`. Las preguntas sin atender salen en ámbar y arriba:
+                       una pregunta que nadie lee es peor que no poder preguntar,
+                       porque el creador se queda esperando y además cree que nos
+                       importa. --}}
+                  @foreach (($preguntas[$p->id] ?? collect()) as $q)
+                    <div class="mt-1.5 rounded-lg border px-2 py-1.5 text-xs
+                                {{ $q->seen_at ? 'border-slate-200 bg-slate-50' : 'border-amber-200 bg-amber-50' }}">
+                      <p class="{{ $q->seen_at ? 'text-slate-500' : 'text-amber-900' }}">«{{ $q->body }}»</p>
+                      <div class="mt-1 flex items-center gap-2">
+                        <span class="text-slate-400">
+                          {{ \Illuminate\Support\Carbon::parse($q->asked_at)->format('d/m H:i') }}
+                        </span>
+                        @if ($q->seen_at)
+                          <span class="text-slate-400">· atendida por {{ $q->visto_por }}</span>
+                        @else
+                          @can('campaign.invite')
+                            <form method="POST"
+                                  action="{{ route('campanas.candidatos.pregunta', [$campana->uuid, $p->id, $q->id]) }}">
+                              @csrf
+                              <button class="text-amber-700 hover:underline">Me hago cargo</button>
+                            </form>
+                          @endcan
+                        @endif
+                      </div>
+                    </div>
+                  @endforeach
                 </td>
                 <td class="py-2 text-right">
                   {{-- Congelado en cuanto acepta: se enseña el número, sin

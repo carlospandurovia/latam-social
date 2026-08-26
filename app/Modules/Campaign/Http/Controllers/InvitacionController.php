@@ -124,6 +124,43 @@ final class InvitacionController
         return redirect()->route('invitacion.gracias')->with('respuesta', 'declined');
     }
 
+    /**
+     * El creador pregunta antes de decidir (`T-38`).
+     *
+     * **No se olvida el token**: la invitación sigue viva y él sigue delante de
+     * la misma pantalla. Preguntar no es contestar.
+     */
+    public function preguntar(Request $peticion): RedirectResponse
+    {
+        $token = $this->tokenDeSesion($peticion);
+
+        if ($token === '') {
+            return $this->alFallo($peticion, 'sesion_perdida');
+        }
+
+        $datos = $peticion->validate([
+            'pregunta' => ['required', 'string', 'min:3', 'max:1000'],
+        ], [
+            'pregunta.required' => 'Escribe tu pregunta.',
+            'pregunta.min' => 'Escribe un poco mas: asi no sabemos que contestarte.',
+        ]);
+
+        $resultado = Invitaciones::preguntar($token, (string) $datos['pregunta'], $peticion->ip());
+
+        if (!$resultado['ok']) {
+            $this->olvidarToken($peticion);
+
+            return redirect()->route('invitacion.caducada')
+                ->with('fallo', Invitaciones::FALLOS[$resultado['motivo']] ?? 'Esta invitacion no sirve.');
+        }
+
+        return redirect()->route('invitacion.oferta')->with(
+            'preguntado',
+            'Tu pregunta ha llegado al equipo y te contestan por correo. '
+            .'Ojo: el plazo de la invitacion sigue corriendo.',
+        );
+    }
+
     public function gracias(Request $peticion): View|RedirectResponse
     {
         $respuesta = (string) $peticion->session()->get('respuesta', '');

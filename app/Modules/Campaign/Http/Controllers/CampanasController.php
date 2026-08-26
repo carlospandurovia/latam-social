@@ -310,29 +310,48 @@ final class CampanasController
         /** @var array<string, mixed> $datos */
         $datos = $peticion->validated();
 
-        // El mismo formato dos veces en la misma campana lo rechaza
-        // `uq_creq_general` con un 1062. Se traduce, no se absorbe: repetir un
-        // formato no es un valor que el sistema pueda recalcular --es que el
-        // operador queria EDITAR la fila que ya existe--.
+        // El mismo formato dos veces lo rechaza la base con un 1062, y hay DOS
+        // indices que lo hacen:
+        //
+        // | Indice | Cubre |
+        // |---|---|
+        // | `uq_creq_general` | el requisito general, via `general_gate` |
+        // | `uq_creq_market`  | el de un mercado concreto (7.3) |
+        //
+        // Se traduce, no se absorbe (`DEC-087`): repetir un formato no es un
+        // valor que el sistema pueda recalcular --es que el operador queria
+        // EDITAR la fila que ya existe--.
+        //
+        // La primera version solo miraba `uq_creq_general`, porque cuando se
+        // escribio los mercados no existian. `7.3` los anadio, el formulario
+        // empezo a mandar `campaign_market_id`, y anadir dos veces el mismo
+        // formato a un mercado paso a dar un **500 con la traza entera**. No
+        // fallaba en pruebas: la suite SQL comprobaba que la base lo rechaza
+        // --y lo rechaza-- pero nadie comprobaba que la PANTALLA lo explique.
         try {
             DB::table('campaign_requirements')->insert($datos + [
                 'campaign_id' => $campana->id,
-                // `campaign_market_id` NULL significa «todos los mercados»
-                // (docs 2.3 §9). Los mercados llegan en 7.3; hasta entonces
-                // todos los requisitos son generales, que es justo lo que
-                // `uq_creq_general` cubre.
+                // `campaign_market_id` viene en `$datos` desde 7.3, y vacio
+                // significa «todos los mercados» (docs 2.3 §9, `N-03`). El `+`
+                // no pisa lo que ya esta: esto es el valor por omision para
+                // cuando el formulario no lo manda.
                 'campaign_market_id' => null,
                 'created_at' => now(),
                 'updated_at' => now(),
             ]);
         } catch (Throwable $e) {
-            if (!Choque::esDe($e, 'uq_creq_general')) {
+            $general = Choque::esDe($e, 'uq_creq_general');
+            $mercado = Choque::esDe($e, 'uq_creq_market');
+
+            if (!$general && !$mercado) {
                 throw $e;
             }
 
-            return back()->withInput()->with('aviso',
-                'Ese formato ya esta en el brief. Edite la fila que hay en vez de anadir otra: '
-                .'dos filas del mismo formato serian dos cantidades para la misma cosa.');
+            return back()->withInput()->with('aviso', $mercado && ($datos['campaign_market_id'] ?? null) !== null
+                ? 'Ese formato ya esta en el brief de ese mercado. Edite la fila que hay en vez de '
+                  .'anadir otra: dos filas del mismo formato serian dos cantidades para la misma cosa.'
+                : 'Ese formato ya esta en el brief general. Edite la fila que hay en vez de anadir '
+                  .'otra: dos filas del mismo formato serian dos cantidades para la misma cosa.');
         }
 
         Bitacora::registrar(

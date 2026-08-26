@@ -186,6 +186,51 @@ final class Bitacora
         return false;
     }
 
+    /**
+     * Un valor de la bitácora, en algo que se pueda pintar.
+     *
+     * ### Por qué hace falta
+     *
+     * `changes` es JSON y sus valores **no son siempre escalares**.
+     * `MarcasController` guarda `categorias => ['antes' => [1,2], 'despues' => [3]]`
+     * porque una marca tiene varias categorías y el cambio interesante es la
+     * lista entera. Eso es correcto y no se va a cambiar.
+     *
+     * Lo que estaba mal era la pantalla: hacía `{{ $v['antes'] }}` a pelo, y con
+     * un array eso es un **500** —`htmlspecialchars(): must be of type string,
+     * array given`— que se lleva por delante la página entera de la bitácora.
+     * Basta con que exista UNA fila así para que no se pueda ver ninguna.
+     *
+     * Se arregla aquí y no en la vista porque la clase que decide qué se guarda
+     * es la que sabe cómo se lee, y porque hay filas viejas con arrays dentro:
+     * cambiar sólo lo que se escribe de hoy en adelante no arreglaría el pasado.
+     */
+    public static function legible(mixed $valor): string
+    {
+        if ($valor === null || $valor === '') {
+            return '—';
+        }
+
+        if (is_bool($valor)) {
+            return $valor ? 'si' : 'no';
+        }
+
+        if (is_scalar($valor)) {
+            return (string) $valor;
+        }
+
+        if (is_array($valor)) {
+            // Una lista se lee como lista. Un mapa no tiene forma natural en una
+            // celda, asi que se deja en JSON: es feo y es honesto, mejor que
+            // inventarse un formato que oculte parte.
+            return array_is_list($valor)
+                ? ($valor === [] ? '—' : implode(', ', array_map(self::legible(...), $valor)))
+                : (string) json_encode($valor, JSON_UNESCAPED_UNICODE);
+        }
+
+        return (string) json_encode($valor, JSON_UNESCAPED_UNICODE);
+    }
+
     private static function comoTexto(mixed $valor): ?string
     {
         if ($valor === null || $valor === '') {

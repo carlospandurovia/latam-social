@@ -211,6 +211,81 @@ final class BriefTest extends TestCase
         ]);
     }
 
+    // -------------------------------------------- el formato repetido
+
+    /**
+     * Repetir un formato **se explica**, no revienta.
+     *
+     * Encontrado usando la aplicación: la pantalla de mercados manda
+     * `campaign_market_id`, y el controlador sólo traducía el choque del índice
+     * general (`uq_creq_general`). El de mercado (`uq_creq_market`, que llegó en
+     * 7.3) se escapaba del `catch` y salía **un 500 con la traza entera**.
+     *
+     * No fallaba en pruebas: la suite SQL comprueba que la base lo rechaza —y lo
+     * rechaza— pero nadie comprobaba que la **pantalla** lo explique. Es la misma
+     * lección de siempre, un piso más arriba: que la regla exista no significa
+     * que alguien la sepa contar.
+     */
+    public function test_repetir_un_formato_en_el_brief_general_se_explica(): void
+    {
+        $gestor = $this->usuarioCon('campaign_manager');
+        $uuid = $this->campanaEnBorrador(quien: $gestor);
+
+        $this->actingAs($gestor)->post("/campanas/{$uuid}/requisitos", $this->requisito());
+
+        $this->actingAs($gestor)
+            ->post("/campanas/{$uuid}/requisitos", $this->requisito(['quantity' => 5]))
+            ->assertRedirect()
+            ->assertSessionHas('aviso');
+
+        $this->assertSame(1, DB::table('campaign_requirements')
+            ->where('campaign_id', $this->idDe($uuid))->count());
+    }
+
+    public function test_repetir_un_formato_en_u_n_mercad_o_tambien_se_explica(): void
+    {
+        $gestor = $this->usuarioCon('campaign_manager');
+        $uuid = $this->campanaEnBorrador(quien: $gestor);
+        $mercadoId = (int) DB::table('campaign_markets')
+            ->where('campaign_id', $this->idDe($uuid))->value('id');
+
+        $datos = $this->requisito(['campaign_market_id' => $mercadoId]);
+
+        $this->actingAs($gestor)->post("/campanas/{$uuid}/requisitos", $datos);
+
+        $respuesta = $this->actingAs($gestor)
+            ->post("/campanas/{$uuid}/requisitos", $datos + ['quantity' => 5]);
+
+        // Lo que se afirma es que NO es un 500. Antes de esto, esta misma
+        // peticion devolvia una traza de Laravel al operador.
+        $respuesta->assertRedirect()->assertSessionHas('aviso');
+        $this->assertStringContainsString(
+            'de ese mercado',
+            (string) session('aviso'),
+            'y el aviso dice que es del MERCADO, no del brief general',
+        );
+
+        $this->assertSame(1, DB::table('campaign_requirements')
+            ->where('campaign_id', $this->idDe($uuid))->count());
+    }
+
+    /** El mismo formato en el brief general y en un mercado **sí** convive. */
+    public function test_el_mismo_formato_general_y_de_mercado_conviven(): void
+    {
+        $gestor = $this->usuarioCon('campaign_manager');
+        $uuid = $this->campanaEnBorrador(quien: $gestor);
+        $mercadoId = (int) DB::table('campaign_markets')
+            ->where('campaign_id', $this->idDe($uuid))->value('id');
+
+        $this->actingAs($gestor)->post("/campanas/{$uuid}/requisitos", $this->requisito());
+        $this->actingAs($gestor)
+            ->post("/campanas/{$uuid}/requisitos", $this->requisito(['campaign_market_id' => $mercadoId]))
+            ->assertSessionHas('exito');
+
+        $this->assertSame(2, DB::table('campaign_requirements')
+            ->where('campaign_id', $this->idDe($uuid))->count());
+    }
+
     // ------------------------------------------------------- la pantalla
 
     public function test_el_mismo_formato_dos_veces_se_explica_en_vez_de_reventar(): void

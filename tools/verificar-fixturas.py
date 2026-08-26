@@ -514,10 +514,35 @@ def main():
     if tozudas and '-v' in sys.argv:
         print('  No se dejan vaciar (disparador `no_delete`): ' + ', '.join(tozudas))
 
+    a_proposito = []
+
     for archivo in archivos:
         texto = archivo.read_text(encoding='utf-8')
+        lineas = texto.split('\n')
         for tabla, cuerpo, linea in bloques(texto):
             donde = f'{archivo.relative_to(RAIZ)}:{linea}  {tabla}'
+
+            # Un insert que la prueba espera que la base RECHACE.
+            #
+            # Hasta ahora esta herramienta no sabia distinguir «un fixture que
+            # miente» de «un fixture que demuestra que la base no se deja»: los
+            # segundos salian en rojo con toda la razon tecnica y ninguna
+            # practica. Las pruebas que afirman un rechazo de UNICIDAD se
+            # escapaban por casualidad --un insert aislado no choca con nada-- y
+            # las que afirman un CHECK de una sola fila, no.
+            #
+            # El marcador va en la linea de ANTES y hay que escribirlo a mano,
+            # que es lo que impide ponerlo por costumbre. Se cuentan y se
+            # imprimen: una lista de excepciones que nadie mira crece sola.
+            # Se miran las TRES lineas de antes, no solo la inmediata: el
+            # marcador suele ir al principio de un comentario que explica por que,
+            # y exigir que sea la ultima linea del comentario obligaria a
+            # escribirlo al reves de como se lee.
+            previas = '\n'.join(lineas[max(0, linea - 4):linea - 1])
+
+            if 'fixture-invalido-a-proposito' in previas:
+                a_proposito.append(donde)
+                continue
 
             if tabla not in cols:
                 problemas.append((donde, f'la tabla `{tabla}` no existe en el esquema'))
@@ -612,6 +637,13 @@ def main():
                 problemas.append((donde, detalle))
 
     print(f'  Base: {BASE}    inserts revisados: {revisados}')
+    if a_proposito:
+        # Se imprimen SIEMPRE, no solo con -v: una lista de excepciones que
+        # nadie mira crece sola. Es la misma politica que `SIN_PERMISO` en
+        # `RutasProtegidasTest`.
+        print(f'  Invalidos a proposito (la prueba afirma el rechazo): {len(a_proposito)}')
+        for donde in a_proposito:
+            print(f'      - {donde}')
     if inconcluyentes:
         print(f'  Sin veredicto: {len(inconcluyentes)} (rechazos que provoco el relleno, no el fixture)')
         if '-v' in sys.argv:

@@ -91,6 +91,11 @@ Route::post('/invitacion/aceptar', [InvitacionController::class, 'aceptar'])
 Route::post('/invitacion/rechazar', [InvitacionController::class, 'rechazar'])
     ->middleware('throttle:10,1')
     ->name('invitacion.rechazar');
+// `T-38`: preguntar no es contestar --la invitacion sigue viva-- y por eso es
+// una ruta aparte y no un tercer boton del mismo formulario.
+Route::post('/invitacion/pregunta', [InvitacionController::class, 'preguntar'])
+    ->middleware('throttle:5,1')
+    ->name('invitacion.preguntar');
 Route::get('/invitacion/estado/gracias', [InvitacionController::class, 'gracias'])
     ->name('invitacion.gracias');
 Route::get('/invitacion/estado/no-disponible', [InvitacionController::class, 'caducada'])
@@ -569,6 +574,14 @@ Route::middleware('auth')->group(function (): void {
         ->middleware('permiso:campaign.invite')
         ->whereUuid('uuid')->whereNumber('participacion')
         ->name('campanas.candidatos.anular');
+
+    // `T-38`: hacerse cargo de una pregunta no es invitar ni gestionar la
+    // campana: es atender a alguien. Va con `campaign.invite`, que es quien
+    // tiene la conversacion abierta con ese creador.
+    Route::post('/campanas/{uuid}/candidatos/{participacion}/preguntas/{pregunta}', [CandidatosController::class, 'marcarPreguntaVista'])
+        ->middleware('permiso:campaign.invite')
+        ->whereUuid('uuid')->whereNumber('participacion')->whereNumber('pregunta')
+        ->name('campanas.candidatos.pregunta');
 
     Route::post('/campanas/{uuid}/sobrecosto', [CandidatosController::class, 'autorizarSobrecosto'])
         ->middleware('permiso:campaign.approve')

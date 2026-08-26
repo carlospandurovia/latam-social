@@ -48,6 +48,12 @@
     para contestar. Pasado ese plazo la invitación caduca sola.
   </p>
 
+  @if (session('preguntado'))
+    <div class="mt-5 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+      {{ session('preguntado') }}
+    </div>
+  @endif
+
   @if ($errors->any())
     <div class="mt-5 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
       {{ $errors->first() }}
@@ -65,6 +71,34 @@
   <p class="mt-2 text-xs text-slate-500">
     Al aceptar, el importe de arriba queda cerrado por las dos partes.
   </p>
+
+  {{-- `T-38`. Sin un sitio donde preguntar, una DUDA se convierte en un
+       rechazo — y ese rechazo entra en las estadísticas como si fuera una
+       opinión sobre la oferta. --}}
+  <details class="mt-6 group" @if ($errors->has('pregunta')) open @endif>
+    <summary class="cursor-pointer text-sm text-marca-600 hover:text-marca-700 list-none">
+      Tengo una duda antes de decidir
+    </summary>
+
+    <form method="POST" action="{{ route('invitacion.preguntar') }}" class="mt-4 space-y-3">
+      @csrf
+      <div>
+        <label for="pregunta" class="block text-sm font-medium text-slate-700 mb-1.5">Tu pregunta</label>
+        <textarea id="pregunta" name="pregunta" rows="3" maxlength="1000" required
+                  class="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm
+                         focus:border-marca-400 focus:ring-2 focus:ring-marca-200 focus:outline-none">{{ old('pregunta') }}</textarea>
+        {{-- Se dice claro: preguntar NO congela el plazo. Callarlo dejaría a
+             alguien esperando tranquilo mientras su invitación caduca. --}}
+        <p class="mt-1 text-xs text-amber-700">
+          El plazo sigue corriendo mientras te contestamos. Si se te echa encima, dínoslo
+          en la pregunta y te mandamos una invitación nueva.
+        </p>
+      </div>
+      <button class="w-full rounded-lg border border-marca-300 px-4 py-2.5 text-sm text-marca-700 hover:bg-marca-50">
+        Mandar la pregunta
+      </button>
+    </form>
+  </details>
 
   {{-- El rechazo va con motivo, y el motivo es de lista cerrada. Sin él no se
        puede contestar la única pregunta útil que sale de aquí: ¿por qué nos

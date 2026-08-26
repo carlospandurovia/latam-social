@@ -706,7 +706,315 @@ final class InvitacionesTest extends TestCase
             ->assertSee('ofrecido');
     }
 
+    // ------------------------------------------------ `T-38`: las preguntas
+
+    /**
+     * Preguntar **no es contestar**: la invitación sigue viva.
+     *
+     * Es la mitad que faltaba de `7.6`. Sin un sitio donde preguntar, una duda se
+     * convierte en un rechazo — y ese rechazo entra en `decline_reason` como si
+     * fuera una opinión sobre la oferta, contaminando la única estadística que
+     * esa columna existe para producir.
+     */
+    public function test_preguntar_no_gasta_la_invitacion(): void
+    {
+        Queue::fake();
+        $id = $this->participacion(500.0);
+        $token = Invitaciones::invitar($this->campana(), $this->fila($id), $this->invitador());
+
+        $this->assertTrue(Invitaciones::preguntar($token, '.El producto llega antes del rodaje?', '203.0.113.9')['ok']);
+
+        $this->assertTrue(Invitaciones::validar($token)['ok'], 'la invitacion sigue viva');
+        $this->assertSame('invited', $this->fila($id)->status);
+        $this->assertCount(1, Invitaciones::preguntas($id));
+    }
+
+    /** Y el plazo no se mueve: es la decisión de negocio, y se afirma. */
+    public function test_preguntar_no_mueve_el_plazo(): void
+    {
+        Queue::fake();
+        $id = $this->participacion(500.0);
+        $token = Invitaciones::invitar($this->campana(), $this->fila($id), $this->invitador());
+
+        $antes = (string) DB::table('invitations')->where('campaign_creator_id', $id)->value('expires_at');
+        Invitaciones::preguntar($token, 'Una duda cualquiera', '203.0.113.9');
+
+        $this->assertSame(
+            $antes,
+            (string) DB::table('invitations')->where('campaign_creator_id', $id)->value('expires_at'),
+            'congelar el plazo dejaria el importe comprometido para siempre si nadie contesta',
+        );
+    }
+
+    public function test_la_pregunta_llega_a_quien_invito(): void
+    {
+        Event::fake([CorreoPedido::class]);
+        $invitador = $this->usuarioCon('campaign_manager');
+        $id = $this->participacion(500.0);
+        $token = Invitaciones::invitar($this->campana(), $this->fila($id), (int) $invitador->id);
+
+        Invitaciones::preguntar($token, 'Sobre el envio del producto', '203.0.113.9');
+
+        Event::assertDispatched(
+            CorreoPedido::class,
+            fn (CorreoPedido $e): bool => $e->codigo === 'campaign.invitation_question'
+                && $e->destinatario === $invitador->email
+                && str_contains((string) $e->variables['pregunta'], 'envio del producto'),
+        );
+    }
+
+    /** Sin invitador —la emitió un proceso— no se manda nada y no se rompe nada. */
+    public function test_sin_invitador_la_pregunta_se_guarda_igual(): void
+    {
+        Queue::fake();
+        $id = $this->participacion(500.0);
+        $token = Invitaciones::invitar($this->campana(), $this->fila($id));
+
+        $this->assertTrue(Invitaciones::preguntar($token, 'Una duda', '203.0.113.9')['ok']);
+        $this->assertCount(1, Invitaciones::preguntas($id));
+    }
+
+    public function test_una_pregunta_vacia_la_rechaza_la_base(): void
+    {
+        Queue::fake();
+        $id = $this->participacion(500.0);
+        Invitaciones::invitar($this->campana(), $this->fila($id));
+        $invitacionId = (int) DB::table('invitations')->where('campaign_creator_id', $id)->value('id');
+
+        $this->expectException(QueryException::class);
+
+        // fixture-invalido-a-proposito: esta fila EXISTE para que la base la
+        // rechace. `verificar-fixturas.py` la saltaria como un fixture que
+        // miente si no se le dice.
+        DB::table('invitation_questions')->insert([
+            'uuid' => (string) Str::uuid(), 'invitation_id' => $invitacionId,
+            'body' => '  ', 'asked_at' => now(), 'created_at' => now(), 'updated_at' => now(),
+        ]);
+    }
+
+    public function test_marcar_vista_exige_decir_quien(): void
+    {
+        Queue::fake();
+        $id = $this->participacion(500.0);
+        Invitaciones::invitar($this->campana(), $this->fila($id));
+        $invitacionId = (int) DB::table('invitations')->where('campaign_creator_id', $id)->value('id');
+        $preguntaId = (int) DB::table('invitation_questions')->insertGetId([
+            'uuid' => (string) Str::uuid(), 'invitation_id' => $invitacionId,
+            'body' => 'Una duda', 'asked_at' => now(), 'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        $this->expectException(QueryException::class);
+
+        DB::table('invitation_questions')->where('id', $preguntaId)->update(['seen_at' => now()]);
+    }
+
+    public function test_una_caducada_ya_no_admite_preguntas(): void
+    {
+        Queue::fake();
+        $id = $this->participacion(500.0);
+        $token = Invitaciones::invitar($this->campana(), $this->fila($id));
+        $this->vencer($id);
+
+        $this->assertSame('caducada', Invitaciones::preguntar($token, 'Llego tarde', '203.0.113.9')['motivo']);
+        $this->assertCount(0, Invitaciones::preguntas($id));
+    }
+
+    // --------------------------------------- `T-38` por pantalla y back-office
+
+    public function test_preguntar_desde_la_pantalla_del_creador(): void
+    {
+        Queue::fake();
+        $id = $this->participacion(500.0);
+        $token = Invitaciones::invitar($this->campana(), $this->fila($id), $this->invitador());
+
+        $this->get(route('invitacion.ver', ['token' => $token]));
+
+        $this->post(route('invitacion.preguntar'), ['pregunta' => 'Cuando llega el producto?'])
+            ->assertRedirect(route('invitacion.oferta'))
+            ->assertSessionHas('preguntado');
+
+        // Y sigue pudiendo aceptar: preguntar no gasta el enlace.
+        $this->post(route('invitacion.aceptar'))->assertRedirect(route('invitacion.gracias'));
+        $this->assertSame('accepted', $this->fila($id)->status);
+    }
+
+    public function test_la_pantalla_avisa_de_que_el_plazo_sigue_corriendo(): void
+    {
+        Queue::fake();
+        $id = $this->participacion(500.0);
+        $token = Invitaciones::invitar($this->campana(), $this->fila($id));
+
+        $this->get(route('invitacion.ver', ['token' => $token]));
+
+        // Callarlo dejaria a alguien esperando tranquilo mientras su invitacion
+        // caduca, que es peor que no dejarle preguntar.
+        $this->get(route('invitacion.oferta'))->assertOk()->assertSee('plazo sigue corriendo');
+    }
+
+    public function test_una_pregunta_demasiado_corta_no_pasa(): void
+    {
+        Queue::fake();
+        $id = $this->participacion(500.0);
+        $token = Invitaciones::invitar($this->campana(), $this->fila($id));
+
+        $this->get(route('invitacion.ver', ['token' => $token]));
+        $this->post(route('invitacion.preguntar'), ['pregunta' => 'a'])
+            ->assertSessionHasErrors('pregunta');
+
+        $this->assertCount(0, Invitaciones::preguntas($id));
+        $this->assertTrue(Invitaciones::validar($token)['ok'], 'y no le cuesta el enlace');
+    }
+
+    public function test_la_pregunta_sale_en_la_pantalla_de_candidatos(): void
+    {
+        Queue::fake();
+        $gestor = $this->usuarioCon('campaign_manager');
+        $id = $this->participacion(500.0);
+        $token = Invitaciones::invitar($this->campana(), $this->fila($id), (int) $gestor->id);
+        Invitaciones::preguntar($token, 'Sobre el envio del producto', '203.0.113.9');
+
+        $this->actingAs($gestor)
+            ->get(route('campanas.candidatos', $this->uuid))
+            ->assertOk()
+            ->assertSee('Sobre el envio del producto')
+            ->assertSee('Me hago cargo');
+    }
+
+    public function test_hacerse_cargo_deja_dueno(): void
+    {
+        Queue::fake();
+        $gestor = $this->usuarioCon('campaign_manager');
+        $id = $this->participacion(500.0);
+        $token = Invitaciones::invitar($this->campana(), $this->fila($id), (int) $gestor->id);
+        Invitaciones::preguntar($token, 'Sobre el envio del producto', '203.0.113.9');
+        $preguntaId = (int) Invitaciones::preguntas($id)->first()->id;
+
+        $this->actingAs($gestor)
+            ->post(route('campanas.candidatos.pregunta', [$this->uuid, $id, $preguntaId]))
+            ->assertRedirect()
+            ->assertSessionHas('exito');
+
+        $this->assertNotNull(Invitaciones::preguntas($id)->first()->seen_at);
+        $this->assertSame(0, Invitaciones::preguntasPendientes($this->campanaId));
+    }
+
+    /**
+     * Y el que se hizo cargo **no se pisa**.
+     *
+     * Quién atendió una pregunta es evidencia igual que quién invitó: si el
+     * segundo clic sobrescribe al primero, «¿quién se hizo cargo?» pasa a
+     * responderse con «el último que pulsó», que no es lo mismo.
+     */
+    public function test_hacerse_cargo_dos_veces_no_cambia_el_dueno(): void
+    {
+        Queue::fake();
+        $primero = $this->usuarioCon('campaign_manager');
+        $segundo = $this->usuarioCon('campaign_manager');
+        $id = $this->participacion(500.0);
+        $token = Invitaciones::invitar($this->campana(), $this->fila($id), (int) $primero->id);
+        Invitaciones::preguntar($token, 'Sobre el envio', '203.0.113.9');
+        $preguntaId = (int) Invitaciones::preguntas($id)->first()->id;
+
+        Invitaciones::marcarVista($preguntaId, (int) $primero->id);
+        Invitaciones::marcarVista($preguntaId, (int) $segundo->id);
+
+        $this->assertSame($primero->name, Invitaciones::preguntas($id)->first()->visto_por);
+    }
+
+    /** Una pregunta de OTRA participación no se atiende desde ésta. */
+    public function test_no_se_atiende_una_pregunta_ajena(): void
+    {
+        Queue::fake();
+        $gestor = $this->usuarioCon('campaign_manager');
+        $mio = $this->participacion(500.0);
+        $ajeno = $this->participacion(500.0);
+
+        $token = Invitaciones::invitar($this->campana(), $this->fila($ajeno), (int) $gestor->id);
+        Invitaciones::preguntar($token, 'Una duda del otro', '203.0.113.9');
+        $preguntaId = (int) Invitaciones::preguntas($ajeno)->first()->id;
+
+        $this->actingAs($gestor)
+            ->post(route('campanas.candidatos.pregunta', [$this->uuid, $mio, $preguntaId]))
+            ->assertNotFound();
+
+        $this->assertNull(Invitaciones::preguntas($ajeno)->first()->seen_at);
+    }
+
+    // ------------------------------------------- el aviso a quien invito
+
+    public function test_aceptar_avisa_a_quien_invito(): void
+    {
+        Event::fake([CorreoPedido::class]);
+        $invitador = $this->usuarioCon('campaign_manager');
+        $id = $this->participacion(500.0);
+        $token = Invitaciones::invitar($this->campana(), $this->fila($id), (int) $invitador->id);
+
+        Invitaciones::aceptar($token, '203.0.113.9');
+
+        Event::assertDispatched(
+            CorreoPedido::class,
+            fn (CorreoPedido $e): bool => $e->codigo === 'campaign.invitation_accepted'
+                && $e->destinatario === $invitador->email
+                && str_contains((string) $e->variables['importe'], '500.00'),
+        );
+    }
+
+    public function test_rechazar_avisa_con_el_motivo(): void
+    {
+        Event::fake([CorreoPedido::class]);
+        $invitador = $this->usuarioCon('campaign_manager');
+        $id = $this->participacion(500.0);
+        $token = Invitaciones::invitar($this->campana(), $this->fila($id), (int) $invitador->id);
+
+        Invitaciones::rechazar($token, 'amount', 'Muy poco', '203.0.113.9');
+
+        Event::assertDispatched(
+            CorreoPedido::class,
+            fn (CorreoPedido $e): bool => $e->codigo === 'campaign.invitation_declined'
+                && $e->destinatario === $invitador->email
+                && $e->variables['motivo'] === Invitaciones::MOTIVOS['amount'],
+        );
+    }
+
+    /**
+     * Y si el invitador se desactivó, **no se le escribe** y la respuesta sigue.
+     *
+     * Escribir a la dirección de alguien que ya no está no avisa a nadie y sí
+     * puede acabar en un buzón reasignado. El hecho no se pierde: queda en
+     * `domain_events` y se ve en la lista de candidatos.
+     *
+     * El precio, dicho: una invitación mandada por quien luego se va queda
+     * **muda**. Se acepta porque la alternativa —avisar a todo el equipo— se
+     * descartó expresamente, y porque la pantalla lo enseña igual.
+     */
+    public function test_con_el_invitador_desactivado_no_se_avisa_pero_la_respuesta_sigue(): void
+    {
+        Event::fake([CorreoPedido::class]);
+        $invitador = $this->usuarioCon('campaign_manager');
+        $id = $this->participacion(500.0);
+        $token = Invitaciones::invitar($this->campana(), $this->fila($id), (int) $invitador->id);
+
+        DB::table('users')->where('id', $invitador->id)->update(['status' => 'deactivated']);
+
+        $this->assertTrue(Invitaciones::aceptar($token, '203.0.113.9')['ok']);
+        $this->assertSame('accepted', $this->fila($id)->status);
+
+        Event::assertNotDispatched(
+            CorreoPedido::class,
+            fn (CorreoPedido $e): bool => $e->codigo === 'campaign.invitation_accepted',
+        );
+
+        // Y el hecho NO se pierde.
+        $this->assertSame(1, DB::table('domain_events')
+            ->where('event_name', 'campaign_creator.accepted')->where('entity_id', $id)->count());
+    }
+
     // ------------------------------------------------------------------ apoyo
+
+    private function invitador(): int
+    {
+        return (int) $this->usuarioCon('campaign_manager')->id;
+    }
 
     private function campana(): object
     {

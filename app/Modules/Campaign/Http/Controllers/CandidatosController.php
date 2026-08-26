@@ -74,6 +74,13 @@ final class CandidatosController
             'invitaciones' => $lista->mapWithKeys(fn (object $f): array => [
                 (int) $f->id => Invitaciones::viva((int) $f->id),
             ]),
+            // `T-38`: las preguntas del creador. Una pregunta que nadie lee es
+            // peor que no poder preguntar --el creador se queda esperando y
+            // ademas cree que nos importa--, asi que salen en la misma pantalla
+            // donde se decide sobre el.
+            'preguntas' => $lista->mapWithKeys(fn (object $f): array => [
+                (int) $f->id => Invitaciones::preguntas((int) $f->id),
+            ]),
             'compromiso' => [
                 'comprometido' => Compromiso::comprometido((int) $campana->id),
                 'presupuesto' => (float) $campana->creator_budget_amount,
@@ -291,6 +298,37 @@ final class CandidatosController
 
         return back()->with('exito', 'Invitacion anulada. El creador vuelve a la lista corta '
             .'y ya se le puede cambiar el importe.');
+    }
+
+    /**
+     * Alguien del equipo se hace cargo de una pregunta (`T-38`).
+     *
+     * **No es una respuesta.** La respuesta va por correo, que es donde el
+     * creador está. Esto marca un dueño, que es lo que hace que una pregunta no
+     * se quede huérfana en una lista que todos miran y nadie atiende.
+     */
+    public function marcarPreguntaVista(string $uuid, int $participacion, int $pregunta): RedirectResponse
+    {
+        $campana = $this->campana($uuid);
+
+        // El par, no solo el id: la pregunta puede existir y ser de otra
+        // campana. Misma leccion que en marcas, requisitos y mercados.
+        $this->participacion($campana, $participacion);
+
+        $suya = DB::table('invitation_questions as q')
+            ->join('invitations as i', 'i.id', '=', 'q.invitation_id')
+            ->where('q.id', $pregunta)
+            ->where('i.campaign_creator_id', $participacion)
+            ->exists();
+
+        if (!$suya) {
+            throw new NotFoundHttpException('Esa pregunta no es de esa participacion.');
+        }
+
+        Invitaciones::marcarVista($pregunta, (int) Auth::id());
+
+        return back()->with('exito', 'Pregunta marcada como atendida. Contestale por correo: '
+            .'el creador espera ahi, y su invitacion sigue corriendo.');
     }
 
     /**

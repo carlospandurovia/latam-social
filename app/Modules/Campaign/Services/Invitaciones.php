@@ -303,6 +303,96 @@ final class Invitaciones
         return self::responder($token, 'declined', $motivo, $nota, $ip);
     }
 
+    /**
+     * El creador pregunta, en vez de decidir a ciegas (`T-38`).
+     *
+     * **Preguntar no mueve el plazo** (decisión de negocio, 2026-08-26). La
+     * alternativa —congelar la invitación hasta que alguien conteste— deja el
+     * importe comprometido para siempre si nadie contesta, que es justo el
+     * agujero que `invitaciones:caducar` existe para tapar. La pantalla se lo
+     * dice, y quien invitó decide: si hace falta más tiempo, anula y manda otra.
+     *
+     * @return array{ok: bool, motivo: ?string}
+     */
+    public static function preguntar(string $token, string $texto, ?string $ip): array
+    {
+        $resultado = self::validar($token);
+
+        if (!$resultado['ok']) {
+            return ['ok' => false, 'motivo' => $resultado['motivo']];
+        }
+
+        $invitacion = $resultado['invitacion'];
+        $empaquetada = is_string($ip) ? inet_pton($ip) : false;
+
+        DB::table('invitation_questions')->insert([
+            'uuid' => (string) Str::uuid(),
+            'invitation_id' => $invitacion->id,
+            'body' => mb_substr(trim($texto), 0, 1000),
+            'asked_at' => now(),
+            'asked_ip' => $empaquetada === false ? null : $empaquetada,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        Eventos::ocurrio(
+            nombre: 'campaign_creator.question_asked',
+            tipoEntidad: 'campaign_creator',
+            idEntidad: (int) $invitacion->campaign_creator_id,
+            payload: ['invitation_id' => (int) $invitacion->id],
+        );
+
+        // Una pregunta que nadie lee es peor que no poder preguntar: el creador
+        // se queda esperando y ademas cree que nos importa.
+        self::avisarAlInvitador((int) $invitacion->id, 'campaign.invitation_question', [
+            'creador' => (string) $invitacion->display_name,
+            'campana' => (string) $invitacion->campana,
+            'pregunta' => mb_substr(trim($texto), 0, 400),
+            'caduca' => (string) $invitacion->expires_at,
+        ]);
+
+        return ['ok' => true, 'motivo' => null];
+    }
+
+    /**
+     * Las preguntas de una participación, la más reciente primero.
+     *
+     * @return Collection<int, \stdClass>
+     */
+    public static function preguntas(int $participacionId): Collection
+    {
+        return DB::table('invitation_questions as q')
+            ->join('invitations as i', 'i.id', '=', 'q.invitation_id')
+            ->leftJoin('users as u', 'u.id', '=', 'q.seen_by_user_id')
+            ->where('i.campaign_creator_id', $participacionId)
+            ->orderByDesc('q.id')
+            ->get(['q.id', 'q.uuid', 'q.body', 'q.asked_at', 'q.seen_at', 'u.name as visto_por']);
+    }
+
+    /** Alguien del equipo se hizo cargo. No es una respuesta: es un dueño. */
+    public static function marcarVista(int $preguntaId, int $usuarioId): void
+    {
+        DB::table('invitation_questions')
+            ->where('id', $preguntaId)
+            ->whereNull('seen_at')
+            ->update([
+                'seen_at' => now(),
+                'seen_by_user_id' => $usuarioId,
+                'updated_at' => now(),
+            ]);
+    }
+
+    /** Cuántas preguntas de esta campaña están sin atender. */
+    public static function preguntasPendientes(int $campanaId): int
+    {
+        return DB::table('invitation_questions as q')
+            ->join('invitations as i', 'i.id', '=', 'q.invitation_id')
+            ->join('campaign_creators as cc', 'cc.id', '=', 'i.campaign_creator_id')
+            ->where('cc.campaign_id', $campanaId)
+            ->whereNull('q.seen_at')
+            ->count();
+    }
+
     // ------------------------------------------------------------ anular
 
     /**
@@ -506,9 +596,68 @@ final class Invitaciones
                 idEntidad: (int) $resultado['participacionId'],
                 payload: array_filter(['decline_reason' => $motivo], static fn ($v): bool => $v !== null),
             );
+
+            // Y se le cuenta a quien invito. Sin esto, «.ya contesto Fulano?» se
+            // responde entrando a mirar una lista todos los dias --y el creador
+            // que acepto y nadie contacto se pierde asi--.
+            $ficha = self::porToken($token);
+
+            if ($ficha !== null) {
+                self::avisarAlInvitador(
+                    (int) $ficha->id,
+                    $respuesta === 'accepted'
+                        ? 'campaign.invitation_accepted'
+                        : 'campaign.invitation_declined',
+                    array_filter([
+                        'creador' => (string) $ficha->display_name,
+                        'campana' => (string) $ficha->campana,
+                        'importe' => number_format((float) $ficha->amount_snapshot, 2).' '
+                            .(string) $ficha->currency_snapshot,
+                        'motivo' => $motivo !== null ? (self::MOTIVOS[$motivo] ?? $motivo) : null,
+                        'nota' => $nota,
+                    ], static fn ($v): bool => $v !== null),
+                );
+            }
         }
 
         return ['ok' => $resultado['ok'], 'motivo' => $resultado['motivo']];
+    }
+
+    /**
+     * Le cuenta a quien invitó lo que ha pasado.
+     *
+     * **A quien invitó y a nadie más** (decisión de negocio, 2026-08-26). Es
+     * quien está esperando la respuesta y quien va a hacer algo con ella. Avisar
+     * a todo el equipo son cuarenta correos por campaña a cada uno, y un buzón
+     * así se filtra a una carpeta y deja de leerse — que es la forma cara de no
+     * avisar a nadie.
+     *
+     * Si la invitación no tiene invitador —la emitió un proceso, o el usuario se
+     * desactivó— no se manda nada y no se rompe nada. El hecho ya consta en
+     * `domain_events`.
+     *
+     * @param array<string, string|int|float> $variables
+     */
+    private static function avisarAlInvitador(int $invitacionId, string $codigo, array $variables): void
+    {
+        $invitador = DB::table('invitations as i')
+            ->join('users as u', 'u.id', '=', 'i.invited_by_user_id')
+            ->where('i.id', $invitacionId)
+            ->where('u.status', 'active')
+            ->first(['u.name', 'u.email', 'u.locale']);
+
+        if ($invitador === null) {
+            return;
+        }
+
+        Event::dispatch(new CorreoPedido(
+            codigo: $codigo,
+            destinatario: (string) $invitador->email,
+            variables: $variables + ['nombre' => (string) $invitador->name],
+            idioma: (string) ($invitador->locale ?: 'es'),
+            tipoRelacionado: 'invitation',
+            idRelacionado: $invitacionId,
+        ));
     }
 
     private static function porToken(string $token): ?object

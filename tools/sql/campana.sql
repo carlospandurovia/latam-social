@@ -456,3 +456,35 @@ BEGIN
 END//
 
 DELIMITER ;
+
+-- T-38: las preguntas del creador antes de contestar una invitacion.
+--
+-- Sin un sitio donde preguntar, una DUDA se convierte en un RECHAZO, y ese
+-- rechazo entra en `invitations.decline_reason` como si fuera una opinion sobre
+-- la oferta. La estadistica que 7.6 existe para producir quedaria contaminada
+-- por gente que no tenia a quien preguntar.
+--
+-- NO hay respuesta aqui, y es deliberado: el equipo contesta por correo, que es
+-- donde el creador ya esta. Un hilo de ida y vuelta dentro de la aplicacion es
+-- un modulo de mensajeria y no cabe en esta iteracion.
+CREATE TABLE invitation_questions (
+  id              BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  uuid            CHAR(36)        NOT NULL,
+  invitation_id   BIGINT UNSIGNED NOT NULL,
+  body            VARCHAR(1000)   NOT NULL,
+  asked_at        DATETIME(3)     NOT NULL,
+  asked_ip        VARBINARY(16)   NULL,
+  -- «Alguien del equipo se hizo cargo». No es una respuesta.
+  seen_at         DATETIME(3)     NULL,
+  seen_by_user_id BIGINT UNSIGNED NULL,
+  created_at      DATETIME(3)     NULL,
+  updated_at      DATETIME(3)     NULL,
+  UNIQUE KEY uq_iq_uuid (uuid),
+  KEY ix_iq_invitacion (invitation_id, asked_at),
+  KEY ix_iq_pendientes (seen_at),
+  KEY ix_iq_visto_por (seen_by_user_id),
+  CONSTRAINT fk_iq_invitacion FOREIGN KEY (invitation_id) REFERENCES invitations(id) ON DELETE RESTRICT,
+  CONSTRAINT fk_iq_visto_por FOREIGN KEY (seen_by_user_id) REFERENCES users(id) ON DELETE RESTRICT,
+  CONSTRAINT ck_iq_body CHECK (CHAR_LENGTH(TRIM(body)) >= 3),
+  CONSTRAINT ck_iq_seen CHECK ((seen_at IS NULL AND seen_by_user_id IS NULL) OR (seen_at IS NOT NULL AND seen_by_user_id IS NOT NULL))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

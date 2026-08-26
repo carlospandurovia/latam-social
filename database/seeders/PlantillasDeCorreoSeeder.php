@@ -128,6 +128,42 @@ final class PlantillasDeCorreoSeeder extends Seeder
                 ."proponerte cosas que si te encajen.\n\n"
                 .'LATAM Social',
             ],
+            // ---- `T-38` y el aviso al invitador ------------------------------
+            //
+            // Estos TRES van al equipo, no al creador, y por eso si llevan datos
+            // dentro: el destinatario ya tiene acceso a la campana. Lo que no
+            // llevan es el enlace de la invitacion --ese es del creador--.
+            [
+                'campaign.invitation_question',
+                'Una pregunta sobre {{ campana }}',
+                "Hola {{ nombre }}:\n\n"
+                ."{{ creador }} ha preguntado sobre la campana {{ campana }}, antes de\n"
+                ."contestar a la invitacion:\n\n"
+                ."  «{{ pregunta }}»\n\n"
+                ."Su invitacion sigue corriendo y caduca el {{ caduca }}: preguntar no mueve\n"
+                ."el plazo. Si necesita mas tiempo, anule la invitacion y mandele otra.\n\n"
+                ."Contestele por correo, que es donde esta.\n\n"
+                .'LATAM Social',
+            ],
+            [
+                'campaign.invitation_accepted',
+                '{{ creador }} acepto la invitacion',
+                "Hola {{ nombre }}:\n\n"
+                ."{{ creador }} ha aceptado participar en {{ campana }} por {{ importe }}.\n\n"
+                ."El importe queda cerrado por las dos partes: cambiarlo ahora exige una\n"
+                ."enmienda aceptada por ambas (BR-CAMPAIGN-003).\n\n"
+                .'LATAM Social',
+            ],
+            [
+                'campaign.invitation_declined',
+                '{{ creador }} no puede esta vez',
+                "Hola {{ nombre }}:\n\n"
+                ."{{ creador }} ha rechazado la invitacion a {{ campana }}.\n\n"
+                ."Motivo: {{ motivo }}\n\n"
+                ."Puede volver a invitarlo con otra oferta cuando quiera: el rechazo no\n"
+                ."cierra la campana para el, y quedan las dos rondas en el historial.\n\n"
+                .'LATAM Social',
+            ],
             [
                 'creator.payment_method_changed',
                 'Se registro un cambio en sus datos de pago',

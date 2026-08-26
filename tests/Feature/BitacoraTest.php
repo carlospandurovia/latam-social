@@ -29,6 +29,75 @@ final class BitacoraTest extends TestCase
         Permisos::olvidar();
     }
 
+    // ------------------------------------------------- lo que se puede pintar
+
+    /**
+     * Una entrada con **listas** dentro no tumba la pantalla.
+     *
+     * Encontrado usando la aplicación. `MarcasController` guarda
+     * `categorias => ['antes' => [1,2], 'despues' => [3]]` —correcto: una marca
+     * tiene varias categorías y el cambio interesante es la lista entera— y la
+     * vista hacía `{{ $v['antes'] }}` a pelo. Con un array eso es
+     * `htmlspecialchars(): must be of type string, array given`: **un 500 que se
+     * lleva por delante la página entera de la bitácora**.
+     *
+     * Bastaba UNA fila así para no poder ver ninguna. Y la bitácora es
+     * precisamente lo que se mira cuando algo ha ido mal.
+     */
+    public function test_una_entrada_con_listas_dentro_se_pinta(): void
+    {
+        $this->entrada(['categorias' => ['antes' => [1, 2], 'despues' => [3]]]);
+
+        $this->actingAs($this->usuarioCon('admin'))
+            ->get('/bitacora')
+            ->assertOk()
+            ->assertSee('1, 2')
+            ->assertSee('categorias');
+    }
+
+    /** Y una que ni siquiera tiene la forma `antes`/`despues`. */
+    public function test_una_entrada_con_forma_rara_tampoco_la_tumba(): void
+    {
+        $this->entrada(['origen' => 'importacion masiva']);
+
+        $this->actingAs($this->usuarioCon('admin'))
+            ->get('/bitacora')
+            ->assertOk()
+            ->assertSee('importacion masiva');
+    }
+
+    public function test_una_lista_vacia_no_se_pinta_como_corchetes(): void
+    {
+        $this->entrada(['categorias' => ['antes' => [], 'despues' => [7]]]);
+
+        $this->actingAs($this->usuarioCon('admin'))
+            ->get('/bitacora')
+            ->assertOk()
+            ->assertDontSee('[]');
+    }
+
+    /**
+     * Escribe una entrada de bitácora con el `changes` que se le dé.
+     *
+     * Directo a la tabla y no por `Bitacora::registrar()`: lo que se prueba es
+     * que la PANTALLA aguanta lo que hay guardado, incluidas las filas viejas.
+     *
+     * @param array<string, mixed> $cambios
+     */
+    private function entrada(array $cambios): void
+    {
+        DB::table('audit_logs')->insert([
+            'action' => 'client_brand.updated',
+            'entity_type' => 'client_brand',
+            'entity_id' => 1,
+            'changes' => json_encode($cambios, JSON_THROW_ON_ERROR),
+            // `audit_logs` no tiene `created_at`: `occurred_at` ES su fecha, y
+            // la tabla no lleva marcas de tiempo de Eloquent a proposito --es
+            // evidencia de solo insercion, no una entidad que se edite--.
+            'occurred_at' => now(),
+        ]);
+    }
+
     // ------------------------------------------------------------ autorización
 
     public function test_la_bitacora_es_solo_para_quien_puede_auditar(): void

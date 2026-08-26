@@ -11,6 +11,7 @@
 #   ck_inv_terminal               contestada y anulada se excluyen
 #   ck_camp_invitation_hours      el plazo va de 1 hora a 30 dias
 #   tg_ccr_monto_con_invitacion   el importe no se mueve con una oferta encima
+#   ck_iq_body / ck_iq_seen       T-38: una pregunta dice algo, y atenderla tiene dueno
 #
 # La ultima es la que de verdad importa: sin ella, al creador le llega «te
 # pagamos 1.500», alguien lo baja a 900, y el creador acepta 900 sin haberlo
@@ -37,7 +38,7 @@ echo "==========================================================================
 echo "  7.6 - La invitacion a una campana"
 echo "==================================================================================="
 
-$CLIENTE $DB -e "DELETE FROM invitations;" 2>/dev/null
+$CLIENTE $DB -e "DELETE FROM invitation_questions; DELETE FROM invitations;" 2>/dev/null
 
 valor "la tabla existe" \
   "SELECT COUNT(*) FROM information_schema.tables
@@ -135,7 +136,7 @@ $CLIENTE $DB -e "UPDATE campaign_creators SET status='invited', accepted_at=NULL
 
 valor "la premisa: esa participacion ya no esta aceptada" \
   "SELECT status FROM campaign_creators WHERE id=$PART;" "invited"
-valor "y `b1` sigue viva sobre ella" \
+valor "y la invitacion b1 sigue viva sobre ella" \
   "SELECT COUNT(*) FROM invitations WHERE token_hash=LPAD('b1',64,'0') AND viva_gate=1;" "1"
 
 probar "bajar el monto de la participacion invitada" \
@@ -146,6 +147,28 @@ probar "anulada la invitacion, el monto se mueve" \
    UPDATE campaign_creators SET agreed_amount=850 WHERE id=$PART;" OK
 probar "y sin invitacion viva, tampoco estorba una segunda vez" \
   "UPDATE campaign_creators SET agreed_amount=1000 WHERE id=$PART;" OK
+
+echo ""
+echo "--- T-38: las preguntas del creador ---"
+# `a2` esta RECHAZADA y `b1` anulada, asi que las preguntas se cuelgan de la que
+# haya: una pregunta es de la invitacion, no de su estado.
+INV="(SELECT id FROM (SELECT id FROM invitations ORDER BY id LIMIT 1) x)"
+pregunta() {
+  echo "INSERT INTO invitation_questions (uuid,invitation_id,body,asked_at,created_at)
+    VALUES (UUID(),$INV,'$1',NOW(3),NOW(3));"
+}
+probar "una pregunta normal" "$(pregunta 'Cuando llega el producto?')" OK
+probar "una pregunta vacia" "$(pregunta '   ')" RECHAZO
+probar "una de dos letras" "$(pregunta 'ok')" RECHAZO
+probar "marcar vista sin decir quien" \
+  "UPDATE invitation_questions SET seen_at=NOW(3) WHERE invitation_id=$INV;" RECHAZO
+probar "marcar vista con quien" \
+  "UPDATE invitation_questions SET seen_at=NOW(3),
+     seen_by_user_id=(SELECT id FROM users ORDER BY id LIMIT 1) WHERE invitation_id=$INV;" OK
+probar "y un dueno sin fecha tampoco" \
+  "UPDATE invitation_questions SET seen_at=NULL WHERE invitation_id=$INV;" RECHAZO
+probar "borrar la invitacion que tiene preguntas" \
+  "DELETE FROM invitations WHERE id=$INV;" RECHAZO
 
 echo ""
 echo "--- La participacion no se borra teniendo invitaciones ---"
@@ -162,7 +185,8 @@ valor "ninguna viva: todas contestadas o anuladas" \
 valor "y las tres filas que si entraron siguen ahi" "SELECT COUNT(*) FROM invitations;" "3"
 
 # Se devuelve la semilla a como estaba: aceptada y con su importe.
-$CLIENTE $DB -e "DELETE FROM invitations;
+$CLIENTE $DB -e "DELETE FROM invitation_questions;
+  DELETE FROM invitations;
   UPDATE campaign_creators SET agreed_amount=900, status='accepted', accepted_at=NOW(3)
    WHERE id=$PART;" 2>/dev/null
 

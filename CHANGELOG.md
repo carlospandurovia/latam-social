@@ -2,6 +2,53 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 
+## [7.6b · Los tres cabos sueltos] — 2026-08-26
+
+Ninguna de las tres cosas era una funcionalidad nueva: eran huecos que dejaron
+`5.9` y `7.6` y que se notan en cuanto alguien usa el sistema de verdad. Que es
+exactamente lo que pasó a mitad de iteración.
+
+### Añadido
+- **`usuarios:crear` ya no teclea la contraseña** (`T-36`, `DEC-126`). Cierra
+  `BR-SEC-004` del todo. `must_change_password` era el parche: obligaba a
+  cambiarla *después*, dejando una ventana en la que **dos personas conocían la
+  credencial** — justo en las cuentas donde la base exige dos personas distintas
+  para el dinero. Ahora la contraseña no existe hasta que la escribe su dueño.
+- **`usuarios:contrasena --enlace`**, que además **no toca la contraseña actual**:
+  si el correo no llega, la persona no se queda peor de como estaba. Teclearla a
+  mano sigue existiendo como cristal de emergencia, y el comando lo avisa.
+- **El creador puede preguntar** antes de decidir (`T-38`, `DEC-124`). Sin esto una
+  duda se convierte en un rechazo, y ese rechazo entra en `decline_reason` como si
+  fuera una opinión sobre la oferta. Preguntar **no mueve el plazo**, y la pantalla
+  lo dice con todas las letras.
+- **Aviso por correo a quien invitó** cuando el creador acepta, rechaza o pregunta
+  (`DEC-125`).
+
+### Corregido — los tres los encontró el usuario probando
+- **Un 500 al repetir un formato en el brief de un mercado** (`T-40`).
+  `campaign_requirements` tiene **dos** índices únicos y el controlador sólo
+  traducía el primero. No fallaba en pruebas: la suite SQL comprobaba que la base
+  lo rechaza, pero nadie comprobaba que la **pantalla** lo explique.
+- **La bitácora entera caída por una fila con una lista dentro** (`T-41`). Una
+  marca guarda sus categorías como lista y la vista la pintaba a pelo. Bastaba
+  **una** fila así para no poder ver **ninguna** — y la bitácora es precisamente lo
+  que se mira cuando algo ha ido mal.
+- **`verificar-fixturas.py` no distinguía un fixture inválido a propósito**
+  (`T-42`). Una prueba que afirma «la base rechaza esto» necesita escribir una fila
+  mala.
+
+### Verificación
+504 pruebas / 1.723 aserciones · 1.196 (MariaDB) y 1.186 (MySQL 8) aserciones de
+restricción · 15 mutaciones, 15 detectadas tras tres correcciones · las seis
+puertas en verde.
+
+**Una mutación sigue viva y se dice por qué**: cambiar la contraseña aleatoria de
+una cuenta nueva por una constante no lo caza ninguna prueba, y no puede — una
+prueba de caja negra no distingue 32 bytes del generador criptográfico de una
+constante que no conoce.
+
+---
+
 ## [7.6 · La invitación a una campaña] — 2026-08-26
 
 `invitations` existía desde la Fase 2 y **no tenía una sola fila**. Tercera vez que

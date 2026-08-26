@@ -1,5 +1,7 @@
 # 09 — Estado del proyecto y siguiente iteración
 
+> **Versión 1.9 — 2026-08-26.** Actualizado al cerrar `7.6b`.
+>
 > **Versión 1.8 — 2026-08-26.** Actualizado al cerrar `7.6`.
 >
 > **Versión 1.7 — 2026-08-26.** Actualizado al cerrar `5.9` + `4.1`.
@@ -37,12 +39,12 @@
 
 | | |
 |---|---|
-| Tablas | 68 |
-| Migraciones | 49, verdes desde cero en MySQL 8 y con vuelta atrás completa |
-| Pruebas de PHPUnit | **471**, 1.607 aserciones |
-| Aserciones de restricción (SQL) | **1.182** en MariaDB, **1.172** en MySQL 8 |
+| Tablas | 69 |
+| Migraciones | 50, verdes desde cero en MySQL 8 y con vuelta atrás completa |
+| Pruebas de PHPUnit | **504**, 1.723 aserciones |
+| Aserciones de restricción (SQL) | **1.196** en MariaDB, **1.186** en MySQL 8 |
 | Puertas de calidad | 6: formato, análisis estático, fronteras, pruebas, vigencias, nombres entre capas |
-| Decisiones registradas | hasta `DEC-123` |
+| Decisiones registradas | hasta `DEC-126` |
 
 ### Lo que se puede hacer hoy por pantalla
 
@@ -85,7 +87,20 @@ contesta el plazo la cierra sola y devuelve el dinero al presupuesto. Rechazar n
 cierra la puerta: se puede volver a preguntar con otra oferta, y quedan las dos
 rondas.
 
+Y desde `7.6b`, los tres cabos sueltos que quedaban: **ninguna contraseña se
+dicta ya por teléfono** —tampoco la del equipo—, el creador **puede preguntar**
+antes de decidir, y a quien invitó **le llega un correo** cuando el creador
+contesta.
+
 Eso completa **7.0 a 7.6 del roadmap**, más `F4.9`, `5.9` y `4.1`.
+
+> **Y por primera vez el sistema se ha usado.** Tres fallos salieron de ahí en una
+> tarde: un 500 al repetir un formato en el brief de un mercado, la bitácora
+> entera caída por una fila con una lista dentro, y una herramienta que no sabía
+> distinguir un fixture inválido a propósito. Los tres están cerrados
+> (`T-40`, `T-41`, `T-42`). **Ninguno lo habría encontrado yo solo**, y los dos
+> primeros eran de pantalla: la regla existía y estaba probada; lo que faltaba era
+> que alguien la supiera contar.
 
 ---
 
@@ -128,29 +143,29 @@ Ninguna bloquea código hoy; todas bloquean una iteración futura concreta.
 
 ## 4. Lo que propongo como siguiente iteración
 
-Aquí hay una bifurcación de verdad, y la decisión es tuya.
+**`7.7` — el seguimiento de la campaña.** Ya no queda nada delante y es, según el
+propio roadmap, *«la pantalla más usada del sistema»*: quién va en qué estado, qué
+falta por entregar, qué está en revisión.
 
-**`7.7` — el brief operativo y las entregas.** Es lo siguiente del roadmap: el
-creador aceptó, ahora hay que decirle qué entregar y cuándo, y recibirlo. Es la
-continuación natural y no depende de nadie.
+Los tres cabos sueltos que recomendé antes de abrirla están cerrados.
 
-**Pero antes conviene mirar tres cosas pequeñas que ya estorban**, y que juntas
-son una iteración:
+### Pero hay algo que vale más que cualquier iteración nueva
 
-| # | Qué | Por qué ahora |
-|---|---|---|
-| `T-36` | `usuarios:crear` sigue tecleando la contraseña | cierra `BR-SEC-004` del todo; la pieza ya existe |
-| `T-38` | el creador no puede preguntar antes de contestar | una duda sin canal se convierte en un rechazo, y ese rechazo entra en las estadísticas como si fuera una opinión sobre la oferta |
-| — | nadie avisa al equipo cuando un creador contesta | hoy hay que mirar la pantalla; el hecho ya está en `domain_events` |
+**Seguir usando el sistema.** En una tarde de pruebas tuyas salieron tres fallos
+que ninguna de las seis puertas había visto, y los dos serios eran del mismo tipo:
+*la regla existía, estaba probada en la base, y la pantalla no la sabía contar*.
 
-Las tres son media hora cada una y las tres se notan en cuanto haya una campaña
-real. Yo iría por ahí antes de abrir `7.7`, pero no es una decisión técnica.
+Eso no lo encuentra una suite. Lo encuentra alguien pulsando botones.
+
+Si tuviera que elegir entre construir `7.7` y que dediques otra tarde a recorrer lo
+que hay —crear un cliente, una marca, una campaña, añadir mercados y requisitos,
+buscar creadores, invitar a uno y contestar desde el enlace—, elegiría lo segundo
+sin dudar.
 
 ### Lo que NO propongo, y por qué
 
 - **El portal del creador (`F6`).** Sigue bloqueado por `T-09`. Con `5.9` y `7.6`
-  el creador ya puede poner su contraseña y contestar invitaciones **sin portal**,
-  que era la mitad de lo que el portal iba a darle.
+  el creador ya pone su contraseña y contesta invitaciones **sin portal**.
 - **Facturación (`F9`).** Depende de `Q-40` y `Q-44`, o sea de tu contador.
 
 ---

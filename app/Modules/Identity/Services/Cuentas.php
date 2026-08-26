@@ -43,6 +43,10 @@ use Illuminate\Support\Str;
  * Identity sabe qué es una cuenta. `deptrac.yaml` dice `Creator: [..., Identity]`
  * y no al revés, así que la llamada va en esa dirección — y el día que un usuario
  * de cliente necesite lo mismo (`F8`), la pieza ya está escrita.
+ *
+ * Eso se cobró antes de lo previsto: en `T-36`, una iteración después, el alta de
+ * usuarios **internos** pasó a usar exactamente la misma pieza. La diferencia
+ * entre las dos entradas son tres argumentos.
  */
 final class Cuentas
 {
@@ -62,11 +66,61 @@ final class Cuentas
         string $idioma = 'es',
         ?int $solicitanteId = null,
     ): array {
+        return self::crear($email, $nombre, 'creator', 'creator', $idioma, $solicitanteId);
+    }
+
+    /**
+     * Crea la cuenta de alguien del equipo y le manda su enlace (`T-36`).
+     *
+     * ### Lo que esto cierra
+     *
+     * `BR-SEC-004` es 🔴 y dice *«nunca se transmite una contraseña en texto
+     * claro por ningún canal»*. Desde `5.9` se cumplía para los creadores y
+     * **no para los usuarios internos**: `usuarios:crear` pedía la contraseña
+     * por consola y alguien se la dictaba.
+     *
+     * Y son justo las cuentas donde más importa. La base **exige dos personas
+     * distintas** para lo que toca dinero —`ck_ctp_segregation` para aprobar un
+     * perfil fiscal, `ck_cpm_segregation` para verificar un medio de pago
+     * (`DEC-044`, `BR-FIN-005`)—, y esa garantía se apoya en que dos `user_id`
+     * distintos sean dos personas distintas. Si el administrador conoce la
+     * credencial de la segunda, la separación de funciones es una fila en una
+     * tabla y nada más.
+     *
+     * `must_change_password` era el parche: obligaba a cambiarla *después*, y
+     * dejaba una ventana —de minutos o de meses— en la que dos personas conocían
+     * la credencial. Ahora no hay ventana: la contraseña **nunca existe** hasta
+     * que la escribe su dueño.
+     *
+     * @return array{usuarioId: ?int, motivo: ?string}
+     */
+    public static function paraInterno(
+        string $email,
+        string $nombre,
+        string $rolCodigo,
+        ?int $solicitanteId = null,
+    ): array {
+        return self::crear($email, $nombre, 'internal', $rolCodigo, 'es', $solicitanteId);
+    }
+
+    /**
+     * La parte común: una cuenta sin contraseña utilizable, con su rol y su enlace.
+     *
+     * @return array{usuarioId: ?int, motivo: ?string}
+     */
+    private static function crear(
+        string $email,
+        string $nombre,
+        string $tipo,
+        string $rolCodigo,
+        string $idioma,
+        ?int $solicitanteId,
+    ): array {
         $email = mb_strtolower(trim($email));
 
         // La misma comprobacion que hace `uq_users_email_active`, pero con
         // palabras. Sin esto el INSERT revienta con un 1062 dentro de la
-        // transaccion de aprobacion y se lleva la aprobacion por delante.
+        // transaccion de quien llama y se la lleva por delante.
         $ocupado = DB::table('users')
             ->where('email', $email)
             ->where('status', '!=', 'deactivated')
@@ -75,13 +129,24 @@ final class Cuentas
         if ($ocupado !== null) {
             return [
                 'usuarioId' => null,
-                'motivo' => $ocupado->user_type === 'creator'
+                'motivo' => $ocupado->user_type === $tipo
                     ? 'ya_tenia_cuenta'
-                    : 'correo_de_usuario_interno',
+                    : ($ocupado->user_type === 'internal'
+                        ? 'correo_de_usuario_interno'
+                        : 'correo_de_creador'),
             ];
         }
 
-        $usuarioId = DB::transaction(function () use ($email, $nombre, $idioma): int {
+        $rolId = DB::table('roles')->where('code', $rolCodigo)->where('scope', $tipo)->value('id');
+
+        if ($rolId === null) {
+            // Se comprueba ANTES de crear nada. Una cuenta sin rol es una cuenta
+            // que entra y no puede hacer nada, y el sintoma --pantallas en 403--
+            // no apunta al alta.
+            return ['usuarioId' => null, 'motivo' => 'rol_desconocido'];
+        }
+
+        $usuarioId = DB::transaction(function () use ($email, $nombre, $tipo, $idioma, $rolId): int {
             $id = (int) DB::table('users')->insertGetId([
                 'uuid' => (string) Str::uuid(),
                 'name' => $nombre,
@@ -90,7 +155,7 @@ final class Cuentas
                 // dentro de un segundo. La cuenta es inaccesible hasta que su
                 // dueno use el enlace.
                 'password' => Hash::make(bin2hex(random_bytes(32))),
-                'user_type' => 'creator',
+                'user_type' => $tipo,
                 'status' => 'active',
                 'locale' => $idioma,
                 // Se queda puesto a proposito: si algun dia se repone una
@@ -101,15 +166,11 @@ final class Cuentas
                 'updated_at' => now(),
             ]);
 
-            $rolId = DB::table('roles')->where('code', 'creator')->where('scope', 'creator')->value('id');
-
-            if ($rolId !== null) {
-                DB::table('role_user')->insert([
-                    'user_id' => $id,
-                    'role_id' => $rolId,
-                    'assigned_at' => now(),
-                ]);
-            }
+            DB::table('role_user')->insert([
+                'user_id' => $id,
+                'role_id' => $rolId,
+                'assigned_at' => now(),
+            ]);
 
             return $id;
         });
@@ -119,8 +180,9 @@ final class Cuentas
             tipoEntidad: 'user',
             idEntidad: $usuarioId,
             cambios: [
-                'user_type' => ['antes' => null, 'despues' => 'creator'],
+                'user_type' => ['antes' => null, 'despues' => $tipo],
                 'email' => ['antes' => null, 'despues' => $email],
+                'rol' => ['antes' => null, 'despues' => $rolCodigo],
             ],
         );
 
@@ -141,9 +203,14 @@ final class Cuentas
             'ya_tenia_cuenta' => 'Ese correo ya tenia una cuenta de creador, asi que no se ha creado otra. '
                 .'Si es la misma persona, esta bien; si no, hay dos creadores compartiendo correo y hay que resolverlo.',
             'correo_de_usuario_interno' => 'Ese correo pertenece a un usuario INTERNO del sistema. '
-                .'No se le ha creado cuenta de creador: seria la misma credencial para dos papeles distintos. '
-                .'Pidele al creador otro correo.',
-            default => 'No se pudo crear la cuenta de acceso del creador.',
+                .'No se le ha creado cuenta: seria la misma credencial para dos papeles distintos. '
+                .'Pide otro correo.',
+            'correo_de_creador' => 'Ese correo pertenece a un CREADOR. No se le ha creado cuenta interna: '
+                .'seria la misma credencial para los dos lados del sistema, y la separacion de funciones '
+                .'del dinero (BR-FIN-005) se apoya en que cada cuenta sea una persona en un papel.',
+            'rol_desconocido' => 'Ese rol no existe. No se ha creado nada: una cuenta sin rol entra y no '
+                .'puede hacer nada, y el sintoma --pantallas en 403-- no apunta al alta.',
+            default => 'No se pudo crear la cuenta de acceso.',
         };
     }
 }
