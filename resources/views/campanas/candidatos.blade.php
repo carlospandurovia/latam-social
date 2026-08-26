@@ -36,6 +36,59 @@
       </ul>
     </div>
 
+    {{-- EL PRESUPUESTO. Va antes de la lista porque es el techo bajo el que se
+         trabaja: verlo después de comprometer es verlo tarde. --}}
+    @php
+      $libre = $compromiso['presupuesto'] - $compromiso['comprometido'];
+      $pasado = $libre < 0;
+    @endphp
+    <div class="rounded-xl border p-4 text-sm
+                {{ $pasado ? 'bg-rose-50 border-rose-200' : 'bg-white border-slate-200' }}">
+      <div class="flex flex-wrap items-baseline justify-between gap-3">
+        <div>
+          <span class="text-slate-500">Comprometido con creadores:</span>
+          <strong>{{ number_format($compromiso['comprometido'], 2) }}</strong>
+          <span class="text-slate-500">de</span>
+          <strong>{{ number_format($compromiso['presupuesto'], 2) }}</strong>
+          {{ $campana->currency_code }}
+        </div>
+        <div class="{{ $pasado ? 'text-rose-700 font-medium' : 'text-slate-500' }}">
+          @if ($pasado)
+            Se pasa en {{ number_format(abs($libre), 2) }}
+          @else
+            Queda {{ number_format($libre, 2) }}
+          @endif
+        </div>
+      </div>
+
+      @if ($compromiso['autorizado'])
+        <p class="mt-2 text-xs text-amber-800">
+          <strong>Sobrecosto autorizado por finanzas.</strong> Motivo: {{ $compromiso['motivo'] }}
+        </p>
+      @elseif ($pasado || $compromiso['presupuesto'] <= 0)
+        @can('campaign.approve')
+          <form method="POST" action="{{ route('campanas.sobrecosto', $campana->uuid) }}"
+                class="mt-3 flex flex-wrap items-end gap-2">
+            @csrf
+            <div class="grow">
+              <label for="budget_override_reason" class="block text-xs text-slate-600 mb-1">
+                Motivo de la autorización <span class="text-slate-400">(queda en la bitácora)</span>
+              </label>
+              <input id="budget_override_reason" name="budget_override_reason" maxlength="255"
+                     class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm">
+            </div>
+            <button class="rounded-lg bg-rose-600 px-3 py-2 text-sm font-medium text-white hover:bg-rose-700">
+              Autorizar sobrecosto
+            </button>
+          </form>
+        @else
+          <p class="mt-2 text-xs text-slate-600">
+            Pasarse del presupuesto lo tiene que autorizar finanzas (<code>BR-CAMPAIGN-005</code>).
+          </p>
+        @endcan
+      @endif
+    </div>
+
     {{-- LA LISTA CORTA primero: es el resultado del trabajo, no la búsqueda. --}}
     <div class="bg-white rounded-xl border border-slate-200 p-5">
       <h2 class="text-sm font-medium text-slate-700 mb-3">
@@ -51,6 +104,7 @@
               <th class="text-left font-medium pb-2">Creador</th>
               <th class="text-left font-medium pb-2">Mercado</th>
               <th class="text-left font-medium pb-2">Estado</th>
+              <th class="text-right font-medium pb-2">Monto acordado</th>
               <th></th>
             </tr>
           </thead>
@@ -64,6 +118,27 @@
                 <td class="py-2">{{ $p->mercado ?? '—' }}</td>
                 <td class="py-2">
                   <span class="rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-600">{{ $p->status }}</span>
+                </td>
+                <td class="py-2 text-right">
+                  {{-- Congelado en cuanto acepta: se enseña el número, sin
+                       formulario. Un campo editable que rechaza al guardar es
+                       peor que un número que se ve y no se toca. --}}
+                  @if ($p->accepted_at !== null)
+                    <span class="font-medium">{{ number_format((float) $p->agreed_amount, 2) }}</span>
+                    <span class="ml-1 rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-500">congelado</span>
+                  @elsecan('campaign.manage')
+                    <form method="POST"
+                          action="{{ route('campanas.candidatos.monto', [$campana->uuid, $p->id]) }}"
+                          class="flex items-center justify-end gap-1">
+                      @csrf
+                      <input name="agreed_amount" type="number" step="0.01" min="0"
+                             value="{{ (float) $p->agreed_amount }}"
+                             class="w-28 rounded-lg border border-slate-300 px-2 py-1 text-sm text-right">
+                      <button class="text-xs text-marca-600 hover:underline">Guardar</button>
+                    </form>
+                  @else
+                    {{ number_format((float) $p->agreed_amount, 2) }}
+                  @endcan
                 </td>
                 <td class="py-2 text-right">
                   @can('campaign.manage')

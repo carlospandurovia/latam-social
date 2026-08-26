@@ -379,8 +379,10 @@ final class CandidatosTest extends TestCase
 
         $this->assertNull(ListaCorta::vetoParaQuitar($fila));
 
+        // El importe va ANTES de invitar: desde 7.5 `tg_ccr_compromiso` impide
+        // invitar a alguien sin decirle cuanto se le paga (BR-CREATOR-008).
         DB::table('campaign_creators')->where('id', $fila->id)
-            ->update(['status' => 'invited', 'invited_at' => now()]);
+            ->update(['agreed_amount' => 500, 'status' => 'invited', 'invited_at' => now()]);
         $fila = DB::table('campaign_creators')->where('id', $fila->id)->first();
 
         $this->assertNotNull(ListaCorta::vetoParaQuitar($fila));

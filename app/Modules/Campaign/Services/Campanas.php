@@ -83,6 +83,7 @@ final class Campanas
             'status' => EstadosDeCampana::BORRADOR,
             'revenue_amount' => $datos['revenue_amount'] ?? 0,
             'is_gratis' => (bool) ($datos['is_gratis'] ?? false),
+            'creator_budget_amount' => $datos['creator_budget_amount'] ?? 0,
             'currency_code' => $datos['currency_code'],
             'included_revision_rounds' => $datos['included_revision_rounds'] ?? 2,
             'min_creator_age' => $datos['min_creator_age'] ?? 0,

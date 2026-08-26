@@ -77,7 +77,7 @@
         </div>
       </div>
 
-      <div class="grid gap-4 sm:grid-cols-3">
+      <div class="grid gap-4 sm:grid-cols-4">
         <div>
           <label for="objective" class="block text-sm font-medium text-slate-700 mb-1">Objetivo</label>
           <select id="objective" name="objective" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
@@ -109,6 +109,21 @@
           </label>
           @error('revenue_amount') <p class="mt-1 text-xs text-rose-600">{{ $message }}</p> @enderror
           @error('is_gratis') <p class="mt-1 text-xs text-rose-600">{{ $message }}</p> @enderror
+        </div>
+        <div>
+          <label for="creator_budget_amount" class="block text-sm font-medium text-slate-700 mb-1">
+            Presupuesto de creadores
+          </label>
+          <input id="creator_budget_amount" name="creator_budget_amount" type="number" step="0.01" min="0"
+                 value="{{ old('creator_budget_amount', $campana->creator_budget_amount ?? '0') }}"
+                 class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+          {{-- Se dice para que sirve, porque el nombre no lo dice: no es lo que
+               se cobra, es el techo de lo que se puede comprometer con
+               creadores, y de el sale el veto de `BR-CAMPAIGN-005`. --}}
+          <p class="mt-1 text-xs text-slate-500">
+            Techo de lo que se puede comprometer con creadores. <code>BR-CAMPAIGN-005</code>.
+          </p>
+          @error('creator_budget_amount') <p class="mt-1 text-xs text-rose-600">{{ $message }}</p> @enderror
         </div>
         <div>
           <label for="currency_code" class="block text-sm font-medium text-slate-700 mb-1">Moneda</label>

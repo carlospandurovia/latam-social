@@ -495,6 +495,18 @@ Route::middleware('auth')->group(function (): void {
         ->whereUuid('uuid')->whereNumber('participacion')
         ->name('campanas.candidatos.quitar');
 
+    // El compromiso economico (7.5). Poner el monto es gestionar; AUTORIZAR el
+    // sobrecosto es de finanzas, misma separacion que aprobar la campana.
+    Route::post('/campanas/{uuid}/candidatos/{participacion}/monto', [CandidatosController::class, 'comprometer'])
+        ->middleware('permiso:campaign.manage')
+        ->whereUuid('uuid')->whereNumber('participacion')
+        ->name('campanas.candidatos.monto');
+
+    Route::post('/campanas/{uuid}/sobrecosto', [CandidatosController::class, 'autorizarSobrecosto'])
+        ->middleware('permiso:campaign.approve')
+        ->whereUuid('uuid')
+        ->name('campanas.sobrecosto');
+
     Route::post('/campanas/{uuid}/estado', [CampanasController::class, 'transicionar'])
         ->middleware('permiso:campaign.view')
         ->whereUuid('uuid')

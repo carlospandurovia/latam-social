@@ -65,6 +65,10 @@ final class GuardarCampanaRequest extends FormRequest
             'currency_code' => ['required', 'string', 'size:3', 'exists:currencies,code'],
             'revenue_amount' => ['required', 'numeric', 'min:0'],
             'is_gratis' => ['required', 'boolean'],
+            // El techo de `BR-CAMPAIGN-005`. Sin `max`, porque un presupuesto
+            // grande no es un error: lo que la regla vigila es que el COSTO
+            // COMPROMETIDO no lo supere, no cuanto vale el techo.
+            'creator_budget_amount' => ['required', 'numeric', 'min:0'],
             'included_revision_rounds' => ['required', 'integer', 'between:0,10'],
             'min_creator_age' => ['required', 'integer', 'between:0,99'],
             // `date_format` y no `date`: `'2026-2-1'` es una fecha valida para
@@ -109,6 +113,7 @@ final class GuardarCampanaRequest extends FormRequest
             'currency_code' => 'moneda',
             'revenue_amount' => 'ingreso',
             'is_gratis' => 'campana gratuita',
+            'creator_budget_amount' => 'presupuesto de creadores',
             'included_revision_rounds' => 'rondas incluidas',
             'min_creator_age' => 'edad minima',
             'starts_on' => 'fecha de inicio',

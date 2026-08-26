@@ -23,6 +23,15 @@ CREATE TABLE campaigns (
   -- --«esta campana se regala» y «nadie le ha puesto precio»-- y de ahi sale el
   -- margen. `ck_camp_revenue_declarado` obliga a elegir una, fuera de borrador.
   is_gratis            TINYINT(1)    NOT NULL DEFAULT 0,
+  -- 7.5 / BR-CAMPAIGN-005: el OTRO lado del margen. La regla nombraba «el
+  -- presupuesto de creadores de la campana» y esta columna no existia: no es que
+  -- nadie comprobara la regla, es que el dato que nombra no estaba en el modelo.
+  creator_budget_amount DECIMAL(18,4) NOT NULL DEFAULT 0,
+  -- La autorizacion de finanzas para pasarse. «Que queda auditada», dice la
+  -- regla, asi que es un dato de la fila: quien, cuando y por que.
+  budget_override_by_user_id BIGINT UNSIGNED NULL,
+  budget_override_at   DATETIME(3)   NULL,
+  budget_override_reason VARCHAR(255) NULL,
   currency_code        CHAR(3)       NOT NULL,
   -- El negocio lo fijo: 2 rondas de correccion incluidas en el precio.
   included_revision_rounds TINYINT UNSIGNED NOT NULL DEFAULT 2,
@@ -46,12 +55,18 @@ CREATE TABLE campaigns (
   KEY ix_camp_currency (currency_code),
   KEY ix_camp_creator_user (created_by_user_id),
   KEY ix_camp_file (briefing_file_id),
+  KEY fk_camp_budget_override (budget_override_by_user_id),
   CONSTRAINT fk_camp_client FOREIGN KEY (client_organization_id) REFERENCES client_organizations(id) ON DELETE RESTRICT,
   CONSTRAINT fk_camp_brand FOREIGN KEY (client_brand_id) REFERENCES client_brands(id) ON DELETE RESTRICT,
   CONSTRAINT fk_camp_legal_entity FOREIGN KEY (billing_legal_entity_id) REFERENCES legal_entities(id) ON DELETE RESTRICT,
   CONSTRAINT fk_camp_currency FOREIGN KEY (currency_code) REFERENCES currencies(code) ON DELETE RESTRICT,
   CONSTRAINT fk_camp_user FOREIGN KEY (created_by_user_id) REFERENCES users(id) ON DELETE RESTRICT,
   CONSTRAINT fk_camp_file FOREIGN KEY (briefing_file_id) REFERENCES files(id) ON DELETE RESTRICT,
+  -- Va con las demas foraneas y NO entre los CHECK: `generar-triggers.py` quita
+  -- las clausulas CHECK para simular Percona 5.7, y una foranea intercalada
+  -- entre ellas se quedaba huerfana de coma. El sintoma fue un 1064 al cargar la
+  -- base sin-CHECK, no en la de desarrollo.
+  CONSTRAINT fk_camp_budget_override FOREIGN KEY (budget_override_by_user_id) REFERENCES users(id) ON DELETE RESTRICT,
   CONSTRAINT ck_camp_status CHECK (status IN ('draft','pending_approval','approved','recruiting','in_progress','in_review','completed','cancelled')),
   CONSTRAINT ck_camp_objective CHECK (objective IN ('awareness','consideration','conversion','ugc','launch','event')),
   CONSTRAINT ck_camp_dates CHECK (ends_on >= starts_on),
@@ -63,7 +78,12 @@ CREATE TABLE campaigns (
   -- Fuera de borrador el cero se declara: o hay importe, o alguien dijo que se
   -- regala. `ck_camp_revenue` (>= 0) se queda: esta es la otra mitad, no su
   -- sustituta.
-  CONSTRAINT ck_camp_revenue_declarado CHECK (status IN ('draft','pending_approval','cancelled') OR (is_gratis = 1 AND revenue_amount = 0) OR (is_gratis = 0 AND revenue_amount > 0))
+  CONSTRAINT ck_camp_revenue_declarado CHECK (status IN ('draft','pending_approval','cancelled') OR (is_gratis = 1 AND revenue_amount = 0) OR (is_gratis = 0 AND revenue_amount > 0)),
+  CONSTRAINT ck_camp_creator_budget CHECK (creator_budget_amount >= 0),
+  -- Las tres columnas de la autorizacion van juntas o no van. Una firma sin
+  -- explicacion no responde «por que esta campana se paso» dentro de un ano.
+  -- Misma forma que `ck_inv_responded`.
+  CONSTRAINT ck_camp_budget_override CHECK ((budget_override_at IS NULL AND budget_override_by_user_id IS NULL AND budget_override_reason IS NULL) OR (budget_override_at IS NOT NULL AND budget_override_by_user_id IS NOT NULL AND budget_override_reason IS NOT NULL))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Los mercados de la campana. Una campana LATAM tiene varios.
@@ -342,6 +362,41 @@ BEGIN
   THEN
     SIGNAL SQLSTATE '45000'
       SET MESSAGE_TEXT = 'La participacion de una campana cerrada solo se puede cancelar, no avanzar.';
+  END IF;
+END//
+
+-- ===========================================================================
+-- 7.5 / BR-CREATOR-008: el monto acordado se fija al invitar y se congela al
+-- aceptar.
+--
+-- La tarifa declarada por el creador es una REFERENCIA; el precio vinculante es
+-- este numero. De el sale lo que se le paga a una persona, asi que tiene que
+-- sobrevivir a un mantenimiento y a la proxima pantalla que alguien escriba.
+--
+-- Disparador y no CHECK por dos razones: el congelado compara OLD con NEW, que
+-- un CHECK no ve; y la segunda regla mira `campaigns.is_gratis`, porque una
+-- campana declarada gratuita (7.2) puede llevar creadores por canje y exigirles
+-- importe seria contradecir aquella decision.
+-- ===========================================================================
+
+CREATE TRIGGER `tg_ccr_compromiso`
+BEFORE UPDATE ON `campaign_creators`
+FOR EACH ROW
+BEGIN
+  IF OLD.`accepted_at` IS NOT NULL
+     AND NOT (NEW.`agreed_amount` <=> OLD.`agreed_amount`)
+  THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'El monto acordado de una participacion aceptada no se cambia (BR-CREATOR-008): exige una enmienda aceptada por las dos partes.';
+  END IF;
+
+  IF NEW.`status` NOT IN ('shortlisted', 'cancelled')
+     AND NEW.`agreed_amount` <= 0
+     AND NOT EXISTS (SELECT 1 FROM `campaigns`
+                      WHERE `id` = NEW.`campaign_id` AND `is_gratis` = 1)
+  THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'No se invita a un creador sin decirle cuanto se le paga (BR-CREATOR-008). Si la campana es un canje, marquela como gratuita.';
   END IF;
 END//
 

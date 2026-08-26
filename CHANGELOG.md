@@ -2,6 +2,48 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 
+## [7.5 · El compromiso económico con los creadores] — 2026-08-26
+
+`BR-CAMPAIGN-005` es 🔴 y nombra *«el presupuesto de creadores de la campaña»*.
+`campaigns` tenía `revenue_amount` —lo que se le cobra al cliente— y **nada
+más**. **Quinto caso del patrón, y el peor:** en `T-23`, 7.1, 7.2, 7.3 y 7.4
+faltaba el código de una regla que se podía comprobar; aquí faltaba **el dato que
+la regla nombra**.
+
+### Añadido
+- **`campaigns.creator_budget_amount`** y las tres columnas de la autorización
+  (`quién`, `cuándo`, `por qué`), con `ck_camp_budget_override`: las tres o
+  ninguna. Una firma sin explicación no responde «¿por qué esta campaña se pasó?»
+  dentro de un año.
+- **El veto de sobrecosto trae los tres números** — lo que quedaría comprometido,
+  el techo, y por cuánto se pasa. «Excede el presupuesto» obliga a ir a buscarlas.
+- **`tg_ccr_compromiso`** (`DEC-104`): no se invita a nadie sin decirle cuánto se
+  le paga, y al aceptar el monto queda congelado (`BR-CREATOR-008`). Salvo en una
+  campaña declarada gratuita, que es coherencia con 7.2 y no una excepción.
+- **`Compromiso::margen()`** — interno, nunca se enseña a un cliente ni a un
+  creador, y con el porcentaje guardado contra el ingreso cero de una campaña
+  gratuita.
+
+### Decidido
+- **`DEC-103`:** «2 reels» en el brief es lo que entrega **cada** creador. Confirma
+  lo que el coste estimado de 7.4 ya asumía.
+
+### Corregido
+- **El formulario de campaña estaba copiado en CUATRO clases de prueba** y la
+  columna nueva las rompió a las cuatro a la vez, con un `Attempt to read property
+  "id" on null` que no nombra el campo que falta. `H-16` por cuarta vez; ahora vive
+  en `ConFixturas::datosDeCampana()`.
+- **Un `1064` que sólo aparecía en la base sin `CHECK`.** La foránea nueva estaba
+  escrita entre dos `CHECK` y al quitarlos —para simular Percona 5.7— se quedaba
+  huérfana de coma: cargaba bien en desarrollo y reventaba en la base que imita a
+  producción.
+
+### Verificación
+358 pruebas / 1.201 aserciones · 1.028 (MariaDB) y 1.018 (MySQL 8) aserciones de
+restricción · siete mutaciones, las siete en rojo · las seis puertas en verde.
+
+---
+
 ## [7.4 · El buscador de creadores y la lista corta] — 2026-08-26
 
 Primera pantalla que **lee el modelo del creador entero**: cuatro iteraciones de

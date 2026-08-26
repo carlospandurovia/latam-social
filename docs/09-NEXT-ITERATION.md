@@ -1,5 +1,7 @@
 # 09 — Estado del proyecto y siguiente iteración
 
+> **Versión 1.4 — 2026-08-26.** Actualizado al cerrar 7.5.
+>
 > **Versión 1.3 — 2026-08-26.** Actualizado al cerrar 7.4.
 >
 > **Versión 1.2 — 2026-08-25.** Actualizado al cerrar 7.3.
@@ -28,11 +30,11 @@
 | | |
 |---|---|
 | Tablas | 65 |
-| Migraciones | 45, verdes desde cero en MySQL 8 |
-| Pruebas de PHPUnit | **339**, 1.145 aserciones |
-| Aserciones de restricción (SQL) | **980** en MariaDB, **970** en MySQL 8 |
+| Migraciones | 46, verdes desde cero en MySQL 8 |
+| Pruebas de PHPUnit | **358**, 1.201 aserciones |
+| Aserciones de restricción (SQL) | **1.028** en MariaDB, **1.018** en MySQL 8 |
 | Puertas de calidad | 6: formato, análisis estático, fronteras, pruebas, vigencias, nombres entre capas |
-| Decisiones registradas | hasta `DEC-102` |
+| Decisiones registradas | hasta `DEC-105` |
 
 ### Lo que se puede hacer hoy por pantalla
 
@@ -54,7 +56,10 @@ Y desde 7.4, buscar a quién invitar: el buscador aplica solo los mercados, los
 formatos del brief, la edad mínima y las categorías de la marca, y la lista corta
 veta a quien no cumple `BR-CREATOR-006`.
 
-Eso completa **7.0 a 7.4 del roadmap**.
+Y desde 7.5, el dinero: presupuesto de creadores, veto de sobrecosto con
+autorización auditada, y monto acordado congelado al aceptar.
+
+Eso completa **7.0 a 7.5 del roadmap**.
 
 ---
 
@@ -98,8 +103,8 @@ Ninguna bloquea código hoy; todas bloquean una iteración futura concreta.
 
 ## 4. Lo que propongo como siguiente iteración
 
-**Volver a la Fase 4 — colas, correo y el registro de integraciones — antes de
-seguir con 7.5 y 7.6.**
+**Volver a la Fase 4 — colas, correo y el registro de integraciones.** Ya no es
+una preferencia: 7.6 es lo siguiente y no se puede construir sin correo.
 
 Esto es un cambio de orden, y lo propongo a sabiendas:
 
@@ -115,10 +120,9 @@ Esto es un cambio de orden, y lo propongo a sabiendas:
   de contraseña al aprobar un creador (`5.9`), la recuperación de contraseña
   (`4.1`) y el aviso al creador cuando cambian sus datos fiscales (`T-10`).
 
-**Si prefieres seguir el orden del roadmap**, lo siguiente sería 7.5 —selección,
-cupos por formato y costo comprometido congelado—, que sí se puede hacer entera
-sin correo. Es una decisión tuya y las dos son defendibles: 7.5 avanza el valor
-visible; la Fase 4 quita un bloqueo que sólo va a crecer.
+7.5 era lo último de la Fase 7 que se podía hacer sin correo, y ya está cerrado.
+De 7.6 en adelante —invitaciones, seguimiento, logística— todo pasa por avisar a
+alguien. **Seguir el orden del roadmap ahora significa construir contra un hueco.**
 
 ### Lo que NO propongo, y por qué
 
@@ -150,4 +154,4 @@ Tres cosas, por orden de coste para el proyecto:
    impide usar de verdad todo lo construido en las fases 3 y 4.
 2. **Pregúntale a tu contador `Q-40` y `Q-44`.** Las dos tienen respuesta corta y
    las dos bloquean el dinero.
-3. **Dime si vuelvo a la Fase 4 o sigo con 7.5.** Es la única decisión de orden que tengo delante.
+3. **Confírmame que arranco la Fase 4** (correo, colas e integraciones). Es lo que desbloquea 7.6 y media docena de cosas más.

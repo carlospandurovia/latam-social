@@ -448,6 +448,38 @@ trait ConFixturas
     }
 
     /**
+     * El formulario de alta de campaña, con todo lo que hoy exige.
+     *
+     * **Estaba copiado en TRES clases de prueba**, cada una con su propio
+     * `datos()`. 7.5 anadio `creator_budget_amount` como obligatorio y las tres
+     * se rompieron a la vez, con un «Attempt to read property id on null» que no
+     * nombra el campo que falta — el sintoma clasico de `H-16`, y la cuarta vez
+     * en este proyecto.
+     *
+     * Ahora vive aqui. La proxima columna obligatoria rompe **un** sitio.
+     *
+     * @param array<string, mixed> $cambios
+     * @return array<string, mixed>
+     */
+    protected function datosDeCampana(int $clienteId, int $marcaId, array $cambios = []): array
+    {
+        return array_merge([
+            'name' => 'Lanzamiento verano',
+            'client_organization_id' => $clienteId,
+            'client_brand_id' => $marcaId,
+            'objective' => 'awareness',
+            'currency_code' => (string) DB::table('currencies')->value('code'),
+            'revenue_amount' => '15000.00',
+            'is_gratis' => '0',
+            'creator_budget_amount' => '5000.00',
+            'included_revision_rounds' => 2,
+            'min_creator_age' => 18,
+            'starts_on' => '2026-09-01',
+            'ends_on' => '2026-09-30',
+        ], $cambios);
+    }
+
+    /**
      * Un mercado para una campaña.
      *
      * Desde 7.3 una campaña necesita **al menos uno** para salir de borrador

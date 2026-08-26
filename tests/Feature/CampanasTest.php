@@ -294,21 +294,16 @@ final class CampanasTest extends TestCase
 
     // ------------------------------------------------------------------ apoyo
 
-    /** @param array<string, mixed> $cambios */
+    /**
+     * El formulario de alta. Delega en el apoyo: estaba copiado en CUATRO clases
+     * y `creator_budget_amount` (7.5) las rompio a todas a la vez.
+     *
+     * @param array<string, mixed> $cambios
+     * @return array<string, mixed>
+     */
     private function campana(array $cambios = []): array
     {
-        return array_merge([
-            'name' => 'Lanzamiento verano',
-            'client_organization_id' => $this->clienteId,
-            'client_brand_id' => $this->marcaId,
-            'objective' => 'awareness',
-            'currency_code' => (string) DB::table('currencies')->value('code'),
-            'revenue_amount' => '15000.00',
-            'included_revision_rounds' => 2,
-            'min_creator_age' => 18,
-            'starts_on' => '2026-09-01',
-            'ends_on' => '2026-09-30',
-        ], $cambios);
+        return $this->datosDeCampana($this->clienteId, $this->marcaId, $cambios);
     }
 
     /**

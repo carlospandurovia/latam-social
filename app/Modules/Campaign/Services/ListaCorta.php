@@ -57,6 +57,7 @@ final class ListaCorta
             ->orderBy('c.display_name')
             ->get([
                 'cc.id', 'cc.uuid', 'cc.creator_id', 'cc.status', 'cc.campaign_market_id',
+                'cc.agreed_amount', 'cc.accepted_at',
                 'c.display_name', 'c.uuid as creador_uuid', 'p.name as mercado',
             ]);
     }
