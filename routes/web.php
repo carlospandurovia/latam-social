@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Modules\Campaign\Http\Controllers\CampanasController;
 use App\Modules\Campaign\Http\Controllers\CandidatosController;
 use App\Modules\Campaign\Http\Controllers\InvitacionController;
+use App\Modules\Campaign\Http\Controllers\SeguimientoController;
 use App\Modules\Client\Http\Controllers\ClientesController;
 use App\Modules\Client\Http\Controllers\ContactosController;
 use App\Modules\Client\Http\Controllers\MarcasController;
@@ -537,6 +538,14 @@ Route::middleware('auth')->group(function (): void {
         ->middleware('permiso:campaign.view')
         ->whereUuid('uuid')->whereNumber('mercado')
         ->name('campanas.mercados.ver');
+
+    // 7.7: el panel de seguimiento. Es VER: contesta «como va», no cambia nada.
+    // La ficha (`campanas.show`) contesta «que es»; mezclarlas daria una pagina
+    // que hace las dos cosas a medias y en la que hay que buscar.
+    Route::get('/campanas/{uuid}/seguimiento', SeguimientoController::class)
+        ->middleware('permiso:campaign.view')
+        ->whereUuid('uuid')
+        ->name('campanas.seguimiento');
 
     // Los candidatos (7.4). Buscar es VER --un revisor puede mirar a quien se
     // esta considerando-- pero armar la lista corta es gestionar.

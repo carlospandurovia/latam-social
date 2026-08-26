@@ -2,6 +2,40 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 
+## [7.7 · El panel de seguimiento] — 2026-08-26
+
+*«La pantalla más usada del sistema»*, según el roadmap. Lo que decide una pantalla
+así no es qué se puede enseñar: es **qué pregunta contesta**.
+
+### Añadido
+- **Las alertas, arriba del todo** (`DEC-127`): campaña sin confirmar con el
+  arranque cerca, preguntas sin atender, invitaciones que caducan, cupo sin
+  cubrir. El orden **no es por gravedad**: la de «sin confirmar» va primera porque
+  bloquea a las demás. Cada una dice qué pasa **y qué hacer**.
+- **El embudo por estado**, con todos los pasos aunque estén a cero — uno que
+  esconde los ceros enseña dónde llegó la gente, no dónde se atasca.
+- **El cupo por mercado**, donde **cubierto es aceptado, no invitado**. Una
+  invitación sin contestar es una plaza esperando; contarla como cubierta es cómo
+  se llega al día de arranque con la mitad del equipo y los números en verde.
+- **El dinero**, con el margen detrás de `campaign.view_margin` y **sin
+  calcularse** cuando no toca (`DEC-128`). El disponible se enseña negativo cuando
+  lo es.
+
+### Cambiado
+- El listado de campañas enlaza al **seguimiento** cuando la campaña está
+  confirmada, y a la ficha cuando todavía se está montando.
+
+### Verificación
+530 pruebas / 1.806 aserciones · 14 mutaciones, **14 detectadas a la primera** ·
+las seis puertas en verde. El esquema no se toca.
+
+Lo que sí falló fue **el fixture**: `ConFixturas::mercadoDe()` declara cupo 5 por
+omisión, así que la campaña nacía con una alerta y todas las afirmaciones de «sale
+UNA alerta» habrían salido verdes con dos. Lo caza una aserción de premisa en el
+`setUp`.
+
+---
+
 ## [7.6b · Los tres cabos sueltos] — 2026-08-26
 
 Ninguna de las tres cosas era una funcionalidad nueva: eran huecos que dejaron

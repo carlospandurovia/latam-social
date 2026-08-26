@@ -63,6 +63,11 @@ final class CampanasController
             'campanas' => $consulta->get([
                 'c.uuid', 'c.code', 'c.name', 'c.status', 'c.starts_on', 'c.ends_on',
                 'c.revenue_amount', 'c.currency_code',
+                // 7.7: el listado enlaza al SEGUIMIENTO cuando la campana ya
+                // esta confirmada, y a la ficha cuando todavia se esta montando.
+                // Es la diferencia entre «como va» y «que es», y quien entra
+                // busca una cosa u otra segun el momento.
+                'c.confirmed_at',
                 'co.commercial_name as cliente', 'cb.name as marca', 'le.code as sociedad',
             ]),
             'estados' => EstadosDeCampana::NOMBRES,

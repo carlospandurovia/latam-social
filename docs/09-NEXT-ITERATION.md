@@ -1,5 +1,7 @@
 # 09 — Estado del proyecto y siguiente iteración
 
+> **Versión 2.0 — 2026-08-26.** Actualizado al cerrar `7.7`.
+>
 > **Versión 1.9 — 2026-08-26.** Actualizado al cerrar `7.6b`.
 >
 > **Versión 1.8 — 2026-08-26.** Actualizado al cerrar `7.6`.
@@ -41,10 +43,10 @@
 |---|---|
 | Tablas | 69 |
 | Migraciones | 50, verdes desde cero en MySQL 8 y con vuelta atrás completa |
-| Pruebas de PHPUnit | **504**, 1.723 aserciones |
+| Pruebas de PHPUnit | **530**, 1.806 aserciones |
 | Aserciones de restricción (SQL) | **1.196** en MariaDB, **1.186** en MySQL 8 |
 | Puertas de calidad | 6: formato, análisis estático, fronteras, pruebas, vigencias, nombres entre capas |
-| Decisiones registradas | hasta `DEC-126` |
+| Decisiones registradas | hasta `DEC-128` |
 
 ### Lo que se puede hacer hoy por pantalla
 
@@ -92,7 +94,11 @@ dicta ya por teléfono** —tampoco la del equipo—, el creador **puede pregunt
 antes de decidir, y a quien invitó **le llega un correo** cuando el creador
 contesta.
 
-Eso completa **7.0 a 7.6 del roadmap**, más `F4.9`, `5.9` y `4.1`.
+Y desde `7.7`, **el panel de seguimiento**: qué hay que atender hoy, por dónde va
+cada creador, qué mercado va corto y cuánto queda de presupuesto. Es la pantalla
+que el roadmap llama «la más usada del sistema».
+
+Eso completa **7.0 a 7.7 del roadmap**, más `F4.9`, `5.9` y `4.1`.
 
 > **Y por primera vez el sistema se ha usado.** Tres fallos salieron de ahí en una
 > tarde: un 500 al repetir un formato en el brief de un mercado, la bitácora
@@ -143,30 +149,28 @@ Ninguna bloquea código hoy; todas bloquean una iteración futura concreta.
 
 ## 4. Lo que propongo como siguiente iteración
 
-**`7.7` — el seguimiento de la campaña.** Ya no queda nada delante y es, según el
-propio roadmap, *«la pantalla más usada del sistema»*: quién va en qué estado, qué
-falta por entregar, qué está en revisión.
+Aquí la Fase 7 se parte en dos, y conviene elegir a sabiendas.
 
-Los tres cabos sueltos que recomendé antes de abrirla están cerrados.
+**Lo que queda de F7 son cosas laterales.** `7.8` es logística de producto (envíos
+y tracking), `7.9` campañas UGC, `7.10` reemplazos, `7.11` conflictos de marca,
+`7.12` calendario. Ninguna bloquea a las demás y ninguna es el camino crítico.
 
-### Pero hay algo que vale más que cualquier iteración nueva
+**El camino crítico es la Fase 8: los entregables.** Hoy un creador acepta una
+campaña y ahí se acaba el sistema — `in_production`, `delivered`, `published` están
+en el embudo y **siempre valen cero**, porque nada los escribe. Sin `F8` no hay
+nada que revisar, nada que publicar y nada que facturar.
 
-**Seguir usando el sistema.** En una tarde de pruebas tuyas salieron tres fallos
-que ninguna de las seis puertas había visto, y los dos serios eran del mismo tipo:
-*la regla existía, estaba probada en la base, y la pantalla no la sabía contar*.
+Yo iría a **`8.1` — entregables**: qué entrega el creador, cómo lo sube, y cómo
+pasa la participación de `accepted` a `delivered`. Es lo que hace que el embudo
+deje de terminar en su tercer paso.
 
-Eso no lo encuentra una suite. Lo encuentra alguien pulsando botones.
+### Lo que sigue sin poder hacerse, y no es código
 
-Si tuviera que elegir entre construir `7.7` y que dediques otra tarde a recorrer lo
-que hay —crear un cliente, una marca, una campaña, añadir mercados y requisitos,
-buscar creadores, invitar a uno y contestar desde el enlace—, elegiría lo segundo
-sin dudar.
+`T-09` —el texto de los términos— lleva **cinco días** bloqueando toda activación
+de creadores. Todo lo construido en las fases 3, 5 y 7 funciona y está probado, y
+**no se puede usar con una persona real** hasta que exista ese texto.
 
-### Lo que NO propongo, y por qué
-
-- **El portal del creador (`F6`).** Sigue bloqueado por `T-09`. Con `5.9` y `7.6`
-  el creador ya pone su contraseña y contesta invitaciones **sin portal**.
-- **Facturación (`F9`).** Depende de `Q-40` y `Q-44`, o sea de tu contador.
+Es, con diferencia, lo más caro que hay abierto.
 
 ---
 
