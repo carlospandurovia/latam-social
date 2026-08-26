@@ -1,5 +1,7 @@
 # 09 — Estado del proyecto y siguiente iteración
 
+> **Versión 1.5 — 2026-08-26.** Actualizado al cerrar `F4.9` (el correo).
+>
 > **Versión 1.4 — 2026-08-26.** Actualizado al cerrar 7.5.
 >
 > **Versión 1.3 — 2026-08-26.** Actualizado al cerrar 7.4.
@@ -29,12 +31,12 @@
 
 | | |
 |---|---|
-| Tablas | 65 |
-| Migraciones | 46, verdes desde cero en MySQL 8 |
-| Pruebas de PHPUnit | **358**, 1.201 aserciones |
-| Aserciones de restricción (SQL) | **1.028** en MariaDB, **1.018** en MySQL 8 |
+| Tablas | 67 |
+| Migraciones | 47, verdes desde cero en MySQL 8 |
+| Pruebas de PHPUnit | **380**, 1.265 aserciones |
+| Aserciones de restricción (SQL) | **1.070** en MariaDB, **1.060** en MySQL 8 |
 | Puertas de calidad | 6: formato, análisis estático, fronteras, pruebas, vigencias, nombres entre capas |
-| Decisiones registradas | hasta `DEC-105` |
+| Decisiones registradas | hasta `DEC-108` |
 
 ### Lo que se puede hacer hoy por pantalla
 
@@ -59,7 +61,10 @@ veta a quien no cumple `BR-CREATOR-006`.
 Y desde 7.5, el dinero: presupuesto de creadores, veto de sobrecosto con
 autorización auditada, y monto acordado congelado al aceptar.
 
-Eso completa **7.0 a 7.5 del roadmap**.
+Y desde `F4.9`, el correo: plantillas versionadas, registro de envíos auditable
+y reintentos. Es lo que desbloquea 7.6, 5.9, 4.1 y `T-10`.
+
+Eso completa **7.0 a 7.5 del roadmap**, más `F4.9` adelantada.
 
 ---
 
@@ -103,26 +108,23 @@ Ninguna bloquea código hoy; todas bloquean una iteración futura concreta.
 
 ## 4. Lo que propongo como siguiente iteración
 
-**Volver a la Fase 4 — colas, correo y el registro de integraciones.** Ya no es
-una preferencia: 7.6 es lo siguiente y no se puede construir sin correo.
+**Enganchar el correo a lo que ya estaba esperándolo**, antes de seguir con 7.6.
 
-Esto es un cambio de orden, y lo propongo a sabiendas:
+`F4.9` dejó el aparato construido y probado, pero **no lo usa nadie todavía**.
+Hay cuatro consumidores esperando y tres son de una tarde:
 
-- **7.6 (invitaciones) no se puede construir sin correo.** «Enviar, expirar,
-  aceptar, rechazar» empieza por enviar, y `F4.9` —plantillas en base de datos,
-  registro de envíos, reintentos— no existe. Construir 7.5 y llegar a 7.6 con
-  ese hueco delante es descubrirlo dos iteraciones más tarde.
-- **`F4.8` (colas) bloquea lo mismo** y además las exportaciones de 10.7.
-- **`F4.6b` (integraciones) está bloqueado por `2.7`**, que no tiene ni documento
-  ni tablas. Es prerrequisito de la **F12 entera** y de la facturación
-  electrónica. Cuanto más tarde se mire, más caro.
-- Y hay tres cosas más que dependen de correo y hoy se hacen a mano: el enlace
-  de contraseña al aprobar un creador (`5.9`), la recuperación de contraseña
-  (`4.1`) y el aviso al creador cuando cambian sus datos fiscales (`T-10`).
+| Qué | Regla | Qué pasa hoy |
+|---|---|---|
+| `T-10` — aviso al creador cuando cambian sus datos fiscales | `BR-CREATOR-007` 🔴 | la pantalla se lo recuerda al operador para que lo haga a mano |
+| `5.9` — enlace de contraseña al aprobar un creador | — | por comando, y se la dicta por teléfono |
+| `4.1` — recuperación de contraseña | — | no existe |
+| `7.6` — invitaciones | `BR-CAMPAIGN-006` | bloqueada |
 
-7.5 era lo último de la Fase 7 que se podía hacer sin correo, y ya está cerrado.
-De 7.6 en adelante —invitaciones, seguimiento, logística— todo pasa por avisar a
-alguien. **Seguir el orden del roadmap ahora significa construir contra un hueco.**
+Los tres primeros cierran huecos que ya están abiertos y validan el aparato
+contra usos reales antes de apoyar 7.6 encima. `T-10` además cierra media
+`BR-CREATOR-007`, que es 🔴 y lleva desde la Fase 3 sin nadie que la cumpla.
+
+Después de eso, **7.6** ya se puede construir entera.
 
 ### Lo que NO propongo, y por qué
 
@@ -154,4 +156,4 @@ Tres cosas, por orden de coste para el proyecto:
    impide usar de verdad todo lo construido en las fases 3 y 4.
 2. **Pregúntale a tu contador `Q-40` y `Q-44`.** Las dos tienen respuesta corta y
    las dos bloquean el dinero.
-3. **Confírmame que arranco la Fase 4** (correo, colas e integraciones). Es lo que desbloquea 7.6 y media docena de cosas más.
+3. **Nada urgente esta vez.** El correo ya no bloquea. Sigue faltando la cuenta de SMTP (`Q-20`) para que los avisos salgan de verdad: hasta entonces se escriben en el log y el flujo se puede probar entero.

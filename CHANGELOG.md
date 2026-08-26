@@ -2,6 +2,52 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 
+## [4.9 · El correo] — 2026-08-26
+
+**Se adelanta a propósito, rompiendo el orden del roadmap.** 7.6 no se podía
+construir: «invitaciones: envío, expiración, aceptación» empieza por enviar. Y no
+bloqueaba sólo eso — también el enlace de contraseña al aprobar un creador
+(`5.9`), la recuperación de contraseña (`4.1`) y el aviso de cambio de datos
+fiscales (`T-10`, con `BR-CREATOR-007` en 🔴).
+
+### Añadido
+- **`email_templates`** — versionadas y con vigencia, igual que `terms_versions`.
+  Una versión publicada **no se edita**: se publica la siguiente y la anterior se
+  cierra el día antes, con `Periodo::sinSolape` imponiéndolo en la base.
+- **`email_log`** — guarda plantilla, versión, idioma, asunto y **la huella** del
+  cuerpo. El cuerpo no (`DEC-106`): lleva los datos de la persona, y la versión
+  inmutable más la huella ya demuestran qué texto salió.
+- **Caída de idioma anotada** (`DEC-107`). De la diferencia entre el idioma
+  pedido y el enviado sale la lista de traducciones que faltan, y sale en la
+  pantalla como lo único que pide una acción.
+- **Tres reintentos y `failed` visible** (`DEC-108`), con `ck_el_failed`
+  exigiendo en la base que un fallido diga **cuándo y por qué**.
+- **`correos:publicar`** y **`correos:probar`**, permiso `comms.view`, y dos
+  pantallas de sólo lectura. La de envíos abre filtrada por fallidos.
+- **`config/mail.php`** con `MAIL_MAILER=log` por defecto: sin credenciales, un
+  `smtp` por defecto llenaría el registro de fallos que no son culpa de nadie.
+
+### Corregido antes de que llegara a producción
+- **`Plantillas::vigente()` resolvía por la columna puerta**, que identifica «la
+  última publicada» y no «la vigente». Publicar una versión para dentro de un mes
+  cerraba la anterior y dejaba **un mes sin ninguna vigente** — por haber
+  programado el cambio con antelación. Lo destapó una prueba; ahora se resuelve
+  por periodo (`T-21` otra vez).
+- **La opción `--version` del comando chocaba con la de Symfony Console.** No era
+  un aviso de estilo: el comando no se podía registrar. Lo cazó PHPStan antes de
+  que nadie lo ejecutara. Ahora es `--etiqueta`.
+
+### Verificación
+380 pruebas / 1.265 aserciones · 1.070 (MariaDB) y 1.060 (MySQL 8) aserciones de
+restricción · ocho mutaciones, las ocho en rojo · las seis puertas en verde.
+
+**Una mutación sobrevivió** a la primera versión de las pruebas: cambiar el
+`throw` del job por un `return` dejaba el correo en `queued` para siempre — peor
+que `failed`, porque uno se ve en la pantalla y el otro parece que sigue en
+camino.
+
+---
+
 ## [7.5 · El compromiso económico con los creadores] — 2026-08-26
 
 `BR-CAMPAIGN-005` es 🔴 y nombra *«el presupuesto de creadores de la campaña»*.

@@ -8,6 +8,7 @@ use App\Modules\Client\Http\Controllers\ClientesController;
 use App\Modules\Client\Http\Controllers\ContactosController;
 use App\Modules\Client\Http\Controllers\MarcasController;
 use App\Modules\Client\Http\Controllers\PerfilesFiscalesController;
+use App\Modules\Communication\Http\Controllers\CorreosController;
 use App\Modules\Core\Http\Controllers\BitacoraController;
 use App\Modules\Core\Http\Controllers\CatalogosController;
 use App\Modules\Core\Http\Controllers\EntidadesLegalesController;
@@ -506,6 +507,17 @@ Route::middleware('auth')->group(function (): void {
         ->middleware('permiso:campaign.approve')
         ->whereUuid('uuid')
         ->name('campanas.sobrecosto');
+
+    // El correo (4.9). Solo lectura: publicar plantillas es por comando, porque
+    // el texto de un aviso que le llega a 150 personas se revisa y se versiona
+    // en el repositorio como cualquier otro texto legal.
+    Route::get('/correos', [CorreosController::class, 'index'])
+        ->middleware('permiso:comms.view')
+        ->name('correos.index');
+
+    Route::get('/correos/plantillas', [CorreosController::class, 'plantillas'])
+        ->middleware('permiso:comms.view')
+        ->name('correos.plantillas');
 
     Route::post('/campanas/{uuid}/estado', [CampanasController::class, 'transicionar'])
         ->middleware('permiso:campaign.view')

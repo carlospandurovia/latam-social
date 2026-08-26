@@ -196,6 +196,12 @@ final class CimientosSeeder extends Seeder
             // a campanas y a finanzas sin abrir tambien los datos fiscales ni
             // la cuenta bancaria, que estan detras de `creator.view_sensitive`.
             ['creator.rate.manage',    'Creator',  'Fijar tarifas, disponibilidad y bloqueos de agenda del creador'],
+            // 4.9: ver el registro de correos NO es ver el correo. Solo se
+            // guarda plantilla, version, asunto y la huella del cuerpo --el
+            // texto con los datos de la persona no esta ahi-- pero saber a
+            // quien se le escribio y cuando sigue siendo informacion, y el
+            // permiso lo acota.
+            ['comms.view',             'Communication', 'Ver el registro de correos enviados y las plantillas'],
             ['client.view',            'Client',   'Ver clientes y marcas'],
             ['client.manage',          'Client',   'Crear y editar clientes'],
             // 4.4: la identidad fiscal del cliente va en permiso propio, no en
@@ -277,6 +283,10 @@ final class CimientosSeeder extends Seeder
                 'client.view', 'client.manage', 'content.review', 'catalog.view',
                 // 4.4: quien habla con el cliente es quien tiene su RUC.
                 'client.tax.manage',
+                // 4.9: quien invita a un creador necesita poder comprobar que la
+                // invitacion salio. Un «no me llego» sin registro es la palabra
+                // de uno contra la del otro.
+                'comms.view',
             ],
             'finance' => [
                 'finance.view', 'finance.payout.create', 'finance.payout.approve',
@@ -297,6 +307,7 @@ final class CimientosSeeder extends Seeder
                 // 4.4: finanzas emite la factura, asi que tiene que poder
                 // corregir la identidad fiscal con la que se emite.
                 'client.tax.manage',
+                'comms.view',
             ],
             'content_reviewer' => [
                 'content.review', 'campaign.view', 'creator.view', 'catalog.view',

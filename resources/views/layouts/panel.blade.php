@@ -36,6 +36,11 @@
           // 4.5: la pantalla a la que BR-LE-004 lleva mandando desde 4.1.
           // `legal_entity.manage` es solo de admin, asi que el resto no la ve.
           ['Entidades legales', 'entidades.index', 'entidades', 'legal_entity.manage'],
+          // 4.9: junto a la bitacora porque responde a la misma clase de
+          // pregunta --que paso y cuando-- y porque el modo de fallo que importa
+          // («al creador no le llego su enlace») lo descubre operaciones, no un
+          // desarrollador leyendo storage/logs.
+          ['Correos', 'correos.index', 'correos', 'comms.view'],
           ['Bitácora', 'bitacora', 'bitacora', 'audit.view'],
         ];
         $catalogos = [

@@ -109,7 +109,7 @@ Iterativa y exhaustiva, tal como pide la especificación. **Nada de frontend aqu
 | 4.6b | **Registro de integraciones + resolver + bóveda de credenciales**: proveedores, conexiones, asignaciones con vigencia, validación de empates al guardar, aislamiento de ambiente, `test connection`, panel mínimo (listar, crear, editar, asignar, probar) | Nuevo (addendum). Adaptadores de arranque: SMTP, storage, tipo de cambio |
 | 4.7 | File Manager sobre S3 + validación por contenido + URLs firmadas | |
 | 4.8 | Colas, scheduler, workers, Horizon | |
-| 4.9 | Email: plantillas en BD con idioma/versión/variables + Email Log + reintentos | |
+| 4.9 | ✅ **Cerrada (2026-08-26), adelantada.** Plantillas versionadas con vigencia (una publicada no se edita), registro de envíos que guarda la **huella** del cuerpo y no el cuerpo (`DEC-106`), caída de idioma anotada (`DEC-107`) y tres reintentos con `failed` visible (`DEC-108`). Desbloquea 7.6, 5.9, 4.1 y `T-10` |
 | 4.10 | Notification Center in-app + preferencias | |
 | 4.11 | Manejo de errores, logging estructurado, páginas de error, health check | |
 | 4.12 | Layout de admin, navegación, búsqueda básica, tabla estándar con filtros/orden/paginación | Reutilizable en todos los módulos |

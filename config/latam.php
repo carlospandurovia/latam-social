@@ -27,6 +27,18 @@ return [
     ],
 
     /*
+     * Correo (iteración 4.9).
+     *
+     * `idioma_por_defecto` es al que se cae cuando no existe la plantilla en el
+     * idioma del destinatario. La caída se ANOTA en `email_log.locale_requested`,
+     * así que la lista de traducciones que faltan es una consulta y no una
+     * revisión a mano.
+     */
+    'correo' => [
+        'idioma_por_defecto' => env('CORREO_IDIOMA_POR_DEFECTO', 'es'),
+    ],
+
+    /*
      * Archivos subidos (iteración 3.5).
      *
      * Documentos de identidad y evidencias legales. El disco por defecto es el

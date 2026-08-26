@@ -12,4 +12,5 @@ return [
     App\Modules\Core\Providers\CoreServiceProvider::class,
     App\Modules\Identity\Providers\IdentityServiceProvider::class,
     App\Modules\Creator\Providers\CreatorServiceProvider::class,
+    App\Modules\Communication\Providers\CommunicationServiceProvider::class,
 ];
