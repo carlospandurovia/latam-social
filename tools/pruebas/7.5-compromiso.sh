@@ -139,8 +139,11 @@ probar "bajarselo tampoco" \
   "UPDATE campaign_creators SET agreed_amount=100.00 WHERE campaign_id=$CP AND creator_id=$CR1;" RECHAZO
 valor "y sigue siendo el acordado" \
   "SELECT agreed_amount=400.0000 FROM campaign_creators WHERE campaign_id=$CP AND creator_id=$CR1;" "1"
+# Era `revision_rounds_used`, que en 8.3 se fue de esta tabla --las rondas son
+# por ENTREGABLE, no por creador--. Sirve igual cualquier columna que no sea el
+# monto: lo que se afirma es que el congelado es del importe y no de la fila.
 probar "lo demas de una participacion aceptada si se toca" \
-  "UPDATE campaign_creators SET revision_rounds_used=1 WHERE campaign_id=$CP AND creator_id=$CR1;" OK
+  "UPDATE campaign_creators SET completed_at=NOW(3) WHERE campaign_id=$CP AND creator_id=$CR1;" OK
 
 $CLIENTE $DB -e "DELETE FROM campaign_creators WHERE campaign_id IN
    (SELECT id FROM (SELECT id FROM campaigns WHERE code LIKE 'C75-%') t);

@@ -74,12 +74,25 @@
               @php $cambios = $e->changes ? json_decode($e->changes, true) : null; @endphp
               @if (is_array($cambios))
                 <ul class="space-y-0.5">
+                  {{-- `Bitacora::legible()` y no `{{ $v['antes'] }}` a pelo.
+
+                       Los valores NO son siempre escalares: una marca guarda sus
+                       categorías como lista, y pintar un array reventaba con un
+                       500 que se llevaba por delante la página entera. Bastaba
+                       una fila así para no poder ver ninguna. --}}
                   @foreach ($cambios as $campo => $v)
                     <li class="text-xs">
                       <span class="text-slate-500">{{ $campo }}:</span>
-                      <span class="line-through text-slate-400">{{ $v['antes'] ?? '—' }}</span>
-                      <span class="text-slate-400">→</span>
-                      <span class="text-slate-800 font-medium">{{ $v['despues'] ?? '—' }}</span>
+                      @if (is_array($v) && (array_key_exists('antes', $v) || array_key_exists('despues', $v)))
+                        <span class="line-through text-slate-400">{{ \App\Shared\Audit\Bitacora::legible($v['antes'] ?? null) }}</span>
+                        <span class="text-slate-400">→</span>
+                        <span class="text-slate-800 font-medium">{{ \App\Shared\Audit\Bitacora::legible($v['despues'] ?? null) }}</span>
+                      @else
+                        {{-- Una entrada que no tiene la forma antes/despues. No
+                             debería haberlas, y si aparece una se enseña tal cual
+                             en vez de perder la página. --}}
+                        <span class="text-slate-800 font-medium">{{ \App\Shared\Audit\Bitacora::legible($v) }}</span>
+                      @endif
                     </li>
                   @endforeach
                 </ul>

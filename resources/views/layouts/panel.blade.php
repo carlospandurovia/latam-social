@@ -33,6 +33,13 @@
           // 7.1: va detras de Clientes porque una campana se hace PARA un
           // cliente y su marca; sin cliente dado de alta no hay nada que ver aqui.
           ['Campañas', 'campanas.index', 'campanas', 'campaign.view'],
+          // 8.3: detrás de Campañas porque es lo que llega DE ellas, y con
+          // entrada propia porque es la pantalla de un turno de trabajo: se
+          // abre para vaciarla, no para consultar algo.
+          ['Revisión', 'revision.cola', 'revision', 'content.review'],
+          // 8.7: detrás de Revisión porque es el paso siguiente del mismo
+          // trabajo, y con entrada propia porque también se abre para vaciarla.
+          ['Verificación', 'verificacion.cola', 'verificacion', 'content.deliverable.view'],
           // 4.5: la pantalla a la que BR-LE-004 lleva mandando desde 4.1.
           // `legal_entity.manage` es solo de admin, asi que el resto no la ve.
           ['Entidades legales', 'entidades.index', 'entidades', 'legal_entity.manage'],

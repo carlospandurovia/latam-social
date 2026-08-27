@@ -196,9 +196,20 @@ trait ConFixturas
             'updated_at' => now(),
         ]);
 
+        // `eligible_from` NO se pasa: lo pone `medioDePago()` a partir del mismo
+        // instante que `verified_at`.
+        //
+        // Pasarlo aqui era un FALLO INTERMITENTE. `ck_cpm_eligible_after` exige
+        // `eligible_from >= verified_at` --un enfriamiento negativo no
+        // significa nada-- y los dos salian de dos llamadas distintas a
+        // `now()->subDay()`, separadas por la creacion de un usuario. Cuando
+        // esas dos llamadas caian a los dos lados de un segundo, la elegibilidad
+        // quedaba un segundo ANTES de la verificacion y la base lo rechazaba.
+        //
+        // Fallaba una vez de muchas y siempre en una prueba distinta, que es la
+        // peor forma de fallar: parece un problema de la prueba que toco.
         $this->medioDePago($creadorId, '19100000000'.$creadorId, [
             'status' => 'verified',
-            'eligible_from' => now()->subDay(),
             'is_default' => 1,
         ]);
 
@@ -306,6 +317,7 @@ trait ConFixturas
      * | `ck_cpm_default_usable` | un predeterminado tiene que estar `verified` |
      * | `ck_cpm_verified` | y verificado exige verificador **y** fecha |
      * | `ck_cpm_closed` | retirarlo exige decir **quién y cuándo** |
+     * | `ck_cpm_eligible` / `_after` | verificado exige `eligible_from`, y no antes de la verificación |
      *
      * Se escribe directo y no por el controlador **a propósito**: quien lo usa
      * suele necesitar un estado que la aplicación no produce —una huella
@@ -320,6 +332,12 @@ trait ConFixturas
         $cerrado = in_array($estado, ['rejected', 'disabled'], true);
         $verificado = $estado === 'verified';
         $quien = fn (): int => (int) $this->usuarioCon('finance')->id;
+
+        // UN solo instante para todo el fixture. Cada `now()` suelto es una
+        // oportunidad de cruzar un segundo entre dos columnas que la base
+        // compara entre si.
+        $ahora = now();
+        $verificadoEn = $ahora->copy()->subDay();
 
         return (int) DB::table('creator_payment_methods')->insertGetId(array_merge([
             'uuid' => (string) Str::uuid(),
@@ -343,13 +361,18 @@ trait ConFixturas
             'status' => $estado,
             // Verificador y capturador tienen que ser DISTINTOS
             // (`ck_cpm_segregation`): es la separacion de funciones del dinero.
-            'verified_at' => $verificado ? now()->subDay() : null,
+            'verified_at' => $verificado ? $verificadoEn : null,
             'verified_by_user_id' => $verificado ? $quien() : null,
-            'closed_at' => $cerrado ? now() : null,
+            // `ck_cpm_eligible` exige que un verificado diga desde cuando se le
+            // puede pagar, y `ck_cpm_eligible_after` que no sea antes de
+            // verificarlo. Se deriva del MISMO instante: quien quiera otra fecha
+            // --un enfriamiento en curso, por ejemplo-- la pasa en `$cambios`.
+            'eligible_from' => $verificado ? $verificadoEn : null,
+            'closed_at' => $cerrado ? $ahora : null,
             'closed_by_user_id' => $cerrado ? $quien() : null,
             'is_default' => 0,
-            'created_at' => now(),
-            'updated_at' => now(),
+            'created_at' => $ahora,
+            'updated_at' => $ahora,
         ], $cambios));
     }
 

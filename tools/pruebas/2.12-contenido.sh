@@ -24,9 +24,17 @@ probar() {
 }
 P="(SELECT id FROM campaign_creators ORDER BY id LIMIT 1)"
 R="(SELECT id FROM campaign_requirements ORDER BY id LIMIT 1)"
-D="(SELECT id FROM deliverables ORDER BY id LIMIT 1)"
-D2="(SELECT id FROM deliverables ORDER BY id LIMIT 1 OFFSET 1)"
-V="(SELECT id FROM deliverable_versions ORDER BY id LIMIT 1)"
+# Envueltos en una tabla derivada: desde 8.6 estos entregables hay que APROBARLOS
+# antes de publicar, y `UPDATE deliverables ... WHERE id=(SELECT ... FROM
+# deliverables)` da 1093 en MySQL --no se puede leer la tabla que se escribe--.
+# MariaDB lo tolera, asi que sin esto la suite pasaba en un motor y no en el
+# otro. Misma leccion que en la suite de 8.1.
+D="(SELECT id FROM (SELECT id FROM deliverables ORDER BY id LIMIT 1) d1)"
+D2="(SELECT id FROM (SELECT id FROM deliverables ORDER BY id LIMIT 1 OFFSET 1) d2)"
+# 8.3 exige revisar la ULTIMA version de un entregable --un veredicto sobre
+# contenido que el creador ya reemplazo no lo lee nadie--, asi que esto apunta
+# a la mas alta y no a la primera.
+V="(SELECT id FROM (SELECT id FROM deliverable_versions ORDER BY version_number DESC LIMIT 1) x)"
 IG="(SELECT id FROM platforms WHERE code='instagram')"
 PUB="(SELECT id FROM publications ORDER BY id LIMIT 1)"
 U="(SELECT id FROM users LIMIT 1)"
@@ -60,27 +68,48 @@ echo ""
 echo "--- Revisiones y rondas incluidas ---"
 probar "review: aprobacion (no consume ronda)" \
  "INSERT INTO content_reviews (uuid,deliverable_version_id,reviewer_user_id,outcome,reviewed_at) VALUES (UUID(),$V,$U,'approved',NOW(3));" OK
+# Desde 8.3, pedir cambios exige DECIR CUALES (`ck_cvw_comments`): una
+# correccion sin texto le llega al creador como «hazlo otra vez».
 probar "review: correccion que consume ronda" \
- "INSERT INTO content_reviews (uuid,deliverable_version_id,reviewer_user_id,outcome,consumes_round,reviewed_at) VALUES (UUID(),$V,$U,'changes_requested',1,NOW(3));" OK
+ "INSERT INTO content_reviews (uuid,deliverable_version_id,reviewer_user_id,outcome,comments,consumes_round,reviewed_at) VALUES (UUID(),$V,$U,'changes_requested','El logo se ve cortado en el segundo 4.',1,NOW(3));" OK
+probar "review: correccion sin decir cual" \
+ "INSERT INTO content_reviews (uuid,deliverable_version_id,reviewer_user_id,outcome,consumes_round,reviewed_at) VALUES (UUID(),$V,$U,'changes_requested',1,NOW(3));" RECHAZO
 probar "review: aprobacion que pretende consumir ronda" \
  "INSERT INTO content_reviews (uuid,deliverable_version_id,reviewer_user_id,outcome,consumes_round,reviewed_at) VALUES (UUID(),$V,$U,'approved',1,NOW(3));" RECHAZO
+# La del cliente puede no tener usuario: en 8.5 la escribe un enlace firmado,
+# sin cuenta detras. La NUESTRA si tiene que ir firmada (`ck_cvw_firma`).
 probar "review: revision del cliente" \
- "INSERT INTO content_reviews (uuid,deliverable_version_id,reviewer_side,outcome,consumes_round,reviewed_at) VALUES (UUID(),$V,'client','changes_requested',1,NOW(3));" OK
+ "INSERT INTO content_reviews (uuid,deliverable_version_id,reviewer_side,outcome,comments,consumes_round,reviewed_at) VALUES (UUID(),$V,'client','changes_requested','Prefieren el plano abierto del primer envio.',1,NOW(3));" OK
+probar "review: interna sin firmar" \
+ "INSERT INTO content_reviews (uuid,deliverable_version_id,reviewer_side,outcome,reviewed_at) VALUES (UUID(),$V,'platform','approved',NOW(3));" RECHAZO
 probar "review: veredicto inventado" \
- "INSERT INTO content_reviews (uuid,deliverable_version_id,outcome,reviewed_at) VALUES (UUID(),$V,'mas_o_menos',NOW(3));" RECHAZO
+ "INSERT INTO content_reviews (uuid,deliverable_version_id,reviewer_side,outcome,reviewed_at) VALUES (UUID(),$V,'client','mas_o_menos',NOW(3));" RECHAZO
 
 echo ""
 echo "--- Publicaciones ---"
+# 8.6: solo se publica lo APROBADO, y la version aprobada. Asi que primero se
+# aprueba, y el `deliverable_version_id` es obligatorio y tiene que ser esa.
+# `$D2` no tenia ninguna version --nadie se la habia pedido hasta ahora--.
+$CLIENTE $DB -e "INSERT INTO deliverable_versions (uuid,deliverable_id,version_number,external_url,submitted_at)
+   VALUES (UUID(),$D2,1,'https://drive.google.com/d2',NOW(3));" 2>&1 | grep -i error
+V2="(SELECT id FROM (SELECT id FROM deliverable_versions WHERE deliverable_id=$D2 ORDER BY version_number DESC LIMIT 1) w)"
+# `submitted_at` tambien: `ck_del_approved` (2.12) exige que aprobado implique
+# entregado, y estos entregables se insertaron sin fecha de entrega porque hasta
+# 8.1 nadie se la pedia.
+$CLIENTE $DB -e "UPDATE deliverables SET status='approved', submitted_at=NOW(3), approved_at=NOW(3),
+   approved_by_user_id=$U, approved_version_id=$V WHERE id=$D;
+  UPDATE deliverables SET status='approved', submitted_at=NOW(3), approved_at=NOW(3),
+   approved_by_user_id=$U, approved_version_id=$V2 WHERE id=$D2;" 2>&1 | grep -i error
 probar "publication: el creador reporta su enlace" \
- "INSERT INTO publications (uuid,deliverable_id,platform_id,url,url_fingerprint,published_at) VALUES (UUID(),$D,$IG,'https://instagram.com/p/ABC123',REPEAT('a',64),NOW(3));" OK
+ "INSERT INTO publications (uuid,deliverable_id,deliverable_version_id,platform_id,url,url_fingerprint,published_at,created_at) VALUES (UUID(),$D,$V,$IG,'https://instagram.com/p/ABC123',REPEAT('a',64),NOW(3),NOW(3));" OK
 probar "publication: OTRO entregable reclama el MISMO post" \
- "INSERT INTO publications (uuid,deliverable_id,platform_id,url,url_fingerprint,published_at) VALUES (UUID(),$D2,$IG,'https://instagram.com/p/ABC123?utm=x',REPEAT('a',64),NOW(3));" RECHAZO
+ "INSERT INTO publications (uuid,deliverable_id,deliverable_version_id,platform_id,url,url_fingerprint,published_at,created_at) VALUES (UUID(),$D2,$V2,$IG,'https://instagram.com/p/ABC123?utm=x',REPEAT('a',64),NOW(3),NOW(3));" RECHAZO
 probar "publication: verificada sin verificador" \
- "INSERT INTO publications (uuid,deliverable_id,platform_id,url,url_fingerprint,published_at,status,verified_at) VALUES (UUID(),$D,$IG,'https://instagram.com/p/D',REPEAT('d',64),NOW(3),'verified',NOW(3));" RECHAZO
+ "INSERT INTO publications (uuid,deliverable_id,deliverable_version_id,platform_id,url,url_fingerprint,published_at,created_at,status,verified_at) VALUES (UUID(),$D,$V,$IG,'https://instagram.com/p/D',REPEAT('d',64),NOW(3),NOW(3),'verified',NOW(3));" RECHAZO
 probar "publication: retirada sin fecha de retiro" \
- "INSERT INTO publications (uuid,deliverable_id,platform_id,url,url_fingerprint,published_at,status) VALUES (UUID(),$D,$IG,'https://instagram.com/p/E',REPEAT('e',64),NOW(3),'removed');" RECHAZO
+ "INSERT INTO publications (uuid,deliverable_id,deliverable_version_id,platform_id,url,url_fingerprint,published_at,created_at,status) VALUES (UUID(),$D,$V,$IG,'https://instagram.com/p/E',REPEAT('e',64),NOW(3),NOW(3),'removed');" RECHAZO
 probar "publication: huella de longitud incorrecta" \
- "INSERT INTO publications (uuid,deliverable_id,platform_id,url,url_fingerprint,published_at) VALUES (UUID(),$D,$IG,'https://instagram.com/p/F','corta',NOW(3));" RECHAZO
+ "INSERT INTO publications (uuid,deliverable_id,deliverable_version_id,platform_id,url,url_fingerprint,published_at,created_at) VALUES (UUID(),$D,$V,$IG,'https://instagram.com/p/F','corta',NOW(3),NOW(3));" RECHAZO
 
 echo ""
 echo "--- Evidencia y permanencia ---"
@@ -94,10 +123,16 @@ probar "evidence: payload que no es JSON" \
  "INSERT INTO publication_evidence (uuid,publication_id,evidence_type,raw_payload,captured_at) VALUES (UUID(),$PUB,'api_snapshot','{roto',NOW(3));" RECHAZO
 probar "evidence: tipo inventado" \
  "INSERT INTO publication_evidence (uuid,publication_id,evidence_type,http_status,captured_at) VALUES (UUID(),$PUB,'foto_del_movil',200,NOW(3));" RECHAZO
-probar "permanence: el post sigue vivo" \
- "INSERT INTO permanence_checks (publication_id,checked_at,is_live,http_status) VALUES ($PUB,NOW(3),1,200);" OK
-probar "permanence: el post desaparecio" \
- "INSERT INTO permanence_checks (publication_id,checked_at,is_live,http_status,notes) VALUES ($PUB,NOW(3),0,404,'Eliminado por el creador');" OK
+# 8.8 endurecio esta tabla y estas dos aserciones cambiaron de signo: eran OK
+# porque nada impedia comprobar la permanencia de una publicacion que nadie
+# habia verificado --y `permanence_until` sale justo de verificar (8.7), asi que
+# una comprobacion asi no mide nada--. Se dejan aqui, afirmando el rechazo, para
+# que quede escrito que era un hueco y no una decision. El camino completo lo
+# prueba `8.8-permanencia`.
+probar "permanence: comprobar lo que nadie verifico" \
+ "INSERT INTO permanence_checks (uuid,publication_id,source,checked_at,is_live,http_status) VALUES (UUID(),$PUB,'probe',NOW(3),1,200);" RECHAZO
+probar "permanence: y una manual sin firma tampoco" \
+ "INSERT INTO permanence_checks (uuid,publication_id,checked_at,is_live,http_status,notes) VALUES (UUID(),$PUB,NOW(3),0,404,'Eliminado por el creador');" RECHAZO
 
 echo ""
 echo -n "  Tablas de solo insercion con updated_at (debe ser 0): "

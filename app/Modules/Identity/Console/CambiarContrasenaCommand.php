@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Identity\Console;
 
+use App\Modules\Identity\Services\EnlacesDeContrasena;
 use App\Shared\Audit\Bitacora;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
@@ -31,18 +32,30 @@ use Illuminate\Support\Str;
  * 4. **No teclearla en la línea de órdenes.** Lo que se escribe ahí queda en el
  *    historial del shell. Por eso se pide oculta, o se genera.
  *
+ * ### Desde `T-36`, la forma normal es `--enlace`
+ *
+ * `BR-SEC-004` dice *«nunca se transmite una contraseña en texto claro por
+ * ningún canal»*, y desde `5.9` hay una pieza que lo cumple: un enlace de un solo
+ * uso con caducidad, del que sólo se guarda la huella. Con `--enlace` este
+ * comando manda uno y **no genera ninguna contraseña**: nadie la teclea, nadie la
+ * dicta y nadie la ve.
+ *
+ * Las otras dos formas siguen existiendo **a propósito**, y son el cristal que se
+ * rompe en caso de emergencia: si el correo no sale —`Q-20` sigue abierta— un
+ * enlace no llega a ningún sitio y el administrador se queda fuera de su propio
+ * sistema. El comando avisa cada vez de que ése es el camino excepcional.
+ *
  * ### Uso
  *
+ *     php artisan usuarios:contrasena ana@cts.pe --enlace     <- lo normal
  *     php artisan usuarios:contrasena admin@portalcts.com --generar
  *     php artisan usuarios:contrasena admin@portalcts.com
- *
- * Con `--generar` la escribe el sistema y la enseña una vez. Sin la opción, la
- * pide oculta.
  */
 final class CambiarContrasenaCommand extends Command
 {
     protected $signature = 'usuarios:contrasena
         {email : El correo del usuario}
+        {--enlace : Manda un enlace para que la elija su dueno (lo normal desde T-36)}
         {--generar : La genera el sistema en vez de pedirla}
         {--sin-forzar-cambio : NO exigir el cambio en el primer acceso (desaconsejado)}';
 
@@ -73,9 +86,21 @@ final class CambiarContrasenaCommand extends Command
             return self::FAILURE;
         }
 
+        // `T-36`: el camino normal. No se genera ninguna contrasena, asi que no
+        // hay nada que dictar ni que se quede en el historial de nadie.
+        if ($this->option('enlace')) {
+            return $this->porEnlace($usuario);
+        }
+
+        $this->line('');
+        $this->warn('Reponiendo la contrasena a mano. Lo normal es `--enlace`: asi la elige');
+        $this->warn('su dueno y nadie mas la ve (BR-SEC-004). Esto es el camino de');
+        $this->warn('emergencia, para cuando el correo no sale.');
+        $this->line('');
+
         if ($this->option('generar')) {
-            // 16 de `Str::password()`, lo mismo que genera `usuarios:crear`: el
-            // liston no lo pone este comando, lo pone lo que ya se hacia.
+            // 16 de `Str::password()`. El liston no lo pone este comando: lo
+            // pone la pantalla de cambio, que exige 12.
             $clave = Str::password(16);
         } else {
             $clave = (string) $this->secret('Contrasena nueva (no se ve al teclear)');
@@ -149,6 +174,33 @@ final class CambiarContrasenaCommand extends Command
     }
 
     /** Los roles de un usuario, separados por coma. Cadena vacia si no tiene. */
+    /**
+     * Manda un enlace en vez de reponer nada. `T-36`.
+     *
+     * No toca `password`: la que hubiera sigue valiendo hasta que el enlace se
+     * use. Es deliberado — si el enlace no llega, la persona no se queda peor de
+     * como estaba. Al usarlo, `EnlacesDeContrasena::consumir()` cierra además
+     * todas sus sesiones abiertas.
+     */
+    private function porEnlace(object $usuario): int
+    {
+        EnlacesDeContrasena::emitir((int) $usuario->id, 'reset');
+
+        $this->line('');
+        $this->info("Enlace enviado a {$usuario->email}.");
+        $this->line('  Vale '.EnlacesDeContrasena::HORAS['reset'].' hora(s) y solo se puede usar una vez.');
+        $this->line('  Su contrasena actual sigue valiendo hasta que lo use: si el correo no');
+        $this->line('  llega, no se queda peor de como estaba.');
+
+        if ((string) config('mail.default') === 'log') {
+            $this->line('');
+            $this->warn('OJO: `MAIL_MAILER=log`. El correo NO sale del servidor.');
+            $this->line('    El enlace esta escrito en storage/logs/laravel.log.');
+        }
+
+        return self::SUCCESS;
+    }
+
     private static function rolesDe(int $usuarioId): string
     {
         /** @var list<string> $codigos */

@@ -167,6 +167,18 @@ final class CimientosSeeder extends Seeder
             // separación que `DEC-044` impone en la base para los perfiles
             // fiscales y los medios de pago.
             ['campaign.approve',       'Campaign', 'Aprobar una campaña: fija el ingreso y congela la sociedad emisora'],
+            // 7.6: invitar tiene permiso propio, y no va dentro de
+            // `campaign.manage`. Editar una campaña es trabajo interno;
+            // invitar es el momento en que un compromiso económico sale de
+            // la empresa y llega a una persona. Misma división que
+            // `creator.verify` frente a `creator.activate`.
+            ['campaign.invite',        'Campaign', 'Invitar creadores a una campaña y anular invitaciones'],
+            // 8.1: el primer permiso de ámbito EXTERNO del sistema. `BR-SEC-003`
+            // dice que un rol externo nunca recibe permisos INTERNOS; éste no lo
+            // es: sólo abre la pantalla donde un creador ve y entrega lo suyo,
+            // y la propiedad se comprueba además contra `creators.user_id`.
+            ['creator.portal',         'Content',  'Ver y entregar lo propio (portal del creador)'],
+            ['content.deliverable.view', 'Content', 'Ver los entregables de una campaña'],
             ['creator.view',           'Creator',  'Ver creadores'],
             ['creator.approve',        'Creator',  'Aprobar o rechazar solicitudes de creador'],
             ['creator.manage',         'Creator',  'Editar los datos de contacto y comerciales del creador'],
@@ -219,7 +231,28 @@ final class CimientosSeeder extends Seeder
             ['finance.payout.create',  'Finance',  'Crear lotes de pago'],
             ['finance.payout.approve', 'Finance',  'Aprobar lotes de pago (BR-FIN-005: distinto del creador)'],
             ['finance.invoice.issue',  'Finance',  'Emitir comprobantes'],
-            ['content.review',         'Content',  'Revisar y aprobar contenido'],
+            // 8.3: `content.review` decia «Revisar y aprobar» y ahora solo
+            // revisa. Aprobar es lo que deja el contenido listo para el cliente
+            // y --cuando exista F9-- lo que dispara el pago, asi que se separa,
+            // por el mismo criterio que separo capturar de aprobar en el perfil
+            // fiscal (`DEC-062`).
+            ['content.review',         'Content',  'Ver la cola de revision y pedir cambios'],
+            ['content.approve',        'Content',  'Dar el visto bueno a un entregable'],
+            ['content.extra_round',    'Content',  'Autorizar una ronda de correccion por encima de las incluidas'],
+            // 8.2: volver atras sobre algo ya aprobado. Lo tienen los DOS roles
+            // que revisan: «se aprobo por error» lo descubre normalmente quien
+            // aprobo, y obligarle a pedirselo a otro convierte un clic en un
+            // correo --y en la practica, en que nadie lo arregle--.
+            ['content.reopen',         'Content',  'Reabrir un entregable ya aprobado, con motivo'],
+            // 8.6: registrar el post publicado POR el creador. El creador lo
+            // hace desde su portal con `creator.portal`; esto es para cuando el
+            // enlace llega por WhatsApp y lo mete el equipo.
+            ['content.publication.manage', 'Content', 'Registrar el post publicado en nombre del creador'],
+            // 8.7: dar por buena una publicacion. De `verified` cuelga el pago
+            // (`BR-CONTENT-004`, rojo), asi que es una firma con dinero detras
+            // y va aparte, por el mismo criterio que separo revisar de aprobar
+            // en 8.3. Finanzas NO lo necesita: paga contra lo verificado.
+            ['content.verify',         'Content',  'Verificar que el post existe y archivar su prueba'],
             // 4.5: dar de alta una sociedad es constituir una empresa en el
             // sistema. De ella salen la numeracion de comprobantes
             // (`BR-LE-007`), el emisor de cada factura (`BR-LE-005`) y las
@@ -264,7 +297,8 @@ final class CimientosSeeder extends Seeder
         // hay atajo en el código: ver `App\Shared\Auth\Permisos`.
         $matriz = [
             'campaign_manager' => [
-                'campaign.view', 'campaign.manage', 'campaign.view_margin',
+                'campaign.view', 'campaign.manage', 'campaign.view_margin', 'campaign.invite',
+                'content.deliverable.view',
                 'creator.view', 'creator.manage', 'creator.approve',
                 // DEC-060: el mismo rol verifica y activa. El equipo de
                 // reclutamiento es pequeno y exigir dos personas por creador
@@ -280,7 +314,13 @@ final class CimientosSeeder extends Seeder
                 // que la monta. `client.manage` estaba declarado desde 3.1 y no
                 // lo tenia NINGUN rol, asi que el permiso existia y nadie podia
                 // crear un cliente.
-                'client.view', 'client.manage', 'content.review', 'catalog.view',
+                'client.view', 'client.manage', 'catalog.view',
+                // 8.3: quien lleva la campana revisa, aprueba, y es quien
+                // autoriza una ronda por encima de las incluidas --es quien
+                // responde del margen y quien va a tener que explicarsela al
+                // cliente--.
+                'content.review', 'content.approve', 'content.extra_round', 'content.reopen',
+                'content.publication.manage', 'content.verify',
                 // 4.4: quien habla con el cliente es quien tiene su RUC.
                 'client.tax.manage',
                 // 4.9: quien invita a un creador necesita poder comprobar que la
@@ -309,13 +349,22 @@ final class CimientosSeeder extends Seeder
                 'client.tax.manage',
                 'comms.view',
             ],
+            // 8.3: revisa y aprueba, pero NO autoriza una ronda de mas. Esa
+            // decision es de dinero --se le cobra al cliente o se come el
+            // margen-- y quien revisa contenido no tiene por que cargar con
+            // ella. `campaign_manager` la tiene.
             'content_reviewer' => [
-                'content.review', 'campaign.view', 'creator.view', 'catalog.view',
+                'content.review', 'content.approve', 'content.reopen', 'content.deliverable.view',
+                'content.publication.manage', 'content.verify',
+                'campaign.view', 'creator.view', 'catalog.view',
             ],
             // Portales externos: sus permisos llegan con su fase. Un rol externo
             // con permisos internos por descuido es la peor fuga posible.
             'client_user' => [],
-            'creator' => [],
+            // 8.1: el rol `creator` deja de estar vacio. Lo unico que le abre es
+            // SU pantalla: ver lo que le toca entregar y entregarlo. No hay
+            // ningun permiso interno aqui (`BR-SEC-003`).
+            'creator' => ['creator.portal'],
         ];
 
         $idsPermiso = DB::table('permissions')->pluck('id', 'code')->all();

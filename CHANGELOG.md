@@ -2,6 +2,563 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 
+## [Proceso · `main` vuelve a ser la línea de trabajo] — 2026-08-27
+
+### Cambiado
+- **Se trabaja en `main`** (`DEC-149`). El historial era una línea recta —nunca
+  hubo dos cosas a la vez— así que las ramas no separaban nada, y la que existía
+  para proteger `main` lo dejó **nueve iteraciones obsoleto**. Lo que sustituye a
+  la rama son las seis puertas: no se commitea en rojo. Vuelven las ramas —una
+  por iteración, fusionada el mismo día— el día que haya producción.
+- **`develop` sale del `on: push` del CI.** Esa rama no ha existido nunca, y
+  `CONTRIBUTING.md` la nombraba desde el principio.
+- **`docs/19` §3** reescrito con la medición delante, y `CONTRIBUTING.md`
+  alineado con la realidad.
+
+## [8.8 · La permanencia mínima del post] — 2026-08-27
+
+Qué pasa cuando un creador retira el post antes de tiempo, y por qué eso **no**
+lo puede decidir una máquina.
+
+### Añadido
+- **La bandeja de permanencia**, en `/permanencia`. Las caídas abiertas primero
+  —son las que tienen un pago parado detrás— y luego lo vigilado que nadie mira.
+  `permanence_checks` estrena su primera fila.
+- **Retirar el post bloquea el pago, y el sistema no descuenta nada**
+  (`DEC-145`). La publicación pasa a `removed` con motivo, firma y fecha; el
+  entregable sale de `verified`; y ahí se para. La decisión de qué se le paga la
+  toma una persona con el expediente montado delante.
+- **La sonda marca, una persona confirma** (`DEC-146`). Una comprobación se
+  archiva y **no cambia el estado de nada**. `tg_pub_permanencia` exige una
+  comprobación fallida **y** una captura tomada después de haber verificado el
+  post: la que probó que existía no prueba que ya no esté.
+- **`permanencia:vigilar`**, diario a las 06:00. Cierra las ventanas cumplidas
+  —`verified` → `fulfilled`, que es lo que habilita el pago— y cuenta las
+  desatendidas. **No sale a Internet**, y eso es la decisión, no un descuido.
+- **Se avisa al creador y al equipo; al cliente no** (`DEC-147`). El correo no
+  dice «incumpliste»: dice «no lo encontramos», y dice que el pago está en pausa.
+- **El entregable caído estrena estado** (`DEC-148`). `removed`, y no `published`
+  reutilizado: `published` significa «esperando a que alguien lo mire», y un
+  estado que significa dos cosas es el fallo de `T-50`.
+- **Decimosexta columna puerta**: `uq_pc_sonda_dia`, una sonda por publicación y
+  día. Un cron duplicado —dos servidores, o alguien probando el comando a mano—
+  mandaba dos correos al creador por la misma caída.
+
+### Cambiado
+- **`expired` pasa a llamarse `fulfilled`** en `publications`. Tenía cero filas
+  desde `2.12` y un nombre que se lee al revés de lo que significa: la ventana
+  cumplida es lo bueno, es lo que habilita el pago.
+- **`permanence_checks` entra en la lista de `3.12`**: append-only y sin borrado.
+  El criterio de `T-16` la incluía desde el primer día —la fila es evidencia y de
+  ella depende dinero— y nadie la había mirado.
+- **`docs/18` §2** explica ahora qué cuelga de la línea de `schedule:run` y qué
+  se rompe en silencio si no está.
+
+### Corregido
+- **Dos aserciones que dependían del motor** (`T-51`). `is_live = 7` sin notas y
+  `status = 'expired'` con la permanencia puesta violaban **dos** restricciones a
+  la vez, y cuál responde depende del orden de evaluación: verde en MariaDB, rojo
+  en MySQL 8. Es `T-48` otra vez, y el arreglo es el mismo — un rechazo sólo
+  prueba algo si rechaza por su motivo.
+
+## [8.7 · La prueba de que el post existió] — 2026-08-26
+
+Y por qué esa prueba es una captura de pantalla y no una comprobación
+automática.
+
+### Añadido
+- **La cola de verificación**, en `/verificacion`, y el archivado de la
+  evidencia. `publication_evidence` estrena su primera fila.
+- **La evidencia es una captura** (`DEC-142`). Un `http_status` no distingue «el
+  post existe» de «nos bloquearon» —Instagram devuelve `200` con un muro de
+  login— y de `verified` cuelga el pago. La sonda HTTP se guarda como dato
+  complementario y **no decide**; `tg_pub_verificada_con_evidencia` lo impone.
+- **Permiso propio `content.verify`** (`DEC-143`), comprobado en el POST.
+  Finanzas no lo tiene: paga contra lo verificado, no verifica.
+- **Si el post no está, el entregable vuelve al creador** (`DEC-144`), a
+  `approved` y no a revisión: el contenido estaba bien, lo que falla es el
+  enlace. Motivo de lista cerrada y correo con el motivo dentro.
+- **`permanence_until`** se calcula al verificar, desde `published_at` y con los
+  días del requisito. Es lo que `8.8` va a vigilar.
+
+### Corregido
+- **Una publicación rechazada bloqueaba su propio enlace, y el del vecino**
+  (`T-50`). `uq_pub_fingerprint` era única global, así que cuando se le pedía al
+  creador que arreglara el post y volviera a registrar el mismo enlace, se
+  estrellaba con un `1062`. Y peor: se rechaza el post de Ana por «está
+  publicado en otra cuenta», esa cuenta es la de Luis, **y Luis no podía
+  registrar su propio post**. Ahora la unicidad mira sólo las vivas, con la
+  **decimoquinta columna puerta** del esquema.
+- **`ck_pev_screenshot`**, que cierra un hueco de `2.12`: `ck_pev_content` sólo
+  pedía «algo», así que una fila que decía `screenshot` y traía un `200` pelado
+  se leía como una captura que nadie hizo.
+
+### Verificación
+**659 pruebas / 2.051 aserciones** · **1.438** aserciones de restricción en
+MariaDB y **1.428** en MySQL 8 · 14 mutaciones, 3 sobrevivieron y las tres están
+cerradas · las seis puertas en verde.
+
+Una de las tres sobrevivía porque **la fecha coincidía**: la permanencia se
+calcula desde `published_at`, y el post se reportaba *hoy*, así que sustituir
+`published_at` por `now()` no rompía nada. Ahora se registra con fecha de hace
+cinco días. Es el mismo patrón que la mutación del plazo en `8.1` —dos pruebas
+usando el mismo número— en otra forma.
+
+---
+
+## [8.6 · El post publicado] — 2026-08-26## [8.6 · El post publicado] — 2026-08-26
+
+Donde el trabajo sale de nuestras pantallas y aparece en las de todo el mundo.
+`publications` estaba diseñada desde la Fase 2 con cero filas — la **sexta** tabla
+del proyecto en esa situación.
+
+### Añadido
+- **El creador pega el enlace de su post** desde `/mis-entregas`, en cuanto
+  publica. Y **el equipo puede hacerlo por él** (`DEC-139`), porque el caso real
+  existe: el enlace llega por WhatsApp y el creador no entra. Las dos puertas
+  pasan por el mismo servicio y el mismo veto; sólo cambia quién firma.
+- **Sólo se publica lo aprobado, y esa versión** (`DEC-140`). Se guarda **qué**
+  versión se publicó, como snapshot y con clave ajena compuesta, porque de esa
+  fila cuelga el pago: `8.7` la verifica y `8.8` cuenta su permanencia.
+- **La red se deduce del enlace** y tiene que ser la del brief (`DEC-141`).
+  Estrena `platforms.url_pattern`, en el catálogo desde `2.6` sin usar.
+- **La huella normaliza la URL** antes de firmarla, que es lo único que hace útil
+  a `uq_pub_fingerprint`: con la URL cruda, `?utm_source=ig` basta para reclamar
+  dos veces el mismo post. Y **lo que identifica el post no se toca** — la ruta
+  conserva mayúsculas, y la lista de parámetros que se quitan es explícita
+  porque `youtube.com/watch?v=…` lleva el identificador en la query.
+
+### Corregido
+- **La suite de `2.12` pasaba en un motor y no en el otro** (`T-49`). Al exigir
+  aprobación antes de publicar, pasó a hacer `UPDATE … WHERE id = (SELECT … FROM
+  la misma tabla)`: MariaDB lo tolera, MySQL da `1093`. Misma trampa que la suite
+  de `8.1` ya documentaba. De paso apareció que esa suite insertaba entregables
+  sin `submitted_at`, algo que `ck_del_approved` —de la propia `2.12`— prohibía
+  desde el primer día y que nadie había visto porque nadie había aprobado nada allí.
+
+### Verificación
+**638 pruebas / 2.006 aserciones** · **1.398** aserciones de restricción en
+MariaDB y **1.388** en MySQL 8 · 18 mutaciones, **las 18 detectadas a la
+primera** · las seis puertas en verde.
+
+Ocho de esas mutaciones son sobre la normalización de la URL, en las dos
+direcciones: las que la aflojan —no quitar `utm`, no quitar `www`, no ordenar los
+parámetros— y las que la aprietan de más —bajar la ruta a minúsculas, borrar la
+query entera—. Las segundas importan igual: una huella demasiado agresiva rechaza
+un post legítimo diciendo que ya está reclamado, y quien lo reporta no tiene
+forma de saber por qué.
+
+---
+
+## [8.2 · Qué versión es la buena] — 2026-08-26## [8.2 · Qué versión es la buena] — 2026-08-26
+
+Y cómo se vuelve atrás cuando la buena deja de serlo.
+
+### Añadido
+- **`deliverables.approved_version_id`**: qué versión se aprobó (`DEC-137`). No
+  «la última» —eso sale de un `MAX()` y guardarlo sería una copia que se
+  desvía— sino **la aprobada**, que es el dato del que van a colgar `8.6` y `8.7`.
+- La clave ajena es **compuesta**, y ahí está casi todo el valor: una simple
+  garantizaría que la versión existe; ésta garantiza que es **de este
+  entregable**. Sin la segunda columna, un `UPDATE` mal escrito deja el
+  entregable de uno apuntando a lo aprobado del otro y la fila sigue siendo
+  válida para la base.
+- **Reabrir** un entregable aprobado, con motivo de lista cerrada y firma
+  (`DEC-138`). **No deshace nada**: la aprobación anterior se queda en el
+  historial y la reapertura es otra línea. Permiso `content.reopen`, en los dos
+  roles que revisan — «se aprobó por error» lo descubre normalmente quien aprobó.
+- **`tg_dv_entregable_abierto`** (`T-47`): «no se entrega sobre un entregable
+  cerrado» vivía en el servicio desde `8.1` y **la base no lo conocía**. Un
+  comando o un import podían meter una versión encima de algo ya aprobado.
+
+### Corregido
+- **Una aserción que dependía del orden de evaluación de los CHECK** (`T-48`).
+  `8.3` afirmaba que aprobar sin firma se rechaza por `ck_del_aprobador`; con la
+  restricción nueva encima, MariaDB seguía rechazando por el primero y MySQL
+  empezó por el segundo. El orden no está garantizado. Es `T-43` en otra forma.
+- **La limpieza de la suite de `8.3` dejó de funcionar en silencio**: borrar la
+  versión apuntada es justo lo que la nueva clave ajena impide. Lo cazó la
+  aserción de premisa que `8.1` introdujo — que es literalmente para lo que está.
+
+### Verificación
+**606 pruebas / 1.952 aserciones** · **1.360** aserciones de restricción en
+MariaDB y **1.350** en MySQL 8 · 11 mutaciones, 2 sobrevivieron y las dos están
+cerradas · las seis puertas en verde.
+
+Las dos supervivientes eran vetos del servicio que la pantalla nunca alcanza
+porque el `FormRequest` los filtra antes. Los dos siguen haciendo falta: sin el
+del motivo, `reabrir()` compone su texto con una clave inventada y eso es un
+fatal; sin el del estado, escribe una revisión sobre un puntero nulo y la clave
+ajena lo tumba con un error crudo en la cara de quien revisa.
+
+---
+
+## [8.3 · La revisión] — 2026-08-26## [8.3 · La revisión] — 2026-08-26
+
+Lo que cierra el ciclo: un creador entrega, alguien lo mira, y la pieza pasa a
+estar buena o a volver.
+
+### Añadido
+- **La cola de revisión**, en `/revision`. **Bandeja global** y no una por
+  campaña (`DEC-136`): revisar es trabajo por lotes, y una cola por campaña
+  obliga a recorrer campañas para descubrir si hay algo esperando. Ordenada por
+  **lo que lleva más esperando**, no por lo que vence antes.
+- **El veredicto**, con el brief al lado y el historial debajo. Pedir cambios
+  exige decir cuáles (`ck_cvw_comments`).
+- **Las rondas incluidas dejan de ser una frase del contrato**: son un contador
+  que bloquea. Sólo cuentan las que pide el **cliente** (`DEC-133`) —las nuestras
+  son control de calidad y cobrárselas sería cobrarle nuestro propio error— y
+  hasta `8.5` quien lleva la cuenta marca de parte de quién viene (`DEC-134`).
+- **Pasarse exige decidir y firmar** (`DEC-135`): se cobra o se absorbe, y queda
+  quién lo autorizó. El cargo **no** va a `campaign_costs` —eso es lo que
+  gastamos nosotros y resta del margen; una ronda de más al cliente es ingreso—.
+  La pantalla de entregables la enseña como pendiente de facturar.
+- **Tres permisos**: `content.review`, `content.approve` y `content.extra_round`,
+  comprobados **en el POST** y no sólo en la ruta.
+- **Aviso al creador** cuando le piden cambios, con el comentario dentro. Sólo la
+  corrección manda correo: una aprobación no le pide nada y la ve en su portal.
+
+### Cambiado
+- **El contador de rondas se mudó de tabla.** Estaba en `campaign_creators` —dos
+  rondas **por creador**—, así que con un creador que entrega dos reels y tres
+  stories, dos correcciones sobre el primer reel dejaban las otras cuatro piezas
+  sin ninguna, habiéndolas pagado el cliente. Ahora vive en `deliverables`, y la
+  columna vieja **se fue**: la suma por creador sale de `content_reviews` con un
+  `SUM()` que nunca se desvía.
+
+### Corregido
+- **`tg_cvw_inmutable`** (`T-45`). *«Append-only: un veredicto no se edita, se
+  emite otro»* lo decía el documento de `2.12` desde el primer día y **no lo
+  impedía nada**. Un veredicto justifica una ronda cobrada.
+- **Una puerta que daba rojo por algo que nadie podía arreglar** (`T-46`), desde
+  `4.9`. MariaDB no tiene tipo `JSON` y añade un CHECK implícito `json_valid`
+  que se llama como la columna; `verificar-equivalencia.py` lo contaba como una
+  diferencia entre motores. En el CI salía verde —allí la base con CHECK es
+  MySQL— y en la máquina de quien desarrolla, roja siempre.
+- **En `2.12`, cinco aserciones sobre una versión que nadie revisaría nunca**:
+  apuntaban a la *primera* versión de un entregable que ya tenía dos.
+
+### Verificación
+**591 pruebas / 1.922 aserciones** · **1.320** aserciones de restricción en
+MariaDB y **1.310** en MySQL 8 · 20 mutaciones, **1 sobrevivió y está cerrada** ·
+las seis puertas en verde.
+
+La superviviente fue `lockForUpdate()` sobre el contador de rondas, que no tiene
+resultado observable en una conexión. Se cerró como en `8.1`: la prueba mira **el
+SQL**. Sin ese `FOR UPDATE`, dos revisores sobre la misma pieza leen el mismo
+contador y la segunda ronda del cliente **no se cuenta** — el cliente consigue
+una corrección gratis y nadie se entera, porque el número que queda es plausible.
+
+---
+
+## [8.1 · Los entregables] — 2026-08-26## [8.1 · Los entregables] — 2026-08-26
+
+La primera pantalla que ve un **creador**. Hasta aquí el sistema hablaba sólo con
+el equipo.
+
+### Añadido
+- **Los entregables se generan solos al aceptar** (`DEC-129`), del brief
+  **efectivo** del mercado y no del general (`DEC-130`). Va por evento, porque
+  `Campaign` no puede conocer `Content`. Es idempotente: un reintento de la cola
+  no duplica el trabajo de nadie.
+- **`/mis-entregas`**, el portal del creador, con `creator.portal` — el **primer
+  permiso de ámbito EXTERNAL** del sistema. Lo que ata la pantalla a sus datos no
+  es el permiso sino `creators.user_id = Auth::id()`, comprobado en cada acción;
+  lo de otro devuelve **404, no 403**.
+- **Entregar es un enlace `https://`, y opcionalmente una imagen** (`DEC-131`).
+  El `https://` se comprueba en el formulario, en el servicio y en la base, a
+  propósito: sin el último, un import mete `javascript:` en una columna que una
+  vista pinta dentro de un `href`.
+- **Si al caption le faltan los hashtags del brief, no se envía y se le dice
+  cuáles** (`DEC-132`). Sin distinguir mayúsculas, y con todos los motivos a la
+  vez.
+- **Pantalla interna** de lo entregado por campaña, con acción de recuperación
+  para un aceptado que se quedó sin entregables.
+- **`tools/verificar-mensajes.py`**, gate nuevo (ver abajo).
+
+### Corregido
+- **Cuatro mensajes de la base que en producción no caben**, rotos desde 7.4
+  (`T-43`). `MESSAGE_TEXT` es `VARCHAR(128)` y MySQL 8 y Percona 5.7 **no
+  truncan**: sueltan `1648` en lugar del `45000` del disparador. MariaDB sí lo
+  deja pasar, o sea que el motor de desarrollo perdona y el de **producción** no.
+  Ninguna suite lo vio porque todas comprobaban «esto tiene que fallar» y **1648
+  también es fallar**.
+- **Una suite que se creía limpia y corría sobre filas de otra** (`T-44`). El
+  `DELETE` de apertura de `8.1-entregables.sh` fallaba con `1451` y el
+  `2>/dev/null` se comía el error; varias aserciones pasaban **por el motivo
+  equivocado**. La premisa correcta no era «la tabla está vacía» sino «no hay
+  filas mías».
+
+### Cambiado
+- Las suites de **7.3, 7.4, 7.6 y 8.1** ya no comprueban «esto falla» sino «esto
+  falla **por esto**» (`porque` en vez de `probar`). Es lo que destapó `T-43` y
+  es lo único que lo habría destapado.
+
+### Verificación
+**562 pruebas / 1.872 aserciones** · **1.260** aserciones de restricción en
+MariaDB y **1.250** en MySQL 8 · 17 mutaciones, **5 sobrevivieron** y las cinco
+están cerradas · las seis puertas en verde.
+
+Las cinco supervivientes valen más que las doce que murieron. Dos eran agujeros
+de verdad —se podía entregar sobre un entregable ya **aprobado**, y la fecha de
+la primera entrega se reescribía en cada corrección—, una era dos pruebas usando
+**el mismo número** (7 y 7, así que sustituir el plazo por un 7 a pelo no rompía
+nada), y otra era `lockForUpdate()`, que no tiene resultado observable en una
+conexión: esa prueba mira **el SQL**, y dice en su comentario que eso es lo que
+hace y por qué.
+
+---
+
+## [7.7 · El panel de seguimiento] — 2026-08-26## [7.7 · El panel de seguimiento] — 2026-08-26
+
+*«La pantalla más usada del sistema»*, según el roadmap. Lo que decide una pantalla
+así no es qué se puede enseñar: es **qué pregunta contesta**.
+
+### Añadido
+- **Las alertas, arriba del todo** (`DEC-127`): campaña sin confirmar con el
+  arranque cerca, preguntas sin atender, invitaciones que caducan, cupo sin
+  cubrir. El orden **no es por gravedad**: la de «sin confirmar» va primera porque
+  bloquea a las demás. Cada una dice qué pasa **y qué hacer**.
+- **El embudo por estado**, con todos los pasos aunque estén a cero — uno que
+  esconde los ceros enseña dónde llegó la gente, no dónde se atasca.
+- **El cupo por mercado**, donde **cubierto es aceptado, no invitado**. Una
+  invitación sin contestar es una plaza esperando; contarla como cubierta es cómo
+  se llega al día de arranque con la mitad del equipo y los números en verde.
+- **El dinero**, con el margen detrás de `campaign.view_margin` y **sin
+  calcularse** cuando no toca (`DEC-128`). El disponible se enseña negativo cuando
+  lo es.
+
+### Cambiado
+- El listado de campañas enlaza al **seguimiento** cuando la campaña está
+  confirmada, y a la ficha cuando todavía se está montando.
+
+### Verificación
+530 pruebas / 1.806 aserciones · 14 mutaciones, **14 detectadas a la primera** ·
+las seis puertas en verde. El esquema no se toca.
+
+Lo que sí falló fue **el fixture**: `ConFixturas::mercadoDe()` declara cupo 5 por
+omisión, así que la campaña nacía con una alerta y todas las afirmaciones de «sale
+UNA alerta» habrían salido verdes con dos. Lo caza una aserción de premisa en el
+`setUp`.
+
+---
+
+## [7.6b · Los tres cabos sueltos] — 2026-08-26
+
+Ninguna de las tres cosas era una funcionalidad nueva: eran huecos que dejaron
+`5.9` y `7.6` y que se notan en cuanto alguien usa el sistema de verdad. Que es
+exactamente lo que pasó a mitad de iteración.
+
+### Añadido
+- **`usuarios:crear` ya no teclea la contraseña** (`T-36`, `DEC-126`). Cierra
+  `BR-SEC-004` del todo. `must_change_password` era el parche: obligaba a
+  cambiarla *después*, dejando una ventana en la que **dos personas conocían la
+  credencial** — justo en las cuentas donde la base exige dos personas distintas
+  para el dinero. Ahora la contraseña no existe hasta que la escribe su dueño.
+- **`usuarios:contrasena --enlace`**, que además **no toca la contraseña actual**:
+  si el correo no llega, la persona no se queda peor de como estaba. Teclearla a
+  mano sigue existiendo como cristal de emergencia, y el comando lo avisa.
+- **El creador puede preguntar** antes de decidir (`T-38`, `DEC-124`). Sin esto una
+  duda se convierte en un rechazo, y ese rechazo entra en `decline_reason` como si
+  fuera una opinión sobre la oferta. Preguntar **no mueve el plazo**, y la pantalla
+  lo dice con todas las letras.
+- **Aviso por correo a quien invitó** cuando el creador acepta, rechaza o pregunta
+  (`DEC-125`).
+
+### Corregido — los tres los encontró el usuario probando
+- **Un 500 al repetir un formato en el brief de un mercado** (`T-40`).
+  `campaign_requirements` tiene **dos** índices únicos y el controlador sólo
+  traducía el primero. No fallaba en pruebas: la suite SQL comprobaba que la base
+  lo rechaza, pero nadie comprobaba que la **pantalla** lo explique.
+- **La bitácora entera caída por una fila con una lista dentro** (`T-41`). Una
+  marca guarda sus categorías como lista y la vista la pintaba a pelo. Bastaba
+  **una** fila así para no poder ver **ninguna** — y la bitácora es precisamente lo
+  que se mira cuando algo ha ido mal.
+- **`verificar-fixturas.py` no distinguía un fixture inválido a propósito**
+  (`T-42`). Una prueba que afirma «la base rechaza esto» necesita escribir una fila
+  mala.
+
+### Verificación
+504 pruebas / 1.723 aserciones · 1.196 (MariaDB) y 1.186 (MySQL 8) aserciones de
+restricción · 15 mutaciones, 15 detectadas tras tres correcciones · las seis
+puertas en verde.
+
+**Una mutación sigue viva y se dice por qué**: cambiar la contraseña aleatoria de
+una cuenta nueva por una constante no lo caza ninguna prueba, y no puede — una
+prueba de caja negra no distingue 32 bytes del generador criptográfico de una
+constante que no conoce.
+
+---
+
+## [7.6 · La invitación a una campaña] — 2026-08-26
+
+`invitations` existía desde la Fase 2 y **no tenía una sola fila**. Tercera vez que
+pasa —`campaign_creators` antes de 7.4, `domain_events` antes de 4.13— y las tres
+veces la estructura estaba bien pensada.
+
+### Añadido
+- **El creador contesta él, por enlace de un solo uso** (`DEC-119`). Su portal
+  sigue bloqueado por `T-09`; la alternativa era que un operador tecleara «dijo que
+  sí por WhatsApp», y eso convierte una aceptación en la palabra de un tercero.
+- **Plazo fijo por campaña** (`DEC-120`), de 1 hora a 30 días, con
+  `invitaciones:caducar` cada diez minutos desde el planificador.
+- **Rechazo con motivo de lista cerrada**, y **reinvitar dejando constancia de las
+  dos rondas** (`DEC-121`).
+- **`App\Shared\Eventos\CorreoPedido`** (`DEC-123`): pedir un correo sin conocer a
+  Communication. Sube desde Identity, donde en `5.9` funcionaba de milagro —Identity
+  está en la lista de dependencias permitidas de Communication; Campaign no—.
+- **`App\Shared\Http\EnlaceEnSesion`**: el token no se queda en la URL, ahora en un
+  solo sitio para las dos pantallas públicas.
+
+### Corregido
+- **`BR-CREATOR-008` tenía una ventana abierta** (`DEC-122`). El precio se congela
+  **al aceptar**; entre el envío y la respuesta `agreed_amount` se podía mover. Al
+  creador le llegaba «te pagamos 1.500», alguien lo bajaba a 900, y aceptaba 900
+  **sin haberlo visto nunca**. La invitación copia el importe y
+  `tg_ccr_monto_con_invitacion` lo bloquea mientras haya una oferta encima.
+- **Un fallo intermitente en los fixtures, escondido desde 4.9** (`T-39`).
+  `eligible_from` y `verified_at` de un medio de pago salían de dos `now()`
+  distintos; cuando caían a los dos lados de un segundo, `ck_cpm_eligible_after`
+  rechazaba el `INSERT`. Salió una vez en 471 pruebas, en una clase que no tiene
+  nada que ver con medios de pago.
+- **«Caducada» y «te mandamos otra» decían lo mismo.** En la tabla las dos muertes
+  son un `revoked_at`, y a quien se pasaba del plazo se le mandaba a buscar en su
+  buzón un correo más reciente que no existe.
+
+### Verificación
+471 pruebas / 1.607 aserciones · 1.182 (MariaDB) y 1.172 (MySQL 8) aserciones de
+restricción · 16 mutaciones, 16 detectadas tras una corrección · las seis puertas
+en verde.
+
+**Una aserción de la suite SQL salía verde por el motivo equivocado**: ponía 900
+sobre una fila que ya tenía 900 —sin cambio no se dispara ningún disparador— y
+además las participaciones de la semilla están aceptadas, donde manda la regla de
+7.5 y no la de esta iteración.
+
+---
+
+## [5.9 + 4.1 · El enlace seguro de contraseña] — 2026-08-26
+
+Dos iteraciones del plan que comparten lo único difícil: un token de un solo uso,
+con caducidad, imposible de adivinar y que **no queda guardado en ningún sitio del
+que se pueda recuperar**. Construirlas por separado habría sido escribir esa pieza
+dos veces.
+
+Antes de esto, `usuarios:crear` tecleaba la contraseña y alguien la dictaba por
+teléfono, y olvidarla era una llamada más un comando.
+
+### Añadido
+- **`password_links`** — la tabla número 68 y la **decimotercera columna puerta**
+  del esquema. Guarda `token_sha256`, nunca el token (`DEC-114`): quien lea esta
+  tabla no puede entrar en ninguna cuenta.
+- **Alta 72 h, recuperación 1 h** (`DEC-113`). El de alta llega sin avisar y puede
+  caer un viernes por la noche; el de recuperación lo pide alguien que está
+  delante de la pantalla ahora.
+- **`/recuperar`**, con la **misma respuesta exista o no el correo** (`DEC-115`) —
+  afirmado byte a byte en la prueba— y límite doble: por IP en la ruta y **por
+  correo** en el controlador, que es el que impide inundar un buzón concreto desde
+  IPs distintas.
+- **La URL no lleva el token** (`DEC-117`): la ruta del correo lo guarda en la
+  sesión y redirige a una URL limpia. Una URL con un token dentro viaja en la
+  cabecera `Referer` a cualquier recurso externo, y estas pantallas cargan
+  tipografías de un dominio de terceros.
+- **Aprobar un creador le crea la cuenta** y escribe `creators.user_id` — una
+  columna que existía desde la Fase 3 y no escribía nadie. La cuenta nace con el
+  hash de 32 bytes aleatorios que no se guardan, no se muestran y no se devuelven:
+  no se puede entrar en ella hasta usar el enlace.
+- **Usar el enlace cierra las sesiones abiertas** y rota `remember_token`. Poner
+  una contraseña nueva y dejar viva la sesión de quien entró con la vieja es no
+  haber hecho nada.
+
+### Corregido
+- **`/panel` enseñaba los totales internos a cualquier autenticado** (`DEC-118`).
+  Nadie lo había pensado porque hasta hoy **todos los usuarios eran internos**;
+  `5.9` crea la primera cuenta que no lo es. Un rol sin permisos no protege una
+  pantalla que no pide ninguno.
+- **`VARBINARY` faltaba en el reconocedor de tipos de `generar-triggers.py`.** El
+  `CHECK` que nombraba `used_ip` se generaba como un disparador con el
+  identificador suelto. Se vio porque MySQL grita; el hueco existía desde la Fase 2
+  en `audit_logs.ip_address` y `creator_identity_verifications.ip_address` (`T-37`).
+- **`2026_08_22_000495` no tenía `down()`.** La única de las cuarenta migraciones
+  sin él: `php artisan migrate:rollback` moría ahí con un error fatal y se llevaba
+  por delante la vuelta atrás de todo lo posterior.
+
+### Cambiado
+- **`SESSION_DRIVER=database` pasa a ser requisito de seguridad**, no preferencia
+  (`.env.example` decía `redis`). Con otro almacén las sesiones no se pueden
+  cerrar; el servicio lo **avisa en el log** en vez de fallar en silencio.
+- `BR-SEC-004` deja de ser una regla sin código detrás — para las cuentas de
+  creador. Sigue sin cumplirse para los usuarios internos (`T-36`).
+
+### Verificación
+427 pruebas / 1.429 aserciones · 1.118 (MariaDB) y 1.108 (MySQL 8) aserciones de
+restricción · 20 mutaciones, 20 detectadas tras dos correcciones · las seis
+puertas en verde.
+
+**Las dos mutaciones que sobrevivieron enseñaron algo.** Una era código
+equivalente, y se arregló *haciéndolo dejar de serlo*: «no hay token en la sesión»
+y «el token no vale» piden cosas distintas de la persona. La otra destapó que mi
+propia prueba era un **falso verde** —comparaba el identificador de sesión antes y
+después, y el cliente de PHPUnit ya lo cambia solo—.
+
+---
+
+## [4.13 · El aviso al creador cuando cambian sus datos sensibles] — 2026-08-26
+
+Cierra **`T-10`** y la mitad que faltaba de **`BR-CREATOR-007`** (🔴). La
+aprobación interna existía desde 3.6 y 3.8; la **notificación** no — *«la
+pantalla se lo recuerda al operador para que lo haga a mano»*, que es otra forma
+de decir que no se hacía.
+
+### El problema, que es de arquitectura
+Creator sabe que el dato cambió, Communication sabe enviar, y **`deptrac.yaml` no
+deja que se conozcan**. No es burocracia: si Creator importara Communication, un
+SMTP caído podría tumbar la captura de un dato fiscal.
+
+La respuesta ya estaba diseñada y sin usar. **`domain_events` existe desde 2.4 y
+no tenía una sola fila** — mismo patrón que `campaign_creators` antes de 7.4.
+
+### Añadido
+- **`App\Shared\Eventos`** (`DEC-112`): el hecho se **guarda antes** de
+  despacharlo, para que conste aunque el oyente reviente. Creator levanta un
+  nombre y un array; Communication recibe un nombre y un array. Ninguno importa
+  al otro.
+- **Aviso al capturar, no al aprobar** (`DEC-109`) — es lo único que le da al
+  creador margen para decir «yo no fui» mientras el cambio se puede parar.
+- **El correo no lleva el dato dentro** (`DEC-110`). Sin número, sin banco, sin
+  RUC: se lee en buzones que no controlamos, y ése es justo el escenario del que
+  nos defendemos.
+- **Si el aviso no sale, el cambio sigue** (`DEC-111`), pero el fallo se ve.
+- **Las plantillas van en un seeder**, idempotente y con fecha de vigencia fija.
+  Sin plantilla no sale el aviso, y dejarlo a que alguien la publique en cada
+  entorno es el modo de fallo que `DEC-085` ya demostró.
+
+### Verificación
+390 pruebas / 1.302 aserciones · 1.070 y 1.060 aserciones de restricción · siete
+mutaciones, las siete en rojo · las seis puertas en verde, **Deptrac incluido** —
+que el grafo siga acíclico es parte del resultado, no un trámite.
+
+---
+
+## [Runbook de despliegue] — 2026-08-26
+
+`docs/18-RUNBOOK-DESPLIEGUE.md`. Los pasos de despliegue estaban viviendo en
+conversaciones, y `DEC-085` —los dos `GRANT` que protegen la bitácora— lleva
+desde el 25 de agosto marcado como «falta ejecutarlo» sin más garantía que la
+memoria de alguien.
+
+Recoge: los **dos** crones que hacen falta (la cola y el scheduler **no son lo
+mismo**, y `schedule:run` no procesa la cola), las dos banderas de
+`queue:work` sin las cuales el cron de cada minuto apila procesos hasta tumbar
+el servidor, el orden de despliegue con `queue:restart` incluido, la trampa de
+`config:cache` con `env()`, y las comprobaciones posteriores.
+
+Y dice **lo que todavía no cubre** —copias restauradas, monitorización, vuelta
+atrás— para que no parezca completo cuando no lo está. Anotado como `T-35`: un
+runbook que nadie ha seguido es una hipótesis, no un procedimiento.
+
+---
+
 ## [4.9 · El correo] — 2026-08-26
 
 **Se adelanta a propósito, rompiendo el orden del roadmap.** 7.6 no se podía

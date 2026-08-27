@@ -7,6 +7,7 @@ namespace App\Modules\Campaign\Http\Controllers;
 use App\Modules\Campaign\Services\BuscadorDeCreadores;
 use App\Modules\Campaign\Services\Campanas;
 use App\Modules\Campaign\Services\Compromiso;
+use App\Modules\Campaign\Services\Invitaciones;
 use App\Modules\Campaign\Services\ListaCorta;
 use App\Shared\Audit\Bitacora;
 use App\Shared\Database\Choque;
@@ -54,6 +55,8 @@ final class CandidatosController
             ? BuscadorDeCreadores::conDescartados($campana, $filtros)
             : BuscadorDeCreadores::buscar($campana, $filtros);
 
+        $lista = ListaCorta::de((int) $campana->id);
+
         return view('campanas.candidatos', [
             'campana' => $campana,
             'candidatos' => $candidatos,
@@ -64,7 +67,20 @@ final class CandidatosController
             'verDescartados' => $verDescartados,
             'motivos' => BuscadorDeCreadores::MOTIVOS,
             'edadMinima' => BuscadorDeCreadores::edadMinima($campana),
-            'lista' => ListaCorta::de((int) $campana->id),
+            'lista' => $lista,
+            // 7.6: en que anda la invitacion de cada uno. Se calcula aqui y no
+            // en la plantilla: una consulta dentro de un `foreach` de Blade es
+            // como se llega a cuarenta consultas sin que se note.
+            'invitaciones' => $lista->mapWithKeys(fn (object $f): array => [
+                (int) $f->id => Invitaciones::viva((int) $f->id),
+            ]),
+            // `T-38`: las preguntas del creador. Una pregunta que nadie lee es
+            // peor que no poder preguntar --el creador se queda esperando y
+            // ademas cree que nos importa--, asi que salen en la misma pantalla
+            // donde se decide sobre el.
+            'preguntas' => $lista->mapWithKeys(fn (object $f): array => [
+                (int) $f->id => Invitaciones::preguntas((int) $f->id),
+            ]),
             'compromiso' => [
                 'comprometido' => Compromiso::comprometido((int) $campana->id),
                 'presupuesto' => (float) $campana->creator_budget_amount,
@@ -171,6 +187,14 @@ final class CandidatosController
             return back()->with('aviso', $aviso);
         }
 
+        // 7.6: y si hay una invitacion VIVA, el creador esta mirando la cifra
+        // anterior. `tg_ccr_monto_con_invitacion` lo impide en la base; aqui se
+        // dice con palabras y se explica la salida --anular y volver a invitar--
+        // en vez de dejar que reviente el UPDATE con un SIGNAL.
+        if (($aviso = Invitaciones::vetoPorInvitacionViva($participacion)) !== null) {
+            return back()->with('aviso', $aviso);
+        }
+
         $importe = round((float) $peticion->input('agreed_amount', 0), 4);
 
         if ($importe < 0) {
@@ -197,6 +221,114 @@ final class CandidatosController
         );
 
         return back()->with('exito', 'Monto acordado actualizado.');
+    }
+
+    /**
+     * Manda la invitación (7.6).
+     *
+     * El correo sale por evento —`CorreoPedido`, que vive en `Shared`— porque
+     * `deptrac.yaml` no deja que Campaign conozca Communication. No es
+     * burocracia: un SMTP caído no puede tumbar una invitación que ya está
+     * escrita y cuyo plazo ya corre.
+     */
+    public function invitar(string $uuid, int $participacion): RedirectResponse
+    {
+        $campana = $this->campana($uuid);
+        $fila = $this->participacion($campana, $participacion);
+
+        $motivos = Invitaciones::vetoParaInvitar($campana, $fila);
+
+        if ($motivos !== []) {
+            return back()->with('aviso', 'No se puede invitar a ese creador: '
+                .implode('; ', $motivos).'.');
+        }
+
+        Invitaciones::invitar($campana, $fila, Auth::id());
+
+        return back()->with('exito', sprintf(
+            'Invitacion enviada. Tiene %d horas para contestar; si no, la participacion '
+            .'queda como caducada y su importe deja de contar contra el presupuesto.',
+            (int) ($campana->invitation_hours ?: 72),
+        ));
+    }
+
+    /**
+     * Anula la invitación viva.
+     *
+     * Es la salida cuando hay que renegociar: sin esto, el importe no se puede
+     * tocar mientras el creador tenga una oferta delante — que es exactamente lo
+     * que `tg_ccr_monto_con_invitacion` protege.
+     *
+     * La participación vuelve a `shortlisted`. **No a `cancelled`**: anular una
+     * oferta que nadie contestó no es sacar al creador de la campaña.
+     */
+    public function anularInvitacion(Request $peticion, string $uuid, int $participacion): RedirectResponse
+    {
+        $campana = $this->campana($uuid);
+        $fila = $this->participacion($campana, $participacion);
+
+        if (Invitaciones::viva($participacion) === null) {
+            return back()->with('aviso', 'Ese creador no tiene ninguna invitacion viva que anular.');
+        }
+
+        $motivo = trim((string) $peticion->input('motivo', ''));
+
+        DB::transaction(function () use ($participacion, $motivo): void {
+            // `ck_inv_revoked` exige motivo. El del formulario puede venir
+            // vacio; entonces se anota el hecho --que la anulo una persona-- y
+            // no una cadena vacia que no explica nada.
+            Invitaciones::anular($participacion, $motivo !== '' ? mb_substr($motivo, 0, 40) : 'anulada_a_mano');
+
+            DB::table('campaign_creators')->where('id', $participacion)->update([
+                'status' => ListaCorta::SHORTLISTED,
+                'invited_at' => null,
+                'updated_at' => now(),
+            ]);
+        });
+
+        Bitacora::registrar(
+            accion: 'campaign.invitation_revoked',
+            tipoEntidad: 'campaign_creator',
+            idEntidad: $participacion,
+            cambios: [
+                'status' => ['antes' => $fila->status, 'despues' => ListaCorta::SHORTLISTED],
+                'motivo' => ['antes' => null, 'despues' => $motivo],
+            ],
+        );
+
+        return back()->with('exito', 'Invitacion anulada. El creador vuelve a la lista corta '
+            .'y ya se le puede cambiar el importe.');
+    }
+
+    /**
+     * Alguien del equipo se hace cargo de una pregunta (`T-38`).
+     *
+     * **No es una respuesta.** La respuesta va por correo, que es donde el
+     * creador está. Esto marca un dueño, que es lo que hace que una pregunta no
+     * se quede huérfana en una lista que todos miran y nadie atiende.
+     */
+    public function marcarPreguntaVista(string $uuid, int $participacion, int $pregunta): RedirectResponse
+    {
+        $campana = $this->campana($uuid);
+
+        // El par, no solo el id: la pregunta puede existir y ser de otra
+        // campana. Misma leccion que en marcas, requisitos y mercados.
+        $this->participacion($campana, $participacion);
+
+        $suya = DB::table('invitation_questions as q')
+            ->join('invitations as i', 'i.id', '=', 'q.invitation_id')
+            ->where('q.id', $pregunta)
+            ->where('i.campaign_creator_id', $participacion)
+            ->exists();
+
+        if (!$suya) {
+            throw new NotFoundHttpException('Esa pregunta no es de esa participacion.');
+        }
+
+        Invitaciones::marcarVista($pregunta, (int) Auth::id());
+
+        return back()->with('exito', 'Pregunta marcada como atendida. Contestale por correo: '
+            .'el creador espera ahi, y su invitacion sigue corriendo.');
     }
 
     /**

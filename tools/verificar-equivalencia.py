@@ -28,8 +28,31 @@ def q(db, sql):
         print(r.stderr); sys.exit(2)
     return [l for l in r.stdout.strip().split('\n') if l]
 
-checks = set(q(A, "SELECT constraint_name FROM information_schema.table_constraints "
-                  f"WHERE constraint_schema='{A}' AND constraint_type='CHECK';"))
+# `json_valid(...)` NO cuenta.
+#
+# MariaDB no tiene tipo JSON: es `LONGTEXT` mas un CHECK implicito
+# `json_valid(<columna>)` que se llama COMO LA COLUMNA. MySQL y Percona si lo
+# tienen, asi que ese CHECK no existe alli y esta puerta denunciaba una
+# diferencia que no es de este proyecto --`email_templates.variables`, desde
+# 4.9--. En el CI salia verde porque alli la base con CHECK es MySQL; en la
+# maquina de quien desarrolla, roja siempre.
+#
+# Una puerta que da rojo por algo que nadie puede arreglar ensena a ignorar el
+# rojo, que es peor que no tener la puerta.
+#
+# Se excluye por las DOS condiciones a la vez --nombre que no empieza por `ck_`
+# Y clausula con `json_valid`--, no por la clausula sola: este proyecto declara
+# CHECK de `json_valid` a proposito (`ck_domain_events_payload`,
+# `ck_audit_logs_changes`, `ck_pev_payload`, `ck_sas_extra`) y esos si tienen que
+# contarse. Filtrar solo por la clausula los borraba a los cuatro, que es como
+# una puerta deja de ver lo que existe para vigilar.
+checks = set(q(A, "SELECT tc.constraint_name FROM information_schema.table_constraints tc "
+                  "LEFT JOIN information_schema.check_constraints cc "
+                  "  ON cc.constraint_schema = tc.constraint_schema "
+                  " AND cc.constraint_name = tc.constraint_name "
+                  f"WHERE tc.constraint_schema='{A}' AND tc.constraint_type='CHECK' "
+                  "  AND NOT (tc.constraint_name NOT LIKE 'ck\\_%' "
+                  "           AND COALESCE(cc.check_clause,'') LIKE '%json_valid%');"))
 cubiertos = {}
 for t in q(B, "SELECT trigger_name FROM information_schema.triggers "
               f"WHERE trigger_schema='{B}' AND trigger_name LIKE 'tg_ck_%';"):

@@ -4,11 +4,18 @@ declare(strict_types=1);
 
 use App\Modules\Campaign\Http\Controllers\CampanasController;
 use App\Modules\Campaign\Http\Controllers\CandidatosController;
+use App\Modules\Campaign\Http\Controllers\InvitacionController;
+use App\Modules\Campaign\Http\Controllers\SeguimientoController;
 use App\Modules\Client\Http\Controllers\ClientesController;
 use App\Modules\Client\Http\Controllers\ContactosController;
 use App\Modules\Client\Http\Controllers\MarcasController;
 use App\Modules\Client\Http\Controllers\PerfilesFiscalesController;
 use App\Modules\Communication\Http\Controllers\CorreosController;
+use App\Modules\Content\Http\Controllers\EntregablesController;
+use App\Modules\Content\Http\Controllers\MisEntregasController;
+use App\Modules\Content\Http\Controllers\PermanenciaController;
+use App\Modules\Content\Http\Controllers\RevisionController;
+use App\Modules\Content\Http\Controllers\VerificacionController;
 use App\Modules\Core\Http\Controllers\BitacoraController;
 use App\Modules\Core\Http\Controllers\CatalogosController;
 use App\Modules\Core\Http\Controllers\EntidadesLegalesController;
@@ -22,6 +29,7 @@ use App\Modules\Creator\Http\Controllers\RedesSocialesController;
 use App\Modules\Creator\Http\Controllers\SolicitudesController;
 use App\Modules\Identity\Http\Controllers\AccesoController;
 use App\Modules\Identity\Http\Controllers\PasswordController;
+use App\Modules\Identity\Http\Controllers\RecuperacionController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -41,6 +49,63 @@ Route::middleware('guest')->group(function (): void {
         ->middleware('throttle:5,1')
         ->name('entrar');
 });
+
+// ---- Enlaces de contrasena (`4.1`, y la otra mitad de `5.9`) ---------------
+//
+// FUERA del grupo `guest` a proposito. Un enlace de alta o de recuperacion tiene
+// que funcionar tambien para quien ya tiene una sesion abierta --el caso tipico
+// es la cuenta compartida de un ordenador prestado--, y `guest` lo mandaria al
+// panel sin decirle por que.
+//
+// El limite por IP es la primera barrera; `RecuperacionController` pone ademas
+// uno por correo, que es el que impide inundar un buzon concreto desde IPs
+// distintas.
+Route::get('/recuperar', [RecuperacionController::class, 'pedir'])->name('recuperar');
+Route::post('/recuperar', [RecuperacionController::class, 'enviar'])
+    ->middleware('throttle:5,1')
+    ->name('recuperar.enviar');
+
+// La ruta que lleva el token. Lo unico que hace es guardarlo en la sesion y
+// redirigir a `recuperar.formulario`, que ya no lo lleva: ver la cabecera del
+// controlador.
+Route::get('/contrasena/nueva/{token}', [RecuperacionController::class, 'usar'])
+    ->middleware('throttle:20,1')
+    ->where('token', '[a-f0-9]{64}')
+    ->name('recuperar.usar');
+Route::get('/contrasena/nueva', [RecuperacionController::class, 'formulario'])
+    ->name('recuperar.formulario');
+Route::post('/contrasena/nueva', [RecuperacionController::class, 'fijar'])
+    ->middleware('throttle:10,1')
+    ->name('recuperar.fijar');
+
+// ---- La invitacion del creador (`7.6`) --------------------------------------
+//
+// La primera parte del sistema hecha para alguien de FUERA. Sin `auth` y sin
+// `guest`: el creador no necesita entrar --su portal (`F6`) esta bloqueado por
+// `T-09`-- y la autorizacion es el token, que vale una sola vez.
+//
+// Mismo tratamiento que el enlace de contrasena: la ruta que lleva el token lo
+// guarda en la sesion y redirige a una URL limpia (`DEC-117`).
+Route::get('/invitacion/{token}', [InvitacionController::class, 'ver'])
+    ->middleware('throttle:20,1')
+    ->where('token', '[a-f0-9]{64}')
+    ->name('invitacion.ver');
+Route::get('/invitacion', [InvitacionController::class, 'oferta'])->name('invitacion.oferta');
+Route::post('/invitacion/aceptar', [InvitacionController::class, 'aceptar'])
+    ->middleware('throttle:10,1')
+    ->name('invitacion.aceptar');
+Route::post('/invitacion/rechazar', [InvitacionController::class, 'rechazar'])
+    ->middleware('throttle:10,1')
+    ->name('invitacion.rechazar');
+// `T-38`: preguntar no es contestar --la invitacion sigue viva-- y por eso es
+// una ruta aparte y no un tercer boton del mismo formulario.
+Route::post('/invitacion/pregunta', [InvitacionController::class, 'preguntar'])
+    ->middleware('throttle:5,1')
+    ->name('invitacion.preguntar');
+Route::get('/invitacion/estado/gracias', [InvitacionController::class, 'gracias'])
+    ->name('invitacion.gracias');
+Route::get('/invitacion/estado/no-disponible', [InvitacionController::class, 'caducada'])
+    ->name('invitacion.caducada');
 
 Route::middleware('auth')->group(function (): void {
     Route::post('/salir', [AccesoController::class, 'salir'])->name('salir');
@@ -479,6 +544,121 @@ Route::middleware('auth')->group(function (): void {
         ->whereUuid('uuid')->whereNumber('mercado')
         ->name('campanas.mercados.ver');
 
+    // ---- El portal del creador (`8.1`) ----------------------------------
+    //
+    // `creator.portal` es el primer permiso de ambito EXTERNO. Dice «esta
+    // persona puede ver UN portal de creador»; **cual** lo decide
+    // `creators.user_id = Auth::id()`, comprobado en cada accion. Sin eso,
+    // cualquier creador con el permiso podria entregar en nombre de otro.
+    Route::get('/mis-entregas', [MisEntregasController::class, 'index'])
+        ->middleware('permiso:creator.portal')
+        ->name('entregas.mias');
+    Route::post('/mis-entregas/{uuid}', [MisEntregasController::class, 'entregar'])
+        ->middleware(['permiso:creator.portal', 'throttle:20,1'])
+        ->whereUuid('uuid')
+        ->name('entregas.entregar');
+
+    // 8.6: el creador pega el enlace de su post. Es quien lo sabe primero y quien
+    // lo tiene en la mano; el equipo puede hacerlo por el desde la pantalla
+    // interna, y en los dos casos queda quien lo reporto.
+    Route::post('/mis-entregas/{uuid}/publicado', [MisEntregasController::class, 'publicar'])
+        ->middleware(['permiso:creator.portal', 'throttle:20,1'])
+        ->whereUuid('uuid')
+        ->name('entregas.publicar');
+
+    // 7.7: el panel de seguimiento. Es VER: contesta «como va», no cambia nada.
+    // La ficha (`campanas.show`) contesta «que es»; mezclarlas daria una pagina
+    // que hace las dos cosas a medias y en la que hay que buscar.
+    Route::get('/campanas/{uuid}/seguimiento', SeguimientoController::class)
+        ->middleware('permiso:campaign.view')
+        ->whereUuid('uuid')
+        ->name('campanas.seguimiento');
+
+    // 8.1: los entregables de una campana, por dentro. Pantalla de CONTENT y no
+    // del panel de seguimiento, y no por organizacion: `deptrac.yaml` dice
+    // `Campaign: [..., Creator, Client]` y Content no esta en la lista, asi que
+    // el panel de 7.7 no puede ni contarlos.
+    Route::get('/campanas/{uuid}/entregables', [EntregablesController::class, 'index'])
+        ->middleware('permiso:content.deliverable.view')
+        ->whereUuid('uuid')
+        ->name('campanas.entregables');
+
+    // 8.6: y el equipo, por el creador. Mismo servicio y mismo veto que su
+    // portal: solo cambia quien firma la fila.
+    Route::post('/campanas/{uuid}/entregables/{entregable}/publicado', [EntregablesController::class, 'publicar'])
+        ->middleware(['permiso:content.publication.manage', 'throttle:30,1'])
+        ->whereUuid('uuid')->whereNumber('entregable')
+        ->name('campanas.entregables.publicar');
+
+    // La salida de emergencia cuando el evento que los crea fallo.
+    Route::post('/campanas/{uuid}/entregables/{participacion}', [EntregablesController::class, 'generar'])
+        ->middleware('permiso:content.deliverable.view')
+        ->whereUuid('uuid')->whereNumber('participacion')
+        ->name('campanas.entregables.generar');
+
+    // 8.3: la cola de revision. BANDEJA GLOBAL y no una por campana: revisar es
+    // trabajo por lotes --alguien se sienta y despacha lo que llego--, y una
+    // cola por campana obliga a recorrer campanas para descubrir si hay algo
+    // esperando. Lo que se descubre recorriendo se descubre tarde.
+    Route::get('/revision', [RevisionController::class, 'index'])
+        ->middleware('permiso:content.review')
+        ->name('revision.cola');
+    Route::get('/revision/{uuid}', [RevisionController::class, 'ver'])
+        ->middleware('permiso:content.review')
+        ->whereUuid('uuid')
+        ->name('revision.ver');
+    // El veredicto entra por `content.review`; APROBAR y AUTORIZAR una ronda de
+    // mas se comprueban dentro, porque los tres llegan por el mismo POST y la
+    // ruta solo sabe decir «puede entrar a revisar».
+    Route::post('/revision/{uuid}', [RevisionController::class, 'revisar'])
+        ->middleware(['permiso:content.review', 'throttle:30,1'])
+        ->whereUuid('uuid')
+        ->name('revision.revisar');
+
+    // 8.2: reabrir. Accion propia y no una rama del veredicto: no es una opinion
+    // sobre el contenido, es volver atras sobre una decision ya tomada. Entra por
+    // `content.review` y el permiso de verdad --`content.reopen`-- se comprueba
+    // dentro, como los otros tres de 8.3.
+    Route::post('/revision/{uuid}/reabrir', [RevisionController::class, 'reabrir'])
+        ->middleware(['permiso:content.review', 'throttle:30,1'])
+        ->whereUuid('uuid')
+        ->name('revision.reabrir');
+
+    // 8.7: la cola de verificacion. Bandeja global, como la de revision de 8.3:
+    // verificar es trabajo por lotes, y un post sin verificar es un pago que no
+    // puede salir.
+    Route::get('/verificacion', [VerificacionController::class, 'index'])
+        ->middleware('permiso:content.deliverable.view')
+        ->name('verificacion.cola');
+    Route::get('/verificacion/{uuid}', [VerificacionController::class, 'ver'])
+        ->middleware('permiso:content.deliverable.view')
+        ->whereUuid('uuid')
+        ->name('verificacion.ver');
+    // El veredicto entra por `content.deliverable.view` --mirar la cola es ver--
+    // y `content.verify` se comprueba DENTRO: los dos veredictos llegan por el
+    // mismo formulario y esconder un boton no es una regla de autorizacion.
+    Route::post('/verificacion/{uuid}', [VerificacionController::class, 'verificar'])
+        ->middleware(['permiso:content.deliverable.view', 'throttle:30,1'])
+        ->whereUuid('uuid')
+        ->name('verificacion.verificar');
+
+    // 8.8: la bandeja de permanencia. Las caidas abiertas primero --son las que
+    // tienen un pago parado detras-- y luego lo vigilado que nadie mira.
+    Route::get('/permanencia', [PermanenciaController::class, 'index'])
+        ->middleware('permiso:content.deliverable.view')
+        ->name('permanencia.bandeja');
+    Route::get('/permanencia/{uuid}', [PermanenciaController::class, 'ver'])
+        ->middleware('permiso:content.deliverable.view')
+        ->whereUuid('uuid')
+        ->name('permanencia.ver');
+    // Las tres acciones --anotar, firmar la caida y reponer-- entran por el
+    // mismo POST y `content.verify` se comprueba DENTRO: declarar un post caido
+    // es la misma firma que verificarlo, en el otro sentido.
+    Route::post('/permanencia/{uuid}', [PermanenciaController::class, 'comprobar'])
+        ->middleware(['permiso:content.deliverable.view', 'throttle:30,1'])
+        ->whereUuid('uuid')
+        ->name('permanencia.comprobar');
+
     // Los candidatos (7.4). Buscar es VER --un revisor puede mirar a quien se
     // esta considerando-- pero armar la lista corta es gestionar.
     Route::get('/campanas/{uuid}/candidatos', [CandidatosController::class, 'index'])
@@ -502,6 +682,27 @@ Route::middleware('auth')->group(function (): void {
         ->middleware('permiso:campaign.manage')
         ->whereUuid('uuid')->whereNumber('participacion')
         ->name('campanas.candidatos.monto');
+
+    // 7.6: invitar tiene permiso propio. Editar una campana es trabajo interno;
+    // invitar es el momento en que un compromiso economico sale de la empresa y
+    // llega a una persona.
+    Route::post('/campanas/{uuid}/candidatos/{participacion}/invitar', [CandidatosController::class, 'invitar'])
+        ->middleware('permiso:campaign.invite')
+        ->whereUuid('uuid')->whereNumber('participacion')
+        ->name('campanas.candidatos.invitar');
+
+    Route::post('/campanas/{uuid}/candidatos/{participacion}/anular-invitacion', [CandidatosController::class, 'anularInvitacion'])
+        ->middleware('permiso:campaign.invite')
+        ->whereUuid('uuid')->whereNumber('participacion')
+        ->name('campanas.candidatos.anular');
+
+    // `T-38`: hacerse cargo de una pregunta no es invitar ni gestionar la
+    // campana: es atender a alguien. Va con `campaign.invite`, que es quien
+    // tiene la conversacion abierta con ese creador.
+    Route::post('/campanas/{uuid}/candidatos/{participacion}/preguntas/{pregunta}', [CandidatosController::class, 'marcarPreguntaVista'])
+        ->middleware('permiso:campaign.invite')
+        ->whereUuid('uuid')->whereNumber('participacion')->whereNumber('pregunta')
+        ->name('campanas.candidatos.pregunta');
 
     Route::post('/campanas/{uuid}/sobrecosto', [CandidatosController::class, 'autorizarSobrecosto'])
         ->middleware('permiso:campaign.approve')

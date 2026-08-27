@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Creator\Http\Controllers;
 
 use App\Modules\Creator\Http\Requests\AprobarSolicitudRequest;
+use App\Modules\Identity\Services\Cuentas;
 use App\Shared\Audit\Bitacora;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -166,12 +167,50 @@ final class SolicitudesController
             cambios: ['origen' => ['antes' => null, 'despues' => 'solicitud '.$solicitud->uuid]],
         );
 
+        // ---- `5.9`: la cuenta de acceso y su enlace ------------------------
+        //
+        // FUERA de la transaccion de arriba, y es deliberado. Aprobar a un
+        // creador es la decision de negocio; darle acceso es una consecuencia.
+        // Si estuvieran en la misma transaccion, un correo repetido en `users`
+        // --que ni siquiera es culpa del creador-- desharia la aprobacion
+        // entera, y el revisor volveria a la pantalla sin entender que paso.
+        //
+        // Al reves tampoco valdria: crear la cuenta antes de que el creador
+        // exista dejaria usuarios sueltos si la aprobacion falla.
+        $cuenta = Cuentas::paraCreador(
+            email: (string) $solicitud->email,
+            nombre: (string) $datos['display_name'],
+            idioma: 'es',
+            solicitanteId: $request->user()?->getAuthIdentifier(),
+        );
+
+        if ($cuenta['usuarioId'] !== null) {
+            // `creators.user_id` existe desde la Fase 3 y hasta hoy no lo
+            // escribia nadie: era una columna con su indice unico y su clave
+            // ajena esperando a que hubiera cuentas de creador que enlazar.
+            DB::table('creators')->where('id', $creadorId)
+                ->update(['user_id' => $cuenta['usuarioId'], 'updated_at' => now()]);
+
+            Bitacora::registrar(
+                accion: 'creator.account_created',
+                tipoEntidad: 'creator',
+                idEntidad: $creadorId,
+                cambios: ['user_id' => ['antes' => null, 'despues' => $cuenta['usuarioId']]],
+            );
+        }
+
         $creador = DB::table('creators')->where('id', $creadorId)->first(['uuid']);
+
+        $aviso = $cuenta['usuarioId'] !== null
+            ? 'Se le ha mandado un enlace a '.$solicitud->email.' para que elija su contrasena '
+              .'(vale 72 horas y solo se puede usar una vez).'
+            : Cuentas::explicacion((string) $cuenta['motivo']);
 
         return redirect()
             ->route('creadores.show', $creador->uuid)
             ->with('exito', 'Creador dado de alta en estado «pendiente». Para activarlo faltan '
-                .'identidad verificada, red social, datos fiscales y medio de pago (BR-CREATOR-006).');
+                .'identidad verificada, red social, datos fiscales y medio de pago (BR-CREATOR-006). '
+                .$aviso);
     }
 
     public function rechazar(Request $request, string $uuid): RedirectResponse

@@ -28,3 +28,18 @@
 7.3-mercados
 7.4-candidatos
 7.5-compromiso
+5.9-enlaces
+7.6-invitaciones
+8.1-entregables
+8.3-revision
+8.2-version-vigente
+8.6-publicacion
+# 8.7 va LA ULTIMA a proposito: es la unica suite que NO puede limpiar lo suyo.
+# `publication_evidence` lleva `no_delete` (3.12) y su clave ajena impide borrar
+# la publicacion, que impide borrar el entregable. Si anades una suite despues,
+# encontrara filas de `luisvega` puestas.
+8.7-evidencia
+# 8.8 tampoco puede limpiar: `permanence_checks` entro en la lista de 3.12 y su
+# clave ajena encadena publicacion y entregable. Va detras de 8.7 y usa SU
+# entregable --el numero 2 de luisvega-- para no pisarse con ella.
+8.8-permanencia

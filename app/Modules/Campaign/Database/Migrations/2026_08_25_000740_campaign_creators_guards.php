@@ -58,8 +58,13 @@ return new class extends Migration
     /** @return list<string> */
     private static function disparadores(): array
     {
+        // Cabe en 128 caracteres A PROPOSITO. `MESSAGE_TEXT` es VARCHAR(128) y
+        // MySQL/Percona no truncan: sueltan `1648 Data too long for condition
+        // item` en vez del `45000` que el mensaje queria dar. MariaDB si lo deja
+        // pasar, asi que esto solo se ve en produccion. Gate permanente:
+        // `tools/verificar-mensajes.py`, que lo mira contra Percona en el CI.
         $mensaje = 'No se anaden creadores a una campana cerrada: lo que se entrego ahi ya se conto. '
-            .'Si hay que sumar a alguien, es una campana nueva.';
+            .'Sumar a alguien es una campana nueva.';
 
         return [
             <<<SQL

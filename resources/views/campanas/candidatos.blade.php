@@ -118,6 +118,46 @@
                 <td class="py-2">{{ $p->mercado ?? '—' }}</td>
                 <td class="py-2">
                   <span class="rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-600">{{ $p->status }}</span>
+                  {{-- 7.6: si hay invitación viva, hasta cuándo. Sin esto,
+                       «¿le mandamos ya la invitación?» se contesta abriendo la
+                       base de datos. --}}
+                  @if ($invitaciones[$p->id] ?? null)
+                    <div class="mt-0.5 text-xs text-slate-500">
+                      hasta {{ \Illuminate\Support\Carbon::parse($invitaciones[$p->id]->expires_at)->format('d/m H:i') }}
+                      @if ($invitaciones[$p->id]->opened_at)
+                        · <span class="text-emerald-600">abierta</span>
+                      @else
+                        · <span class="text-slate-400">sin abrir</span>
+                      @endif
+                    </div>
+                  @endif
+
+                  {{-- `T-38`. Las preguntas sin atender salen en ámbar y arriba:
+                       una pregunta que nadie lee es peor que no poder preguntar,
+                       porque el creador se queda esperando y además cree que nos
+                       importa. --}}
+                  @foreach (($preguntas[$p->id] ?? collect()) as $q)
+                    <div class="mt-1.5 rounded-lg border px-2 py-1.5 text-xs
+                                {{ $q->seen_at ? 'border-slate-200 bg-slate-50' : 'border-amber-200 bg-amber-50' }}">
+                      <p class="{{ $q->seen_at ? 'text-slate-500' : 'text-amber-900' }}">«{{ $q->body }}»</p>
+                      <div class="mt-1 flex items-center gap-2">
+                        <span class="text-slate-400">
+                          {{ \Illuminate\Support\Carbon::parse($q->asked_at)->format('d/m H:i') }}
+                        </span>
+                        @if ($q->seen_at)
+                          <span class="text-slate-400">· atendida por {{ $q->visto_por }}</span>
+                        @else
+                          @can('campaign.invite')
+                            <form method="POST"
+                                  action="{{ route('campanas.candidatos.pregunta', [$campana->uuid, $p->id, $q->id]) }}">
+                              @csrf
+                              <button class="text-amber-700 hover:underline">Me hago cargo</button>
+                            </form>
+                          @endcan
+                        @endif
+                      </div>
+                    </div>
+                  @endforeach
                 </td>
                 <td class="py-2 text-right">
                   {{-- Congelado en cuanto acepta: se enseña el número, sin
@@ -126,6 +166,12 @@
                   @if ($p->accepted_at !== null)
                     <span class="font-medium">{{ number_format((float) $p->agreed_amount, 2) }}</span>
                     <span class="ml-1 rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-500">congelado</span>
+                  {{-- 7.6: con una invitación viva tampoco se toca — el creador
+                       está mirando esa cifra. Se enseña, no se ofrece un campo
+                       que la base va a rechazar. --}}
+                  @elseif ($invitaciones[$p->id] ?? null)
+                    <span class="font-medium">{{ number_format((float) $p->agreed_amount, 2) }}</span>
+                    <span class="ml-1 rounded bg-amber-50 px-1.5 py-0.5 text-xs text-amber-700">ofrecido</span>
                   @elsecan('campaign.manage')
                     <form method="POST"
                           action="{{ route('campanas.candidatos.monto', [$campana->uuid, $p->id]) }}"
@@ -141,13 +187,38 @@
                   @endcan
                 </td>
                 <td class="py-2 text-right">
-                  @can('campaign.manage')
-                    <form method="POST"
-                          action="{{ route('campanas.candidatos.quitar', [$campana->uuid, $p->id]) }}">
-                      @csrf @method('DELETE')
-                      <button class="text-xs text-rose-600 hover:underline">Quitar</button>
-                    </form>
-                  @endcan
+                  <div class="flex justify-end gap-3">
+                    @can('campaign.invite')
+                      @if ($invitaciones[$p->id] ?? null)
+                        <form method="POST"
+                              action="{{ route('campanas.candidatos.anular', [$campana->uuid, $p->id]) }}"
+                              class="flex items-center gap-1">
+                          @csrf
+                          <input name="motivo" placeholder="motivo" maxlength="40"
+                                 class="w-24 rounded border border-slate-300 px-1.5 py-0.5 text-xs">
+                          <button class="text-xs text-amber-700 hover:underline">Anular</button>
+                        </form>
+                      @elseif (in_array($p->status, \App\Modules\Campaign\Services\Invitaciones::INVITABLES, true))
+                        <form method="POST"
+                              action="{{ route('campanas.candidatos.invitar', [$campana->uuid, $p->id]) }}">
+                          @csrf
+                          <button class="text-xs text-marca-600 hover:underline">
+                            {{ $p->status === 'shortlisted' ? 'Invitar' : 'Volver a invitar' }}
+                          </button>
+                        </form>
+                      @endif
+                    @endcan
+
+                    @if ($p->status === 'shortlisted')
+                      @can('campaign.manage')
+                        <form method="POST"
+                              action="{{ route('campanas.candidatos.quitar', [$campana->uuid, $p->id]) }}">
+                          @csrf @method('DELETE')
+                          <button class="text-xs text-rose-600 hover:underline">Quitar</button>
+                        </form>
+                      @endcan
+                    @endif
+                  </div>
                 </td>
               </tr>
             @endforeach

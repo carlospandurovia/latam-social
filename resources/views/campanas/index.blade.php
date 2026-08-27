@@ -54,7 +54,8 @@
           <tr class="hover:bg-slate-50">
             <td class="px-4 py-3 font-mono text-xs text-slate-500">{{ $c->code }}</td>
             <td class="px-4 py-3">
-              <a href="{{ route('campanas.show', $c->uuid) }}" class="font-medium text-marca-600 hover:underline">
+              <a href="{{ route($c->confirmed_at !== null ? 'campanas.seguimiento' : 'campanas.show', $c->uuid) }}"
+                 class="font-medium text-marca-600 hover:underline">
                 {{ $c->name }}
               </a>
             </td>

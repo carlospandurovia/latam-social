@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Modules\Identity\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Validation\Rules\Password;
 
 /**
  * Cambiar la propia contraseña (`T-23`).
@@ -44,24 +43,11 @@ final class CambiarPasswordRequest extends FormRequest
      */
     public function rules(): array
     {
-        // 12 caracteres y mezcla. La temporal que genera `usuarios:crear` son
-        // 16 de `Str::password()`, así que el listón no lo pone esta pantalla:
-        // lo pone lo que ya se estaba generando.
-        $fuerza = Password::min(12)->letters()->numbers()->symbols();
-
-        // Comprobar contra filtraciones publicas es una llamada HTTP saliente a
-        // haveibeenpwned. Se deja configurable porque **falla en ABIERTO**: sin
-        // salida a internet, Laravel da la contrasena por buena. Un servidor
-        // endurecido —que es donde mas importa— seria justo donde la
-        // comprobacion no comprueba, y sin decirlo.
-        //
-        // Asi que no es la defensa: la defensa son los 12 caracteres y la
-        // mezcla. Esto es un extra, y quien despliega decide si su servidor
-        // puede salir a internet. En pruebas se apaga: no se hacen llamadas de
-        // red desde una prueba.
-        if ((bool) config('latam.seguridad.comprobar_filtraciones', true)) {
-            $fuerza = $fuerza->uncompromised();
-        }
+        // El liston vive en `FijarPasswordRequest::fuerza()` y se llama desde
+        // las dos pantallas que ponen una contrasena. Repetirlo aqui seria
+        // garantizar que un dia se endurezca en una y no en la otra --y la que
+        // se quedara floja seria la que no se mira--.
+        $fuerza = FijarPasswordRequest::fuerza();
 
         return [
             // `current_password` compara contra el hash del usuario conectado;

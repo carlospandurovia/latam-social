@@ -140,7 +140,7 @@ return new class extends Migration
                           WHERE `id` = OLD.`campaign_id` AND `confirmed_at` IS NOT NULL)
               THEN
                 SIGNAL SQLSTATE '45000'
-                  SET MESSAGE_TEXT = 'De una campana confirmada no se quita un mercado (BR-CAMPAIGN-003): puede dejar fuera a creadores ya invitados. Anadir si se puede.';
+                  SET MESSAGE_TEXT = 'De una campana confirmada no se quita un mercado (BR-CAMPAIGN-003): deja fuera a creadores ya invitados. Anadir si se puede.';
               END IF;
             END
             SQL;

@@ -98,7 +98,7 @@ Iterativa y exhaustiva, tal como pide la especificación. **Nada de frontend aqu
 ### F4 — Core técnico
 | It. | Contenido | Notas |
 |---|---|---|
-| 4.1 | Identidad: usuarios, login, logout, recuperación, verificación de email, sesiones | Con rate limiting y bloqueo progresivo |
+| 4.1 | ✅ **Cerrada (2026-08-26)**, junto con `5.9`: comparten la única pieza difícil. Recuperación por enlace de un solo uso, 1 h, con la **misma respuesta exista o no el correo** (`DEC-115`), la URL **sin el token dentro** (`DEC-117`) y límite doble —por IP en la ruta y por correo en el controlador—. Login, logout y rate limiting existían desde 3.1; la verificación de correo sigue pendiente. Ver `docs/fase-5/5.9-ENLACE-DE-CONTRASENA.md` |
 | 4.2 | RBAC: roles, permisos, políticas de recurso, tests de autorización negativos | La base de toda la seguridad |
 | 4.3 | Ámbito de acceso externo: `client_organization_id` y `creator_id` aplicados por política de recurso | Sin `tenant_id` (`DEC-002`) |
 | 4.3b | MFA/TOTP obligatorio para roles con permisos financieros | `BR-SEC-005`. Barato ahora, caro de retrofitear |
@@ -110,7 +110,7 @@ Iterativa y exhaustiva, tal como pide la especificación. **Nada de frontend aqu
 | 4.7 | File Manager sobre S3 + validación por contenido + URLs firmadas | |
 | 4.8 | Colas, scheduler, workers, Horizon | |
 | 4.9 | ✅ **Cerrada (2026-08-26), adelantada.** Plantillas versionadas con vigencia (una publicada no se edita), registro de envíos que guarda la **huella** del cuerpo y no el cuerpo (`DEC-106`), caída de idioma anotada (`DEC-107`) y tres reintentos con `failed` visible (`DEC-108`). Desbloquea 7.6, 5.9, 4.1 y `T-10` |
-| 4.10 | Notification Center in-app + preferencias | |
+| 4.10 | Notification Center in-app + preferencias. **Nota (4.13):** el bus de eventos de dominio ya existe (`App\Shared\Eventos` + `domain_events`); el centro de notificaciones es otro oyente sobre el mismo bus | |
 | 4.11 | Manejo de errores, logging estructurado, páginas de error, health check | |
 | 4.12 | Layout de admin, navegación, búsqueda básica, tabla estándar con filtros/orden/paginación | Reutilizable en todos los módulos |
 | 4.13 | **QA de fase + Phase Review Report** | |
@@ -133,7 +133,7 @@ Iterativa y exhaustiva, tal como pide la especificación. **Nada de frontend aqu
 | 5.6 | **Importación masiva CSV/Excel** con mapeo, previsualización, validación, resumen y reversión | ✅ **(adelantado)** |
 | 5.7 | Bandeja de revisión + ficha 360 + notas internas | ✅ |
 | 5.8 | Máquina de estados + aprobar/rechazar/solicitar información con motivos tipificados | ✅ |
-| 5.9 | Aprobación → creación de usuario + enlace seguro de contraseña + emails | ✅ |
+| 5.9 | ✅ **Cerrada (2026-08-26).** Aprobar una solicitud crea la cuenta del creador —con un hash de 32 bytes aleatorios que nadie conoce: no se puede entrar hasta usar el enlace—, escribe `creators.user_id` y manda el enlace de 72 h (`DEC-113`). Destapó que `/panel` enseñaba los totales internos a cualquier autenticado (`DEC-118`) |
 | 5.10 | Blacklist | ✅ |
 | 5.11 | QA de fase + Phase Review Report | ✅ |
 
@@ -163,8 +163,8 @@ Iterativa y exhaustiva, tal como pide la especificación. **Nada de frontend aqu
 | 7.3 | ✅ **Cerrada (2026-08-25).** Mercados de campaña (multipaís): al menos uno para salir de borrador, foráneas **compuestas** para que el mercado sea de su campaña, `N-03` implementada (el brief de mercado reemplaza al general) y **añadir sí, quitar no** con la campaña confirmada. Cierra `T-33` |
 | 7.4 | ✅ **Cerrada (2026-08-26).** Buscador con los filtros derivados de la campaña (mercados, formatos del brief, edad mínima, categorías de la marca), interruptor de descartados con el motivo, coste estimado, y lista corta en `campaign_creators` con el mercado derivado del país. Media `BR-CAMPAIGN-007` implementada. Abre `T-34` |
 | 7.5 | ✅ **Cerrada (2026-08-26).** Presupuesto de creadores (columna nueva: `BR-CAMPAIGN-005` nombraba un dato que no existía), veto de sobrecosto con autorización de finanzas y motivo auditado, y monto acordado que se fija al invitar y se congela al aceptar. «Cantidad» = por creador (`DEC-103`) |
-| 7.6 | Invitaciones: envío, expiración, aceptación, rechazo con motivo, preguntas |
-| 7.7 | Panel de seguimiento de la campaña (quién va en qué estado) — **la pantalla más usada del sistema** |
+| 7.6 | ✅ **Cerrada (2026-08-26).** Envío por enlace de un solo uso —el creador contesta él, no un operador (`DEC-119`)—, plazo fijo por campaña con comando de caducidad (`DEC-120`), rechazo con motivo de lista cerrada y reinvitación dejando constancia de las dos rondas (`DEC-121`). La invitación **copia el importe** y la base impide moverlo mientras viva (`DEC-122`). **Las preguntas del creador quedan fuera**, en `T-38`: son un mini módulo de mensajería |
+| 7.7 | ✅ **Cerrada (2026-08-26).** Embudo por estado, cupo por mercado —donde **cubierto es aceptado, no invitado**—, dinero con el margen detrás de su permiso (`DEC-128`) y cuatro alertas ordenadas por lo que bloquean, no por gravedad (`DEC-127`). Pantalla aparte de la ficha: una contesta «qué es» y la otra «cómo va» |
 | 7.8 | **Logística de producto:** dirección de envío, lista de despacho, tracking, confirmación de recepción |
 | 7.9 | Campañas UGC vs distribución |
 | 7.10 | Gestión de reemplazos: `dropped`/`replaced`, motivo, lista de espera, reasignación de presupuesto |
@@ -177,14 +177,14 @@ Iterativa y exhaustiva, tal como pide la especificación. **Nada de frontend aqu
 ### F8 — Contenido, revisión y evidencia
 | It. | Contenido |
 |---|---|
-| 8.1 | Entregables: tipos, subida desde móvil, enlaces, captions, hashtags |
-| 8.2 | Versionado append-only + puntero de versión actual |
-| 8.3 | Cola de revisión interna + comentarios por versión + solicitud de corrección |
+| 8.1 | ✅ **Cerrada (2026-08-26).** Los entregables se generan **solos** al aceptar, del brief **efectivo** del mercado (`DEC-129`, `DEC-130`). Se entrega un enlace `https://` y opcionalmente una imagen (`DEC-131`); si al caption le faltan los hashtags del brief, **no se envía y se le dice cuáles** (`DEC-132`). Primera pantalla del **portal del creador** —y primer permiso de ámbito EXTERNAL—, que `T-09` no bloquea: para llegar aquí ya hay que haber aceptado los términos. De paso, `T-43`: cuatro mensajes de la base que en **Percona no caben** y llevaban rotos desde 7.4 |
+| 8.2 | ✅ **Cerrada (2026-08-26).** El puntero apunta a la versión **aprobada** —no a la última, que sale de un `MAX()`— con clave ajena **compuesta** para que la base garantice que es de **ese** entregable (`DEC-137`). Y un entregable aprobado deja de ser un callejón sin salida: se **reabre** con motivo de lista cerrada y firma, sin deshacer nada (`DEC-138`). De paso, `T-47`: «no se entrega sobre un entregable cerrado» vivía en el servicio desde 8.1 y la base no lo conocía |
+| 8.3 | ✅ **Cerrada (2026-08-26).** Bandeja **global** de lo pendiente, ordenada por lo que lleva más esperando. Sólo las rondas del **cliente** cuentan contra el precio y son **por entregable** —el contador estaba en `campaign_creators`, o sea dos rondas por creador (`DEC-133`)—. Pasarse **bloquea** y exige decir si se cobra o se absorbe, firmado (`DEC-135`); el cargo **no** va a `campaign_costs`. Tres permisos: revisar, aprobar y autorizar el cargo (`DEC-136`). Y `tg_cvw_inmutable` cierra el «append-only» que 2.12 afirmaba sin impedir nada |
 | 8.4 | Aprobación interna y límite de rondas |
 | 8.5 | Aprobación del cliente por **enlace firmado** (sin portal completo) |
-| 8.6 | Programación y registro de publicación (URL) |
-| 8.7 | **Verificación de publicación + archivado de evidencia** (captura del post en vivo) |
-| 8.8 | Control de permanencia mínima del post |
+| 8.6 | ✅ **Cerrada (2026-08-26).** El creador pega el enlace de su post desde su portal, y el equipo puede hacerlo por él (`DEC-139`). **Sólo se publica lo aprobado, y esa versión** (`DEC-140`), guardada como snapshot con clave ajena compuesta. La red se **deduce** del enlace con `platforms.url_pattern` y tiene que ser la del brief (`DEC-141`); la huella normaliza la URL para que `?utm_source=…` no esquive «el mismo post no se reclama dos veces». La **programación** queda fuera: hoy se registra lo ya publicado |
+| 8.7 | ✅ **Cerrada (2026-08-26).** La evidencia es una **captura**, no una comprobación HTTP: Instagram y TikTok responden igual a un post vivo que a un bloqueo, así que un `http_status` no prueba nada y de `verified` cuelga el pago (`DEC-142`). Permiso propio `content.verify` (`DEC-143`). Si el post no está, el entregable vuelve al **creador** —el contenido estaba bien, falla el enlace— y se le avisa (`DEC-144`). `permanence_until` se calcula al verificar, que es lo que 8.8 necesita. De paso, `T-50`: una rechazada bloqueaba su propio enlace |
+| 8.8 | ✅ **Cerrada (2026-08-27).** Retirar el post antes de tiempo **bloquea el pago** y el sistema no descuenta nada: la decisión de qué se le paga la toma una persona con el expediente montado (`DEC-145`). La sonda **marca** y una persona **confirma** —es `DEC-142` otra vez, pero aquí un falso negativo acusa a un creador de incumplir un contrato— y `tg_pub_permanencia` exige comprobación fallida **y** captura posterior a la verificación (`DEC-146`). Se avisa al creador y al equipo; al cliente no (`DEC-147`). El entregable caído estrena estado y `expired` pasa a llamarse `fulfilled`, que es lo que significaba (`DEC-148`). Decimosexta columna puerta: `uq_pc_sonda_dia`, para que un cron duplicado no mande dos correos. `permanence_checks` entra en la lista de `3.12`. Abre `Q-59` y resuelve `T-51` |
 | 8.9 | Hilos de mensajes creador ↔ equipo por campaña |
 | 8.10 | Derechos de uso (`UsageRight`): alcance, territorio, canales, exclusividad, vigencia |
 | 8.11 | QA de fase + Phase Review Report |

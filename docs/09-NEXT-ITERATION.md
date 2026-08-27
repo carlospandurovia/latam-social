@@ -1,5 +1,27 @@
 # 09 — Estado del proyecto y siguiente iteración
 
+> **Versión 2.6 — 2026-08-27.** Actualizado al cerrar `8.8`.
+>
+> **Versión 2.5 — 2026-08-26.** Actualizado al cerrar `8.7`.
+>
+> **Versión 2.4 — 2026-08-26.** Actualizado al cerrar `8.6`.
+>
+> **Versión 2.3 — 2026-08-26.** Actualizado al cerrar `8.2`.
+>
+> **Versión 2.2 — 2026-08-26.** Actualizado al cerrar `8.3`.
+>
+> **Versión 2.1 — 2026-08-26.** Actualizado al cerrar `8.1`.
+>
+> **Versión 2.0 — 2026-08-26.** Actualizado al cerrar `7.7`.
+>
+> **Versión 1.9 — 2026-08-26.** Actualizado al cerrar `7.6b`.
+>
+> **Versión 1.8 — 2026-08-26.** Actualizado al cerrar `7.6`.
+>
+> **Versión 1.7 — 2026-08-26.** Actualizado al cerrar `5.9` + `4.1`.
+>
+> **Versión 1.6 — 2026-08-26.** Actualizado al cerrar 4.13 (`T-10`).
+>
 > **Versión 1.5 — 2026-08-26.** Actualizado al cerrar `F4.9` (el correo).
 >
 > **Versión 1.4 — 2026-08-26.** Actualizado al cerrar 7.5.
@@ -31,12 +53,13 @@
 
 | | |
 |---|---|
-| Tablas | 67 |
-| Migraciones | 47, verdes desde cero en MySQL 8 |
-| Pruebas de PHPUnit | **380**, 1.265 aserciones |
-| Aserciones de restricción (SQL) | **1.070** en MariaDB, **1.060** en MySQL 8 |
+| Tablas | 69 |
+| Migraciones | 56, verdes desde cero en MySQL 8 y con vuelta atrás completa |
+| Pruebas de PHPUnit | **687**, 2.109 aserciones |
+| Aserciones de restricción (SQL) | **1.506** en MariaDB, **1.496** en MySQL 8 |
 | Puertas de calidad | 6: formato, análisis estático, fronteras, pruebas, vigencias, nombres entre capas |
-| Decisiones registradas | hasta `DEC-108` |
+| Verificadores fuera de PHPUnit | 4: fixturas, periodos, nombres entre capas y **mensajes de la base** (nuevo en 8.1) |
+| Decisiones registradas | hasta `DEC-148` |
 
 ### Lo que se puede hacer hoy por pantalla
 
@@ -61,10 +84,77 @@ veta a quien no cumple `BR-CREATOR-006`.
 Y desde 7.5, el dinero: presupuesto de creadores, veto de sobrecosto con
 autorización auditada, y monto acordado congelado al aceptar.
 
-Y desde `F4.9`, el correo: plantillas versionadas, registro de envíos auditable
-y reintentos. Es lo que desbloquea 7.6, 5.9, 4.1 y `T-10`.
+Y desde `F4.9` el correo —plantillas versionadas, registro auditable,
+reintentos— y desde 4.13 su primer uso real: **el creador recibe un aviso cuando
+alguien toca sus datos fiscales o su medio de pago**, mientras el cambio todavía
+se puede parar. Eso cerró `T-10` y la mitad que faltaba de `BR-CREATOR-007`.
 
-Eso completa **7.0 a 7.5 del roadmap**, más `F4.9` adelantada.
+Y desde `5.9` + `4.1`, **la contraseña**: aprobar a un creador le crea su cuenta
+y le manda un enlace de 72 h para elegirla —nadie más la ve nunca— y cualquiera
+puede recuperar la suya desde `/recuperar`, con una hora de plazo y la misma
+respuesta exista o no el correo. Es la primera vez que entra al sistema alguien
+que no es del equipo, y eso destapó que la portada le enseñaba los totales
+internos a cualquier autenticado.
+
+Y desde `7.6`, **la conversación con el creador**: se le manda una invitación con
+su importe dentro, la contesta él mismo desde un enlace de un solo uso, y si no
+contesta el plazo la cierra sola y devuelve el dinero al presupuesto. Rechazar no
+cierra la puerta: se puede volver a preguntar con otra oferta, y quedan las dos
+rondas.
+
+Y desde `7.6b`, los tres cabos sueltos que quedaban: **ninguna contraseña se
+dicta ya por teléfono** —tampoco la del equipo—, el creador **puede preguntar**
+antes de decidir, y a quien invitó **le llega un correo** cuando el creador
+contesta.
+
+Y desde `7.7`, **el panel de seguimiento**: qué hay que atender hoy, por dónde va
+cada creador, qué mercado va corto y cuánto queda de presupuesto. Es la pantalla
+que el roadmap llama «la más usada del sistema».
+
+Y desde `8.1`, **el creador entra a trabajar**: al aceptar se le crean solos sus
+entregables —del brief del **mercado** que le toca, no del general—, y en
+`/mis-entregas` manda su enlace. Si al texto le faltan los hashtags del brief, no
+se envía y se le dice cuáles. Cada corrección es una **versión nueva**: nunca se
+pisa la anterior.
+
+Y desde `8.3`, **el ciclo se cierra**: lo entregado cae en una cola, alguien lo
+mira, y o queda aprobado o vuelve con lo que hay que cambiar —y el creador recibe
+ese texto por correo—. Las «2 rondas incluidas en el precio» dejan de ser una
+frase del contrato: son un contador por pieza que **bloquea**, y pasarse exige
+decir si se le cobra al cliente o lo asumimos nosotros, firmado.
+
+Y desde `8.2`, el sistema sabe **cuál es la buena**: aprobar apunta a una versión
+concreta, y esa versión no se puede borrar ni sustituir por debajo. Volver atrás
+sobre algo aprobado deja de exigir tocar la base a mano: se reabre con motivo y
+firma, y la aprobación anterior se queda donde estaba.
+
+Y desde `8.6`, **el ciclo del creador se cierra**: acepta, entrega, corrige, se
+le aprueba, publica y pega el enlace — y ahí termina su parte. Sólo se registra
+lo aprobado, la red se comprueba contra la que pedía el brief, y el mismo post no
+se puede reclamar desde dos entregables.
+
+Y desde `8.7`, **existe la prueba**: alguien abre el post, comprueba que está y
+sube la captura, que queda archivada y no se borra nunca. Si no está, el
+entregable vuelve al creador con el motivo. Es lo que convierte
+`BR-CONTENT-004` en algo real y lo que el pago va a mirar.
+
+Y desde `8.8`, **el post se vigila hasta su fecha**: una bandeja con lo que hay
+que mirar, un histórico de comprobaciones que no se edita ni se borra, y un
+comando diario que cierra las ventanas cumplidas —que es lo que habilita el
+pago—. Si el post desaparece, alguien lo firma con la captura de lo que ve, el
+pago se para y el creador se entera por correo. Nada de eso lo decide una
+máquina, y eso es la iteración entera.
+
+Eso completa **7.0 a 7.7 del roadmap**, más `F4.9`, `5.9`, `4.1`, `8.1`, `8.2`,
+`8.3`, `8.6`, `8.7` y `8.8`.
+
+> **Y por primera vez el sistema se ha usado.** Tres fallos salieron de ahí en una
+> tarde: un 500 al repetir un formato en el brief de un mercado, la bitácora
+> entera caída por una fila con una lista dentro, y una herramienta que no sabía
+> distinguir un fixture inválido a propósito. Los tres están cerrados
+> (`T-40`, `T-41`, `T-42`). **Ninguno lo habría encontrado yo solo**, y los dos
+> primeros eran de pantalla: la regla existía y estaba probada; lo que faltaba era
+> que alguien la supiera contar.
 
 ---
 
@@ -78,9 +168,8 @@ o sin abrir un módulo nuevo.
 |---|---|---|---|
 | `T-09` | Publicar la **primera versión real de los términos del creador** | **Tu abogado** | 🔴 **Ningún creador puede activarse.** La pantalla lo dice explícitamente |
 | `Q-40` | Con qué **tasa** se retiene a un creador no domiciliado | **Tu contador** | Un perfil fiscal con retención sin decidir no se puede aprobar (`DEC-048`) |
-| `DEC-085` | Ejecutar los dos `GRANT` en el servidor de producción | **Tú, al desplegar** | La bitácora es truncable por la aplicación hasta que se haga |
+| `DEC-085` | Ejecutar los dos `GRANT` en el servidor de producción | **Tú, al desplegar** | La bitácora es truncable por la aplicación hasta que se haga. **Pasos en `docs/18-RUNBOOK-DESPLIEGUE.md` §3.1** |
 | `Q-44` | ¿Los servicios a un cliente **no domiciliado** son exportación de servicios (sin IGV) o van al 18 %? | **Tu contador** | El modelo admite las cuatro opciones y no fuerza ninguna |
-| `T-10` | Aviso al creador cuando cambian sus datos fiscales (`BR-CREATOR-007`) | Fase de Communication | La pantalla se lo recuerda al operador para que lo haga a mano |
 
 Los tres primeros son de verdad urgentes. `T-09` es el más caro de todos: **todo
 el trabajo de adquisición de creadores está construido y probado, y no se puede
@@ -97,6 +186,9 @@ Ninguna bloquea código hoy; todas bloquean una iteración futura concreta.
 | `Q-46` | Al publicar términos nuevos, ¿qué pasa con los creadores **ya activos**? | Antes de la 2ª versión de los términos |
 | `Q-47` | El periodo de gracia de 30 días, ¿global o por creador? | Iteración de rechazo de creadores |
 | `Q-50` | ¿`campaign_creators` y compañía son **evidencia** (no se borran)? | **Al construir campañas — o sea, ahora** |
+| `Q-56` | ¿`deliverable_versions` y `content_reviews` son **evidencia**? Hoy se pueden borrar, y son lo que el cliente aprueba y lo que justifica un cargo | **Antes de facturar (F9)** |
+| `Q-57` | ¿Dónde acaba la línea del **cargo por una ronda de más**? Hoy la decisión queda en `content_reviews` y la pantalla la enseña; no hay factura todavía | **Al construir facturación (F9)** |
+| `Q-58` | ¿Se puede **reabrir** un entregable ya publicado o verificado? Hoy no, y hoy da igual porque `publications` se llena en 8.6 | **Al construir publicación (8.6)** |
 | `Q-52` | ¿Un cliente debería exigir contacto de facturación antes de estar `active`? | Facturación (F9) |
 | `Q-53` | ¿El mismo correo repetido en el mismo cliente y tipo es un error? | Importación de clientes |
 | `Q-54` | ¿Se puede corregir un periodo fiscal ya **cerrado**? | Primera corrección real |
@@ -108,32 +200,39 @@ Ninguna bloquea código hoy; todas bloquean una iteración futura concreta.
 
 ## 4. Lo que propongo como siguiente iteración
 
-**Enganchar el correo a lo que ya estaba esperándolo**, antes de seguir con 7.6.
+**`8.4` — el límite de rondas.** Es lo único que queda abierto del ciclo de
+revisión, y `8.3` lo dejó a medio camino a propósito.
 
-`F4.9` dejó el aparato construido y probado, pero **no lo usa nadie todavía**.
-Hay cuatro consumidores esperando y tres son de una tarde:
+Hoy `deliverables.revision_rounds_used` cuenta, `Revisiones::consumeRonda()`
+decide cuáles cuentan —sólo las del cliente— y `content.extra_round` autoriza una
+por encima. Lo que **no** existe es de dónde sale el número de rondas incluidas:
+está en el brief como intención y no lo mira nadie. Así que el contador cuenta
+hacia arriba sin techo, y la autorización que `8.3` construyó no se dispara nunca
+porque no hay límite que cruzar.
 
-| Qué | Regla | Qué pasa hoy |
-|---|---|---|
-| `T-10` — aviso al creador cuando cambian sus datos fiscales | `BR-CREATOR-007` 🔴 | la pantalla se lo recuerda al operador para que lo haga a mano |
-| `5.9` — enlace de contraseña al aprobar un creador | — | por comando, y se la dicta por teléfono |
-| `4.1` — recuperación de contraseña | — | no existe |
-| `7.6` — invitaciones | `BR-CAMPAIGN-006` | bloqueada |
+Es una iteración pequeña —el techo, el veto, y la pantalla que enseña «ronda 2 de
+2»— y no tiene ninguna decisión de negocio oculta: `Q-08` ya la contestaste
+(*rondas por campaña, definidas en el brief*).
 
-Los tres primeros cierran huecos que ya están abiertos y validan el aparato
-contra usos reales antes de apoyar 7.6 encima. `T-10` además cierra media
-`BR-CREATOR-007`, que es 🔴 y lleva desde la Fase 3 sin nadie que la cumpla.
+Después, `8.5` —la aprobación del cliente por enlace firmado— es la última pieza
+del ciclo y la primera vez que entra alguien de la marca; `8.9` y `8.10` son
+mensajería y derechos de uso, y `8.11` es el QA de fase.
 
-Después de eso, **7.6** ya se puede construir entera.
+### Lo que 8.8 dejó abierto y no es mío
 
-### Lo que NO propongo, y por qué
+`Q-59`: **¿la ventana de permanencia se alarga por los días que el post estuvo
+caído?** Hoy no. Si el post estuvo tres días fuera, la marca perdió tres días de
+exposición y el creador cumple igual. Alargarla sería lo justo, y alargarla por
+mi cuenta sería inventarme una cláusula del contrato. Va con `T-09`.
 
-- **Facturación (F9).** Depende de `Q-40` y `Q-44`, o sea de tu contador.
-- **Portal del creador (F6).** Depende de `T-09`, o sea de tu abogado.
-- **Más endurecimiento del esquema.** `T-33` se cerró en 7.3 y no queda ninguna
-  otra anotada. Seguir buscando sería inventar trabajo; lo que sí sigue saliendo
-  son reglas del documento sin código detrás, y ésas aparecen solas al construir
-  la pantalla que las necesita.
+### Lo que sigue sin poder hacerse, y no es código
+
+`T-09` —el texto de los términos— lleva **cinco días** bloqueando toda activación
+de creadores. El ciclo entero está construido y probado de punta a punta —se
+recluta, se invita, se acepta, se entrega, se revisa, se aprueba, se publica y se
+verifica— y **no se puede usar con una persona real** hasta que exista ese texto.
+
+Es, con diferencia, lo más caro que hay abierto.
 
 ---
 
@@ -156,4 +255,8 @@ Tres cosas, por orden de coste para el proyecto:
    impide usar de verdad todo lo construido en las fases 3 y 4.
 2. **Pregúntale a tu contador `Q-40` y `Q-44`.** Las dos tienen respuesta corta y
    las dos bloquean el dinero.
-3. **Nada urgente esta vez.** El correo ya no bloquea. Sigue faltando la cuenta de SMTP (`Q-20`) para que los avisos salgan de verdad: hasta entonces se escriben en el log y el flujo se puede probar entero.
+3. **La cuenta de SMTP (`Q-20`) sube de prioridad.** Ya no es sólo para los
+   avisos: desde `5.9`, **sin correo saliente un creador aprobado no puede
+   estrenar su cuenta** — su contraseña viaja en un correo y en ningún otro
+   sitio. Hasta entonces el enlace se escribe en `storage/logs` y el flujo se
+   puede probar entero, pero eso no sirve con una persona real.

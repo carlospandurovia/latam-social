@@ -9,6 +9,7 @@ use App\Modules\Creator\Http\Requests\RetirarMedioPagoRequest;
 use App\Modules\Creator\Services\CuentasCompartidas;
 use App\Shared\Audit\Bitacora;
 use App\Shared\Crypto\CuentaBancaria;
+use App\Shared\Eventos\Eventos;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -175,7 +176,22 @@ final class MediosPagoController
             ],
         );
 
-        $mensaje = 'Medio capturado. Queda PENDIENTE: tiene que verificarlo otra persona.';
+        // `BR-CREATOR-007`, igual que en el perfil fiscal: se avisa AL CAPTURAR.
+        // Aqui pesa mas todavia, porque lo que cambia es A DONDE VA EL DINERO.
+        Eventos::ocurrio(
+            nombre: 'creator.payment_method_captured',
+            tipoEntidad: 'creator',
+            idEntidad: (int) $creador->id,
+            payload: [
+                'correo' => (string) $creador->email,
+                'nombre' => (string) $creador->display_name,
+                'idioma' => (string) ($creador->locale ?? ''),
+                'fecha' => now()->toDateString(),
+            ],
+        );
+
+        $mensaje = 'Medio capturado. Queda PENDIENTE: tiene que verificarlo otra persona. '
+            .'Se le ha avisado al creador (BR-CREATOR-007).';
 
         if ($marca === 'pending_review') {
             $mensaje .= ' Ojo: esa misma cuenta está registrada en otro creador y queda marcada para revisión (DEC-065).';

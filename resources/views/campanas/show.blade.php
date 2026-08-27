@@ -3,6 +3,18 @@
 @section('subtitulo', $campana->code)
 
 @section('contenido')
+  {{-- 7.7: el acceso al panel de seguimiento. Va arriba y no en un menú porque
+       según el roadmap es la pantalla más usada del sistema, y hoy la única
+       forma de llegar a ella era teclear la URL. --}}
+  @if ($campana->confirmed_at !== null)
+    <div class="mb-5 flex justify-end">
+      <a href="{{ route('campanas.seguimiento', $campana->uuid) }}"
+         class="rounded-lg border border-marca-300 bg-white px-4 py-2 text-sm font-medium text-marca-700 hover:bg-marca-50">
+        Ver cómo va
+      </a>
+    </div>
+  @endif
+
   <div class="grid gap-5 lg:grid-cols-3">
     <div class="lg:col-span-2 space-y-5">
       <div class="bg-white rounded-xl border border-slate-200 p-5">

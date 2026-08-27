@@ -72,9 +72,18 @@ def bloques_create_table(texto):
         salida.append((m.group(1), texto[m.end():i-1], m.start(), i))
     return salida
 
+# `VARBINARY` faltaba, y el hueco lo destapo `password_links.used_ip` en 5.9:
+# `^BINARY` no casa con `VARBINARY(16)`, asi que la columna no entraba en la
+# lista y `ck_pl_used` se genero como un trigger que decia `used_ip` a secas en
+# vez de `NEW.``used_ip```. MySQL lo rechaza con «Undeclared variable», que es
+# ruidoso y por eso se vio; el problema es que el mismo hueco existia desde la
+# Fase 2 en `audit_logs.ip_address` y `creator_identity_verifications.ip_address`
+# --dos columnas VARBINARY que nunca aparecieron en un CHECK--. El dia que
+# apareciera una, la regla no habria existido en Percona.
 TIPO = re.compile(
     r'^(?:BIG|SMALL|TINY|MEDIUM)?INT|^(?:VAR)?CHAR|^(?:TINY|MEDIUM|LONG)?(?:TEXT|BLOB)|'
-    r'^DECIMAL|^NUMERIC|^FLOAT|^DOUBLE|^BOOL|^DATE|^TIME|^YEAR|^ENUM|^SET|^JSON|^BINARY|^BIT',
+    r'^DECIMAL|^NUMERIC|^FLOAT|^DOUBLE|^BOOL|^DATE|^TIME|^YEAR|^ENUM|^SET|^JSON|'
+    r'^(?:VAR)?BINARY|^BIT',
     re.I)
 
 def checks_de(cuerpo):

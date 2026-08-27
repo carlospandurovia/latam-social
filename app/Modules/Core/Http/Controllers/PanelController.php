@@ -6,13 +6,48 @@ namespace App\Modules\Core\Http\Controllers;
 
 use App\Shared\Database\Restriccion;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
+/**
+ * La portada.
+ *
+ * ### Desde `5.9` hay usuarios que NO son del equipo
+ *
+ * Hasta esta iteración todas las cuentas eran internas, así que enseñar aquí
+ * cuántos creadores, clientes y campañas hay era enseñárselo al equipo. `5.9`
+ * crea la primera cuenta de un creador, y esa misma pantalla pasaría a contarle
+ * a un creador el tamaño de nuestra cartera de clientes.
+ *
+ * Eso choca de frente con una de las reglas no negociables del proyecto —*«nunca
+ * mostrar información interna a clientes o creadores»*— y es la clase de fuga
+ * que no falla, no avisa y no se nota hasta que alguien lo comenta por ahí.
+ *
+ * Así que la portada se bifurca **por tipo de usuario**, no por permiso: un
+ * creador no tiene ninguno, y una comprobación de permisos que devuelve «no» a
+ * todo dejaría una pantalla vacía y desconcertante en vez de una que explica
+ * dónde está.
+ *
+ * ### Lo que ve un creador hoy es una sala de espera, y lo dice
+ *
+ * Su portal (`F6`) está bloqueado por `T-09` —el texto de los términos—. Podía
+ * haberse dejado el panel vacío; una pantalla en blanco después de estrenar
+ * contraseña parece un error del sistema. Se le dice qué pasa y qué falta.
+ */
 final class PanelController
 {
     public function __invoke(): View
     {
+        $usuario = Auth::user();
+
+        if (($usuario->user_type ?? 'internal') !== 'internal') {
+            return view('panel.espera', [
+                'nombre' => (string) ($usuario->name ?? ''),
+                'tipo' => (string) ($usuario->user_type ?? ''),
+            ]);
+        }
+
         return view('panel.inicio', [
             'tarjetas' => $this->tarjetas(),
             'motor' => $this->motor(),
