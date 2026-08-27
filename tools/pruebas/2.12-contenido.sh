@@ -70,10 +70,15 @@ probar "review: aprobacion (no consume ronda)" \
  "INSERT INTO content_reviews (uuid,deliverable_version_id,reviewer_user_id,outcome,reviewed_at) VALUES (UUID(),$V,$U,'approved',NOW(3));" OK
 # Desde 8.3, pedir cambios exige DECIR CUALES (`ck_cvw_comments`): una
 # correccion sin texto le llega al creador como «hazlo otra vez».
-probar "review: correccion que consume ronda" \
- "INSERT INTO content_reviews (uuid,deliverable_version_id,reviewer_user_id,outcome,comments,consumes_round,reviewed_at) VALUES (UUID(),$V,$U,'changes_requested','El logo se ve cortado en el segundo 4.',1,NOW(3));" OK
+# Desde 8.4 la que gasta ronda es la del CLIENTE: `reviewer_side` va explicito.
+# El valor por defecto de la columna es 'platform', y una correccion nuestra no
+# cuenta contra el precio (`DEC-133`).
+probar "review: correccion del cliente que consume ronda" \
+ "INSERT INTO content_reviews (uuid,deliverable_version_id,reviewer_user_id,reviewer_side,outcome,comments,consumes_round,reviewed_at) VALUES (UUID(),$V,$U,'client','changes_requested','El logo se ve cortado en el segundo 4.',1,NOW(3));" OK
+probar "review: correccion nuestra que pretende consumir ronda" \
+ "INSERT INTO content_reviews (uuid,deliverable_version_id,reviewer_user_id,reviewer_side,outcome,comments,consumes_round,reviewed_at) VALUES (UUID(),$V,$U,'platform','changes_requested','Esta es nuestra.',1,NOW(3));" RECHAZO
 probar "review: correccion sin decir cual" \
- "INSERT INTO content_reviews (uuid,deliverable_version_id,reviewer_user_id,outcome,consumes_round,reviewed_at) VALUES (UUID(),$V,$U,'changes_requested',1,NOW(3));" RECHAZO
+ "INSERT INTO content_reviews (uuid,deliverable_version_id,reviewer_user_id,reviewer_side,outcome,consumes_round,reviewed_at) VALUES (UUID(),$V,$U,'client','changes_requested',1,NOW(3));" RECHAZO
 probar "review: aprobacion que pretende consumir ronda" \
  "INSERT INTO content_reviews (uuid,deliverable_version_id,reviewer_user_id,outcome,consumes_round,reviewed_at) VALUES (UUID(),$V,$U,'approved',1,NOW(3));" RECHAZO
 # La del cliente puede no tener usuario: en 8.5 la escribe un enlace firmado,

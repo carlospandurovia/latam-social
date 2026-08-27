@@ -1,5 +1,11 @@
 # 09 — Estado del proyecto y siguiente iteración
 
+> **Versión 2.7 — 2026-08-27.** Actualizado al cerrar `8.4`. **Y con una
+> corrección:** la versión 2.6 decía que el contador de rondas «cuenta hacia
+> arriba sin techo y la autorización no se dispara nunca». Era falso — el límite
+> estaba entero desde `8.3`. Lo que faltaba era que algo lo respaldara en la
+> base, y eso es lo que hizo `8.4`.
+>
 > **Versión 2.6 — 2026-08-27.** Actualizado al cerrar `8.8`.
 >
 > **Versión 2.5 — 2026-08-26.** Actualizado al cerrar `8.7`.
@@ -54,12 +60,12 @@
 | | |
 |---|---|
 | Tablas | 69 |
-| Migraciones | 56, verdes desde cero en MySQL 8 y con vuelta atrás completa |
-| Pruebas de PHPUnit | **687**, 2.109 aserciones |
-| Aserciones de restricción (SQL) | **1.506** en MariaDB, **1.496** en MySQL 8 |
+| Migraciones | 57, verdes desde cero en MySQL 8 y con vuelta atrás completa |
+| Pruebas de PHPUnit | **692**, 2.114 aserciones |
+| Aserciones de restricción (SQL) | **1.542** en MariaDB, **1.532** en MySQL 8 |
 | Puertas de calidad | 6: formato, análisis estático, fronteras, pruebas, vigencias, nombres entre capas |
 | Verificadores fuera de PHPUnit | 4: fixturas, periodos, nombres entre capas y **mensajes de la base** (nuevo en 8.1) |
-| Decisiones registradas | hasta `DEC-148` |
+| Decisiones registradas | hasta `DEC-150` |
 
 ### Lo que se puede hacer hoy por pantalla
 
@@ -138,6 +144,12 @@ sube la captura, que queda archivada y no se borra nunca. Si no está, el
 entregable vuelve al creador con el motivo. Es lo que convierte
 `BR-CONTENT-004` en algo real y lo que el pago va a mirar.
 
+Y desde `8.4`, **el techo de rondas lo impone la base**: sólo la corrección del
+cliente gasta ronda, una ronda de más no se cuela sin declararse —y esa columna
+es la que se factura— y el contador no baja. Lo que hasta entonces protegía un
+`if` de PHP, justo antes de que `8.5` empiece a escribir revisiones desde un
+enlace firmado que no pasa por ahí.
+
 Y desde `8.8`, **el post se vigila hasta su fecha**: una bandeja con lo que hay
 que mirar, un histórico de comprobaciones que no se edita ni se borra, y un
 comando diario que cierra las ventanas cumplidas —que es lo que habilita el
@@ -200,30 +212,37 @@ Ninguna bloquea código hoy; todas bloquean una iteración futura concreta.
 
 ## 4. Lo que propongo como siguiente iteración
 
-**`8.4` — el límite de rondas.** Es lo único que queda abierto del ciclo de
-revisión, y `8.3` lo dejó a medio camino a propósito.
+**`8.5` — la aprobación del cliente por enlace firmado.** Es la última pieza del
+ciclo y la primera vez que entra alguien de la marca: un enlace de un solo uso,
+sin portal ni cuenta, con el que el cliente ve la versión y dice si vale o qué
+cambiar. Misma mecánica que la invitación de `7.6`, que ya está construida y
+probada.
 
-Hoy `deliverables.revision_rounds_used` cuenta, `Revisiones::consumeRonda()`
-decide cuáles cuentan —sólo las del cliente— y `content.extra_round` autoriza una
-por encima. Lo que **no** existe es de dónde sale el número de rondas incluidas:
-está en el brief como intención y no lo mira nadie. Así que el contador cuenta
-hacia arriba sin techo, y la autorización que `8.3` construyó no se dispara nunca
-porque no hay límite que cruzar.
+Y es la que hace que `8.4` haya valido la pena: hasta hoy, *«sólo la corrección
+del cliente gasta ronda»* y *«una ronda de más se declara»* las garantizaba
+`Revisiones::emitir()`. `8.5` escribe revisiones del cliente **sin pasar por
+ahí**, así que las garantías tenían que estar en la base antes — y ya lo están.
 
-Es una iteración pequeña —el techo, el veto, y la pantalla que enseña «ronda 2 de
-2»— y no tiene ninguna decisión de negocio oculta: `Q-08` ya la contestaste
-(*rondas por campaña, definidas en el brief*).
+Tiene al menos una decisión de negocio que hay que tomar contigo y que prefiero
+preguntar antes de escribir nada: **qué pasa si el cliente no contesta**. La
+invitación al creador caduca y libera presupuesto (`7.6`); un enlace de
+aprobación que caduca deja una pieza aprobada por nadie o rechazada por nadie, y
+las dos cosas son decisiones con dinero detrás.
 
-Después, `8.5` —la aprobación del cliente por enlace firmado— es la última pieza
-del ciclo y la primera vez que entra alguien de la marca; `8.9` y `8.10` son
-mensajería y derechos de uso, y `8.11` es el QA de fase.
+Después, `8.9` (mensajería), `8.10` (derechos de uso) y `8.11`, que es el QA de
+la fase.
 
-### Lo que 8.8 dejó abierto y no es mío
+### Lo que 8.8 y 8.4 dejaron abierto y no es mío
 
 `Q-59`: **¿la ventana de permanencia se alarga por los días que el post estuvo
 caído?** Hoy no. Si el post estuvo tres días fuera, la marca perdió tres días de
 exposición y el creador cumple igual. Alargarla sería lo justo, y alargarla por
 mi cuenta sería inventarme una cláusula del contrato. Va con `T-09`.
+
+`Q-60`: **¿debería existir `deliverables.revision_rounds_used`?** Las revisiones
+son append-only, así que el número se puede derivar de un `COUNT(*)` y entonces
+no hay contador que proteger. Se decide en `F9`, cuando ese número sea una línea
+de factura.
 
 ### Lo que sigue sin poder hacerse, y no es código
 

@@ -2,6 +2,42 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 
+## [8.4 · El techo de rondas, en la base] — 2026-08-27
+
+`8.3` construyó el límite entero y lo dejó todo en PHP. Un `if` de un servicio
+sólo protege al que pasa por ese servicio — y `8.5` escribe revisiones del
+cliente desde un enlace firmado.
+
+### Añadido
+- **`ck_cvw_round` gana el lado**: sólo la corrección del **cliente** gasta
+  ronda. `DEC-133` vivía únicamente en `Revisiones::consumeRonda()`, así que una
+  revisión nuestra podía gastarle una ronda al cliente.
+- **`tg_cvw_techo`**, en las dos direcciones: con las rondas agotadas hay que
+  declarar la de más, y no se cobra como extra lo que todavía entraba. Es
+  cross-table —el techo está en `campaigns`, lo gastado en `deliverables`— y lee
+  el contador **antes** de que `emitir()` lo suba, que es el mismo valor con el
+  que el servicio calculó su `$exceso`.
+- **`tg_del_rondas`**: el contador no baja. Bajarlo devolvía rondas ya gastadas
+  sin la firma de nadie.
+
+### Corregido
+- **Dos suites estaban verdes por una premisa que nunca escribieron** (`T-54`).
+  `8.3` afirmaba `over_included = 1` con el contador a cero, y `2.12` insertaba
+  una corrección que gastaba ronda **sin decir de quién era** — el valor por
+  defecto de `reviewer_side` es `platform`, así que la suite fundacional del
+  módulo llevaba desde la Fase 2 fijando como correcto lo que `DEC-133` prohíbe.
+- **`docs/09` decía que el límite no existía.** Era falso: estaba entero desde
+  `8.3`. Anotado en el documento y en el de la iteración.
+
+### Notas de diseño
+- **Los disparadores siguen sin modificar filas** (`DEC-150`). Que el contador lo
+  subiera un `AFTER INSERT` habría hecho imposible la desincronización, pero
+  ninguno de los 504 disparadores de este esquema toca una fila, y uno que
+  **haga cosas** convierte el esquema en algo que actúa a espaldas del código.
+- **`tg_del_rondas` es monótono y no «+1»** (`T-53`). La primera versión rompió
+  siete pruebas que tenían razón. El daño no es simétrico: bajarlo no necesita a
+  nadie; subirlo obliga a firmar y a decidir facturación.
+
 ## [Proceso · `main` vuelve a ser la línea de trabajo] — 2026-08-27
 
 ### Cambiado
@@ -14,6 +50,18 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
   `CONTRIBUTING.md` la nombraba desde el principio.
 - **`docs/19` §3** reescrito con la medición delante, y `CONTRIBUTING.md`
   alineado con la realidad.
+
+### Corregido
+- **El CI vuelve a verde después de 24 ejecuciones en rojo** (`T-52`).
+  `resources/views/welcome.blade.php` —la portada que trae Laravel de fábrica—
+  llamaba a `route('login')` y `route('register')`, que este proyecto no declara.
+  Nadie renderizaba esa vista (la raíz redirige a `/panel`), pero
+  `verificar-pantallas.py` la veía y tenía razón. **Mis seis puertas no podían
+  verla**: mi contenedor tiene `stage/`, que es sólo lo que yo entrego, y la
+  herramienta escanea esa raíz cuando existe. Punto ciego documentado en
+  `docs/19 §4`.
+- Primera ejecución verde completa de la historia del proyecto con la cola
+  entera: **Percona 5.7**, el build del frontend y las 687 pruebas.
 
 ## [8.8 · La permanencia mínima del post] — 2026-08-27
 

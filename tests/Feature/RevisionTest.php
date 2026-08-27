@@ -243,6 +243,128 @@ final class RevisionTest extends TestCase
         $this->assertSame([], $motivos);
     }
 
+    // ------------------------------------------ 8.4: el techo, en la base
+    //
+    // Las tres reglas de arriba las aplicaba `Revisiones` y NADA las respaldaba
+    // en el esquema. Un `if` de un servicio sólo protege al que pasa por ese
+    // servicio, y `8.5` escribe revisiones del cliente desde un enlace firmado.
+    // Estas pruebas escriben a mano, saltándose el servicio a propósito.
+
+    /**
+     * Una revisión NUESTRA no puede gastarle una ronda al cliente.
+     *
+     * `DEC-133` vivía sólo en `consumeRonda()`. `ck_cvw_round` decía «consume o
+     * es una corrección» y no decía **de quién**.
+     */
+    public function test_la_base_no_deja_que_una_ronda_nuestra_cuente_contra_el_precio(): void
+    {
+        [$entregable, $usuario] = $this->listoParaRevisar();
+
+        $this->expectException(QueryException::class);
+
+        // fixture-invalido-a-proposito: `ck_cvw_round` la rechaza.
+        DB::table('content_reviews')->insert([
+            'uuid' => (string) Str::uuid(),
+            'deliverable_version_id' => $this->version($entregable)->id,
+            'reviewer_user_id' => $usuario->id,
+            'reviewer_side' => 'platform',
+            'outcome' => Revisiones::CAMBIOS,
+            'comments' => 'Esta es nuestra y quiere gastar ronda.',
+            'consumes_round' => 1,
+            'over_included' => 0,
+            'reviewed_at' => now(),
+            'created_at' => now(),
+        ]);
+    }
+
+    /**
+     * Con las rondas agotadas, `over_included = 0` es mentira. Y es dinero:
+     * `cargosPendientes()` cuenta esa columna para facturar.
+     */
+    public function test_la_base_no_deja_colar_una_ronda_de_mas_sin_declararla(): void
+    {
+        [$entregable, $usuario] = $this->listoParaRevisar();
+        $this->gastarRondas($entregable, 2);
+
+        $this->expectException(QueryException::class);
+
+        // fixture-invalido-a-proposito: `tg_cvw_techo` la rechaza.
+        DB::table('content_reviews')->insert([
+            'uuid' => (string) Str::uuid(),
+            'deliverable_version_id' => $this->version($entregable)->id,
+            'reviewer_user_id' => $usuario->id,
+            'reviewer_side' => 'client',
+            'outcome' => Revisiones::CAMBIOS,
+            'comments' => 'La tercera, y sin decirlo.',
+            'consumes_round' => 1,
+            'over_included' => 0,
+            'reviewed_at' => now(),
+            'created_at' => now(),
+        ]);
+    }
+
+    /** Y la mitad simétrica: no se cobra como extra lo que todavía entraba. */
+    public function test_la_base_no_deja_cobrar_como_extra_una_ronda_incluida(): void
+    {
+        [$entregable, $usuario] = $this->listoParaRevisar();
+
+        $this->expectException(QueryException::class);
+
+        // fixture-invalido-a-proposito: `tg_cvw_techo` la rechaza. Quedan 2.
+        DB::table('content_reviews')->insert([
+            'uuid' => (string) Str::uuid(),
+            'deliverable_version_id' => $this->version($entregable)->id,
+            'reviewer_user_id' => $usuario->id,
+            'reviewer_side' => 'client',
+            'outcome' => Revisiones::CAMBIOS,
+            'comments' => 'La primera, cobrada como si fuera la tercera.',
+            'consumes_round' => 1,
+            'over_included' => 1,
+            'billing_decision' => 'charge',
+            'authorized_by_user_id' => $usuario->id,
+            'reviewed_at' => now(),
+            'created_at' => now(),
+        ]);
+    }
+
+    /**
+     * El contador no baja.
+     *
+     * Es la mitad del daño que no tiene dueño: bajarlo no necesita firma de
+     * nadie y devuelve al cliente rondas que ya gastó.
+     */
+    public function test_el_contador_de_rondas_no_puede_bajar(): void
+    {
+        [$entregable] = $this->listoParaRevisar();
+        $this->gastarRondas($entregable, 2);
+
+        $this->expectException(QueryException::class);
+
+        // fixture-invalido-a-proposito: `tg_del_rondas` lo rechaza.
+        DB::table('deliverables')->where('id', $entregable->id)
+            ->update(['revision_rounds_used' => 0]);
+    }
+
+    /**
+     * Y sí puede subir de golpe, a propósito.
+     *
+     * La primera versión de `tg_del_rondas` exigía `+1` exacto y rompía siete
+     * pruebas que ponían el contador a 2 para simular una pieza gastada — y una
+     * importación desde otro sistema tendría el mismo problema. El daño no es
+     * simétrico: subirlo hace que la siguiente corrección se cobre, y eso ya
+     * exige firma y decisión de facturación, las dos auditadas.
+     */
+    public function test_pero_si_puede_subir_de_golpe(): void
+    {
+        [$entregable] = $this->listoParaRevisar();
+
+        DB::table('deliverables')->where('id', $entregable->id)
+            ->update(['revision_rounds_used' => 2]);
+
+        $this->assertSame(2, (int) DB::table('deliverables')
+            ->where('id', $entregable->id)->value('revision_rounds_used'));
+    }
+
     public function test_la_ronda_cobrada_sale_en_los_cargos_pendientes(): void
     {
         [$entregable, $usuario] = $this->listoParaRevisar();

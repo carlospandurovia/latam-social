@@ -33,6 +33,7 @@
 8.1-entregables
 8.3-revision
 8.2-version-vigente
+8.4-rondas
 8.6-publicacion
 # 8.7 va LA ULTIMA a proposito: es la unica suite que NO puede limpiar lo suyo.
 # `publication_evidence` lleva `no_delete` (3.12) y su clave ajena impide borrar

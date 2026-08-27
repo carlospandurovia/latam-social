@@ -20,7 +20,7 @@ Se escribió mirando el estado real del repositorio, y lo que había era esto:
 | «Vamos por 8.6» | lo último **empujado** era `7.7` |
 | Cuatro iteraciones entregadas | `8.1`, `8.3`, `8.2` y `8.6` sin commit |
 | `main` al día | `main` estaba en **4.9**, ocho iteraciones atrás |
-| El CI vigilando | **el CI no había corrido ni una vez** desde 4.9 |
+| El CI vigilando | no se disparaba desde 4.9 **y estaba en rojo desde 4.2** |
 
 Lo último es lo grave y merece su propio párrafo.
 
@@ -45,7 +45,19 @@ estar en verde. Es exactamente el defecto que `tools/sincronizar-ci.php` ya
 documenta para un CI *desactualizado*, sólo que un escalón antes.
 
 Arreglado en esta misma entrega: el `on: push` incluye ahora `feat/**`,
-`fix/**` y `hotfix/**`.
+`fix/**` y `hotfix/**`. (Desde `DEC-149` lo que importa es `main`; los otros se
+quedan para el día que vuelvan las ramas.)
+
+### Y cuando por fin se disparó, salió rojo
+
+Que no se disparara escondía algo peor: **el CI llevaba en rojo desde la
+ejecución 25**. El último verde fue el **24**, en `4.1 Clientes`. Veinticuatro
+ejecuciones seguidas fallando, todas por lo mismo — `T-52`, un archivo de
+`laravel new` que mis puertas no podían ver.
+
+**Verde otra vez el 2026-08-27, ejecución 44, en `main`**, con todo dentro: las
+tres baterías de restricciones, **Percona 5.7**, el build del frontend y las 687
+pruebas de PHPUnit. Seis minutos y cincuenta y ocho segundos.
 
 ---
 

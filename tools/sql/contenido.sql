@@ -152,8 +152,12 @@ CREATE TABLE content_reviews (
   -- anulacion de un perfil fiscal en 3.11.
   CONSTRAINT ck_cvw_outcome CHECK (outcome IN ('approved','changes_requested','rejected','reopened')),
   CONSTRAINT ck_cvw_side CHECK (reviewer_side IN ('platform','client')),
-  -- Una aprobacion no gasta ronda. Solo la correccion.
-  CONSTRAINT ck_cvw_round CHECK (consumes_round = 0 OR outcome = 'changes_requested'),
+  -- Una aprobacion no gasta ronda. Solo la correccion, y solo la del CLIENTE:
+  -- 8.4 anade el lado. `DEC-133` --«solo las del cliente cuentan contra el
+  -- precio»-- vivia unicamente en `Revisiones::consumeRonda()`, asi que una
+  -- revision NUESTRA podia gastarle una ronda al cliente.
+  CONSTRAINT ck_cvw_round CHECK (consumes_round = 0
+      OR (outcome = 'changes_requested' AND reviewer_side = 'client')),
   -- 8.3. Pedir cambios exige DECIR CUALES: una correccion sin texto le llega al
   -- creador como «hazlo otra vez» y garantiza una vuelta mas, justo lo que las
   -- rondas cuentan.
@@ -596,6 +600,64 @@ FOR EACH ROW
 BEGIN
   SIGNAL SQLSTATE '45000'
     SET MESSAGE_TEXT = 'permanence_checks no admite borrado: es lo que para un pago, y de eso se discute despues.';
+END//
+-- ===========================================================================
+-- 8.4 -- El techo de rondas
+--
+-- 8.3 construyo el limite entero y lo dejo todo en PHP. Un `if` de un servicio
+-- solo protege al que pasa por ese servicio, y 8.5 escribe revisiones del
+-- cliente desde un enlace firmado, sin pasar por la pantalla de revision.
+-- ===========================================================================
+
+-- CROSS-TABLE: el techo vive en `campaigns` y lo gastado en `deliverables`, asi
+-- que un CHECK no puede verlo.
+--
+-- Lee `revision_rounds_used` ANTES de que `emitir()` lo suba --el INSERT va
+-- primero y el UPDATE del contador despues, en la misma transaccion-- que es el
+-- mismo valor con el que el servicio calculo su `$exceso`. Los dos miran lo
+-- mismo, y por eso no pueden contradecirse.
+CREATE TRIGGER `tg_cvw_techo`
+BEFORE INSERT ON `content_reviews`
+FOR EACH ROW
+BEGIN
+  DECLARE v_usadas INT DEFAULT 0;
+  DECLARE v_incluidas INT DEFAULT 0;
+
+  IF NEW.`consumes_round` = 1 THEN
+    SELECT d.`revision_rounds_used`, c.`included_revision_rounds`
+      INTO v_usadas, v_incluidas
+      FROM `deliverable_versions` v
+      JOIN `deliverables` d ON d.`id` = v.`deliverable_id`
+      JOIN `campaign_creators` cc ON cc.`id` = d.`campaign_creator_id`
+      JOIN `campaigns` c ON c.`id` = cc.`campaign_id`
+     WHERE v.`id` = NEW.`deliverable_version_id`;
+
+    IF v_usadas >= v_incluidas AND NEW.`over_included` = 0 THEN
+      SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'Esa pieza ya gasto las rondas incluidas: una correccion mas hay que autorizarla y decir quien la paga.';
+    END IF;
+
+    IF v_usadas < v_incluidas AND NEW.`over_included` = 1 THEN
+      SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'Todavia quedan rondas incluidas: esa no es una ronda de mas y no se puede cobrar como tal.';
+    END IF;
+  END IF;
+END//
+
+-- El contador es lo que el techo compara. Si se puede bajar, el techo no vale
+-- nada: se pone a cero y vuelven a caber dos rondas gratis, sin que nadie firme.
+--
+-- MONOTONO, y no «de uno en uno»: el dano no es simetrico. Bajarlo no necesita a
+-- nadie y regala rondas; subirlo de golpe hace que la siguiente correccion del
+-- cliente se cobre, y eso ya exige firma y decision de facturacion, auditadas.
+CREATE TRIGGER `tg_del_rondas`
+BEFORE UPDATE ON `deliverables`
+FOR EACH ROW
+BEGIN
+  IF NEW.`revision_rounds_used` < OLD.`revision_rounds_used` THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'El contador de rondas no baja. Bajarlo regala rondas ya gastadas y el techo deja de valer nada.';
+  END IF;
 END//
 
 DELIMITER ;

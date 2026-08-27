@@ -125,11 +125,22 @@ porque "una aprobacion que pretende consumir ronda" \
 
 echo ""
 echo "--- Una ronda de mas exige decidir Y firmar ---"
-porque "pasarse sin decir si se cobra" \
-  "$(revision "$V1" changes_requested "'La tercera vuelta.'" client NULL 1 over_included 1)" "ck_cvw_over"
+# Con el contador TODAVIA a cero: quedan rondas incluidas, asi que declarar una
+# decision de facturacion es lo que sobra, y de eso responde `ck_cvw_billing`.
 porque "decidir sin que haya exceso" \
   "$(revision "$V1" changes_requested "'Segunda vuelta normal.'" client NULL 1 \
       "billing_decision,authorized_by_user_id" "'charge',$USR")" "ck_cvw_billing"
+
+# Y a partir de aqui, la pieza con sus rondas GASTADAS, que es la premisa que
+# estas aserciones daban por supuesta sin ponerla. Hasta 8.4 daba igual porque
+# nada miraba el contador; ahora `tg_cvw_techo` lo mira, y una fila que dice
+# «ronda de mas» con dos rondas libres es mentira. La premisa se escribe.
+$CLIENTE $DB -e "UPDATE deliverables SET revision_rounds_used=2 WHERE id=$DEL;" 2>&1 | grep -i error
+valor "la pieza ya gasto sus dos rondas incluidas" \
+  "SELECT revision_rounds_used FROM deliverables WHERE id=$DEL;" "2"
+
+porque "pasarse sin decir si se cobra" \
+  "$(revision "$V1" changes_requested "'La tercera vuelta.'" client NULL 1 over_included 1)" "ck_cvw_over"
 porque "una decision que no es ni cobrar ni absorber" \
   "$(revision "$V1" changes_requested "'La tercera vuelta.'" client NULL 1 \
       "over_included,billing_decision,authorized_by_user_id" "1,'regalar',$USR")" "ck_cvw_billing_valor"
