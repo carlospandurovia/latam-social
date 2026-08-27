@@ -193,6 +193,31 @@ final class PlantillasDeCorreoSeeder extends Seeder
                 ."anterior se queda en el historial.\n\n"
                 .'LATAM Social',
             ],
+            // ---- `8.7`: el post no aparece --------------------------------
+            //
+            // Lleva el motivo DENTRO por lo mismo que el aviso de correccion de
+            // 8.3: es lo que el creador necesita para arreglarlo, y obligarle a
+            // entrar al portal para leer una frase es una vuelta de mas.
+            //
+            // Y no dice «no publicaste»: dice «no lo encontramos». La diferencia
+            // importa cuando la cuenta es privada o el enlace se copio mal, que
+            // es la mayoria de las veces.
+            [
+                'content.publication_rejected',
+                'No encontramos tu post de {{ campana }}',
+                "Hola {{ nombre }}:\n\n"
+                ."Fuimos a comprobar el post que registraste para {{ campana }} y no lo\n"
+                ."pudimos dar por bueno:\n\n"
+                ."  «{{ motivo }}»\n\n"
+                ."El enlace que revisamos fue este:\n"
+                ."{{ enlace_post }}\n\n"
+                ."Si el post esta publicado y el enlace estaba mal, o si la cuenta era\n"
+                ."privada y ya no lo es, puedes registrar el enlace otra vez desde tu\n"
+                ."portal:\n\n"
+                ."{{ enlace }}\n\n"
+                ."Tu contenido sigue aprobado: lo unico que falta es el enlace.\n\n"
+                .'LATAM Social',
+            ],
             [
                 'creator.payment_method_changed',
                 'Se registro un cambio en sus datos de pago',

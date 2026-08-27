@@ -1,5 +1,7 @@
 # 09 — Estado del proyecto y siguiente iteración
 
+> **Versión 2.5 — 2026-08-26.** Actualizado al cerrar `8.7`.
+>
 > **Versión 2.4 — 2026-08-26.** Actualizado al cerrar `8.6`.
 >
 > **Versión 2.3 — 2026-08-26.** Actualizado al cerrar `8.2`.
@@ -50,12 +52,12 @@
 | | |
 |---|---|
 | Tablas | 69 |
-| Migraciones | 54, verdes desde cero en MySQL 8 y con vuelta atrás completa |
-| Pruebas de PHPUnit | **638**, 2.006 aserciones |
-| Aserciones de restricción (SQL) | **1.398** en MariaDB, **1.388** en MySQL 8 |
+| Migraciones | 55, verdes desde cero en MySQL 8 y con vuelta atrás completa |
+| Pruebas de PHPUnit | **659**, 2.051 aserciones |
+| Aserciones de restricción (SQL) | **1.438** en MariaDB, **1.428** en MySQL 8 |
 | Puertas de calidad | 6: formato, análisis estático, fronteras, pruebas, vigencias, nombres entre capas |
 | Verificadores fuera de PHPUnit | 4: fixturas, periodos, nombres entre capas y **mensajes de la base** (nuevo en 8.1) |
-| Decisiones registradas | hasta `DEC-141` |
+| Decisiones registradas | hasta `DEC-144` |
 
 ### Lo que se puede hacer hoy por pantalla
 
@@ -129,8 +131,13 @@ le aprueba, publica y pega el enlace — y ahí termina su parte. Sólo se regis
 lo aprobado, la red se comprueba contra la que pedía el brief, y el mismo post no
 se puede reclamar desde dos entregables.
 
+Y desde `8.7`, **existe la prueba**: alguien abre el post, comprueba que está y
+sube la captura, que queda archivada y no se borra nunca. Si no está, el
+entregable vuelve al creador con el motivo. Es lo que convierte
+`BR-CONTENT-004` en algo real y lo que el pago va a mirar.
+
 Eso completa **7.0 a 7.7 del roadmap**, más `F4.9`, `5.9`, `4.1`, `8.1`, `8.2`,
-`8.3` y `8.6`.
+`8.3`, `8.6` y `8.7`.
 
 > **Y por primera vez el sistema se ha usado.** Tres fallos salieron de ahí en una
 > tarde: un 500 al repetir un formato en el brief de un mercado, la bitácora
@@ -184,45 +191,30 @@ Ninguna bloquea código hoy; todas bloquean una iteración futura concreta.
 
 ## 4. Lo que propongo como siguiente iteración
 
-Hay un post registrado y nadie ha comprobado que exista. Propongo **`8.7` —
-verificación y evidencia archivada**, que es lo único que convierte
-`BR-CONTENT-004` en algo real: *«una publicación no se considera verificada hasta
-que existe evidencia archivada del post en vivo, con fecha y hora de captura»*.
+**`8.8` — la permanencia mínima del post.** `permanence_until` ya se calcula al
+verificar y `permanence_checks` sigue con cero filas: falta lo que vigila que el
+post siga vivo hasta esa fecha y avisa cuando desaparece.
 
-Es también donde el dinero empieza a depender de un dato nuestro: hoy la fila
-nace en `reported` y ahí se queda, y **de `verified` cuelga el pago**.
+Es la iteración natural y es pequeña —un comando planificado, como
+`invitaciones:caducar` de `7.6`, más la pantalla que enseña lo caído— pero tiene
+una decisión de negocio detrás que hay que tomar contigo: **qué pasa cuando un
+creador retira el post antes de tiempo.** `BR-CONTENT-006` dice que el sistema
+alerta; no dice si eso afecta al pago, y ahí es donde deja de ser técnico.
 
-Trae tres cosas concretas:
+Y arrastra la misma limitación que `8.7`: comprobar automáticamente si un post
+de Instagram sigue vivo choca con lo mismo —un `403` no significa que lo hayan
+borrado—. Lo honesto será una comprobación que **marca para revisar a mano**, no
+una que declare el post caído por su cuenta.
 
-- `publication_evidence` —diseñada en la Fase 2, con cero filas, y ya con
-  `no_delete` desde `3.12`— empieza a llenarse.
-- `permanence_until` se calcula al verificar, que es lo que `8.8` necesita para
-  vigilar que el post siga vivo.
-- Y aparece la pregunta que hay que decidir con datos delante: **cómo se
-  captura**. Una comprobación HTTP es barata y demuestra poco; una captura de
-  pantalla demuestra más y no se puede automatizar sin un navegador. El esquema
-  ya admite las tres formas (`file_id`, `http_status`, `raw_payload`), así que la
-  decisión es de operación, no de modelo.
-
-### Y una cosa que no es una iteración pero bloquea igual
-
-**El CI no ha corrido ni una vez desde `4.9`.** El workflow sólo se disparaba en
-`push` a `main` y `develop`; el trabajo vive en `feat/7.6-invitaciones`, así que
-empujar ahí no lanzaba ningún job, y `main` no recibía nada desde entonces.
-
-Ocho iteraciones —`5.9` a `8.6`— se empujaron sin que Percona 5.7 las mirara, y
-Percona es el motor de producción y lo único que el CI prueba y el contenedor no.
-Un CI que no se dispara **no falla: no dice nada**.
-
-Arreglado (el `on: push` incluye ahora `feat/**`), y los pasos de entrega están
-en **`docs/19-PROTOCOLO-DE-ENTREGA.md`**, que también documenta que `main` lleva
-ocho iteraciones de retraso y qué hacer con eso.
+Después, `8.4` (límite de rondas) y `8.5` (aprobación del cliente por enlace
+firmado) cierran la fase, y `8.11` es su QA.
 
 ### Lo que sigue sin poder hacerse, y no es código
 
 `T-09` —el texto de los términos— lleva **cinco días** bloqueando toda activación
-de creadores. El ciclo entero está construido y probado de punta a punta, y **no
-se puede usar con una persona real** hasta que exista ese texto.
+de creadores. El ciclo entero está construido y probado de punta a punta —se
+recluta, se invita, se acepta, se entrega, se revisa, se aprueba, se publica y se
+verifica— y **no se puede usar con una persona real** hasta que exista ese texto.
 
 Es, con diferencia, lo más caro que hay abierto.
 

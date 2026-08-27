@@ -2,7 +2,52 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 
-## [8.6 · El post publicado] — 2026-08-26
+## [8.7 · La prueba de que el post existió] — 2026-08-26
+
+Y por qué esa prueba es una captura de pantalla y no una comprobación
+automática.
+
+### Añadido
+- **La cola de verificación**, en `/verificacion`, y el archivado de la
+  evidencia. `publication_evidence` estrena su primera fila.
+- **La evidencia es una captura** (`DEC-142`). Un `http_status` no distingue «el
+  post existe» de «nos bloquearon» —Instagram devuelve `200` con un muro de
+  login— y de `verified` cuelga el pago. La sonda HTTP se guarda como dato
+  complementario y **no decide**; `tg_pub_verificada_con_evidencia` lo impone.
+- **Permiso propio `content.verify`** (`DEC-143`), comprobado en el POST.
+  Finanzas no lo tiene: paga contra lo verificado, no verifica.
+- **Si el post no está, el entregable vuelve al creador** (`DEC-144`), a
+  `approved` y no a revisión: el contenido estaba bien, lo que falla es el
+  enlace. Motivo de lista cerrada y correo con el motivo dentro.
+- **`permanence_until`** se calcula al verificar, desde `published_at` y con los
+  días del requisito. Es lo que `8.8` va a vigilar.
+
+### Corregido
+- **Una publicación rechazada bloqueaba su propio enlace, y el del vecino**
+  (`T-50`). `uq_pub_fingerprint` era única global, así que cuando se le pedía al
+  creador que arreglara el post y volviera a registrar el mismo enlace, se
+  estrellaba con un `1062`. Y peor: se rechaza el post de Ana por «está
+  publicado en otra cuenta», esa cuenta es la de Luis, **y Luis no podía
+  registrar su propio post**. Ahora la unicidad mira sólo las vivas, con la
+  **decimoquinta columna puerta** del esquema.
+- **`ck_pev_screenshot`**, que cierra un hueco de `2.12`: `ck_pev_content` sólo
+  pedía «algo», así que una fila que decía `screenshot` y traía un `200` pelado
+  se leía como una captura que nadie hizo.
+
+### Verificación
+**659 pruebas / 2.051 aserciones** · **1.438** aserciones de restricción en
+MariaDB y **1.428** en MySQL 8 · 14 mutaciones, 3 sobrevivieron y las tres están
+cerradas · las seis puertas en verde.
+
+Una de las tres sobrevivía porque **la fecha coincidía**: la permanencia se
+calcula desde `published_at`, y el post se reportaba *hoy*, así que sustituir
+`published_at` por `now()` no rompía nada. Ahora se registra con fecha de hace
+cinco días. Es el mismo patrón que la mutación del plazo en `8.1` —dos pruebas
+usando el mismo número— en otra forma.
+
+---
+
+## [8.6 · El post publicado] — 2026-08-26## [8.6 · El post publicado] — 2026-08-26
 
 Donde el trabajo sale de nuestras pantallas y aparece en las de todo el mundo.
 `publications` estaba diseñada desde la Fase 2 con cero filas — la **sexta** tabla

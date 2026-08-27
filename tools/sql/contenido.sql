@@ -198,12 +198,25 @@ CREATE TABLE publications (
   status         VARCHAR(20)   NOT NULL DEFAULT 'reported',
   verified_at    DATETIME(3)   NULL,
   verified_by_user_id BIGINT UNSIGNED NULL,
+  -- 8.7: POR QUE se rechazo. `ck_pub_rejected` (8.6) solo exigia el CUANDO, y
+  -- el por que es lo que el creador necesita para arreglarlo.
+  rejected_reason VARCHAR(255) NULL,
   removed_at     DATETIME(3)   NULL,
   created_at     DATETIME(3)   NULL,
   updated_at     DATETIME(3)   NULL,
+  viva_gate      TINYINT UNSIGNED GENERATED ALWAYS AS
+                   (CASE WHEN status <> 'rejected' THEN 1 ELSE NULL END) STORED,
   UNIQUE KEY uq_pub_uuid (uuid),
-  -- El mismo post no puede reclamarse dos veces.
-  UNIQUE KEY uq_pub_fingerprint (url_fingerprint),
+  -- El mismo post no puede reclamarse dos veces --pero solo cuentan las VIVAS--.
+  --
+  -- 8.7: la unicidad era GLOBAL y tenia un agujero que aparecio al conectar el
+  -- rechazo. Si una publicacion se rechaza porque el enlace no lleva a ningun
+  -- post, el creador arregla el post y vuelve a registrar el MISMO enlace, que
+  -- es lo que se le pide, y se estrellaba contra la clave con un 1062. Una fila
+  -- rechazada no reclama nada: se miro y no valia.
+  --
+  -- Decimoquinta columna puerta del esquema.
+  UNIQUE KEY uq_pub_fingerprint (viva_gate, url_fingerprint),
   KEY ix_pub_deliverable (deliverable_id, status),
   KEY ix_pub_platform (platform_id, published_at),
   KEY ix_pub_permanence (permanence_until, status),
@@ -227,7 +240,12 @@ CREATE TABLE publications (
   -- entro la fila; quien la escribe usa EL MISMO instante para las dos, que es
   -- la leccion de `T-39`.
   CONSTRAINT ck_pub_published_no_futuro CHECK (created_at IS NULL OR published_at <= created_at),
-  CONSTRAINT ck_pub_rejected CHECK (status <> 'rejected' OR verified_at IS NOT NULL)
+  CONSTRAINT ck_pub_rejected CHECK (status <> 'rejected'
+      OR (verified_at IS NOT NULL AND CHAR_LENGTH(TRIM(COALESCE(rejected_reason,''))) >= 5)),
+  -- 8.7: `permanence_until` es `published_at + permanence_days` y se calcula AL
+  -- VERIFICAR: hasta que alguien mira no se sabe si hay post que permanezca.
+  CONSTRAINT ck_pub_permanence CHECK (permanence_until IS NULL
+      OR status IN ('verified','removed','expired'))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- La evidencia. Append-only y con checksum: los posts se borran, y esto es lo
@@ -242,6 +260,9 @@ CREATE TABLE publication_evidence (
   raw_payload    LONGTEXT      NULL,
   captured_at    DATETIME(3)   NOT NULL,
   captured_by_user_id BIGINT UNSIGNED NULL,
+  -- `captured_at` es cuando se hizo la captura --puede venir de fuera-- y esto
+  -- es cuando entro la fila. Sin `updated_at`: solo insercion (2.12).
+  created_at     DATETIME(3)   NULL,
   UNIQUE KEY uq_pev_uuid (uuid),
   KEY ix_pev_publication (publication_id, captured_at),
   KEY ix_pev_file (file_id),
@@ -252,19 +273,28 @@ CREATE TABLE publication_evidence (
   CONSTRAINT ck_pev_type CHECK (evidence_type IN ('screenshot','api_snapshot','http_check','archive','manual')),
   CONSTRAINT ck_pev_payload CHECK (raw_payload IS NULL OR JSON_VALID(raw_payload)),
   -- Una evidencia sin nada que ensenar no es evidencia.
-  CONSTRAINT ck_pev_content CHECK (file_id IS NOT NULL OR raw_payload IS NOT NULL OR http_status IS NOT NULL)
+  CONSTRAINT ck_pev_content CHECK (file_id IS NOT NULL OR raw_payload IS NOT NULL OR http_status IS NOT NULL),
+  -- 8.7. Una CAPTURA sin archivo no es una captura. `ck_pev_content` solo pedia
+  -- «algo», asi que una fila que dice `screenshot` y trae un 200 pelado se leia
+  -- como una captura que nadie hizo --y esa es justo la que va a mirar quien
+  -- discuta el pago--.
+  CONSTRAINT ck_pev_screenshot CHECK (evidence_type <> 'screenshot' OR file_id IS NOT NULL),
+  CONSTRAINT ck_pev_http CHECK (evidence_type <> 'http_check' OR http_status IS NOT NULL)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Comprobaciones de permanencia. Append-only. Alimenta el evento
 -- PermanenceCheckPassed que 2.2 P-12 marco como pendiente de crear.
 CREATE TABLE permanence_checks (
   id             BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  uuid           CHAR(36)      NOT NULL,
   publication_id BIGINT UNSIGNED NOT NULL,
   checked_at     DATETIME(3)   NOT NULL,
   is_live        TINYINT(1)    NOT NULL,
   http_status    SMALLINT UNSIGNED NULL,
   evidence_id    BIGINT UNSIGNED NULL,
   notes          VARCHAR(255)  NULL,
+  created_at     DATETIME(3)   NULL,
+  UNIQUE KEY uq_pc_uuid (uuid),
   KEY ix_pc_publication (publication_id, checked_at),
   KEY ix_pc_live (is_live, checked_at),
   KEY ix_pc_evidence (evidence_id),
@@ -372,6 +402,28 @@ END//
 -- algo no aprobado es darlo por bueno a posteriori, con la firma de nadie. Va en
 -- la base y no solo en la pantalla porque de esta fila cuelga el pago: 8.7 la
 -- verifica y 8.8 cuenta su permanencia.
+-- 8.7: no se da por verificada una publicacion sin una captura archivada.
+--
+-- BEFORE UPDATE y no INSERT: una publicacion nace `reported` y la evidencia se
+-- archiva DESPUES, asi que el momento de exigirla es cuando alguien la marca
+-- verificada. Y se exige `screenshot` con archivo, no «alguna evidencia»: una
+-- comprobacion HTTP contra Instagram devuelve 200 con un muro de login o 403 a
+-- todo lo que no sea un navegador, o sea que NO distingue «el post existe» de
+-- «nos bloquearon». De `verified` cuelga el pago (BR-CONTENT-004, rojo).
+CREATE TRIGGER `tg_pub_verificada_con_evidencia`
+BEFORE UPDATE ON `publications`
+FOR EACH ROW
+BEGIN
+  IF NEW.`status` = 'verified' AND OLD.`status` <> 'verified'
+     AND NOT EXISTS (SELECT 1 FROM `publication_evidence` e
+                      WHERE e.`publication_id` = OLD.`id`
+                        AND e.`evidence_type` = 'screenshot'
+                        AND e.`file_id` IS NOT NULL)
+  THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'No se da por verificada una publicacion sin una captura archivada. Un estado HTTP no prueba que el post exista.';
+  END IF;
+END//
 CREATE TRIGGER `tg_pub_version_aprobada`
 BEFORE INSERT ON `publications`
 FOR EACH ROW

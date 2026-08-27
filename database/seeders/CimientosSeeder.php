@@ -248,6 +248,11 @@ final class CimientosSeeder extends Seeder
             // hace desde su portal con `creator.portal`; esto es para cuando el
             // enlace llega por WhatsApp y lo mete el equipo.
             ['content.publication.manage', 'Content', 'Registrar el post publicado en nombre del creador'],
+            // 8.7: dar por buena una publicacion. De `verified` cuelga el pago
+            // (`BR-CONTENT-004`, rojo), asi que es una firma con dinero detras
+            // y va aparte, por el mismo criterio que separo revisar de aprobar
+            // en 8.3. Finanzas NO lo necesita: paga contra lo verificado.
+            ['content.verify',         'Content',  'Verificar que el post existe y archivar su prueba'],
             // 4.5: dar de alta una sociedad es constituir una empresa en el
             // sistema. De ella salen la numeracion de comprobantes
             // (`BR-LE-007`), el emisor de cada factura (`BR-LE-005`) y las
@@ -315,7 +320,7 @@ final class CimientosSeeder extends Seeder
                 // responde del margen y quien va a tener que explicarsela al
                 // cliente--.
                 'content.review', 'content.approve', 'content.extra_round', 'content.reopen',
-                'content.publication.manage',
+                'content.publication.manage', 'content.verify',
                 // 4.4: quien habla con el cliente es quien tiene su RUC.
                 'client.tax.manage',
                 // 4.9: quien invita a un creador necesita poder comprobar que la
@@ -350,7 +355,7 @@ final class CimientosSeeder extends Seeder
             // ella. `campaign_manager` la tiene.
             'content_reviewer' => [
                 'content.review', 'content.approve', 'content.reopen', 'content.deliverable.view',
-                'content.publication.manage',
+                'content.publication.manage', 'content.verify',
                 'campaign.view', 'creator.view', 'catalog.view',
             ],
             // Portales externos: sus permisos llegan con su fase. Un rol externo

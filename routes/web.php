@@ -14,6 +14,7 @@ use App\Modules\Communication\Http\Controllers\CorreosController;
 use App\Modules\Content\Http\Controllers\EntregablesController;
 use App\Modules\Content\Http\Controllers\MisEntregasController;
 use App\Modules\Content\Http\Controllers\RevisionController;
+use App\Modules\Content\Http\Controllers\VerificacionController;
 use App\Modules\Core\Http\Controllers\BitacoraController;
 use App\Modules\Core\Http\Controllers\CatalogosController;
 use App\Modules\Core\Http\Controllers\EntidadesLegalesController;
@@ -621,6 +622,24 @@ Route::middleware('auth')->group(function (): void {
         ->middleware(['permiso:content.review', 'throttle:30,1'])
         ->whereUuid('uuid')
         ->name('revision.reabrir');
+
+    // 8.7: la cola de verificacion. Bandeja global, como la de revision de 8.3:
+    // verificar es trabajo por lotes, y un post sin verificar es un pago que no
+    // puede salir.
+    Route::get('/verificacion', [VerificacionController::class, 'index'])
+        ->middleware('permiso:content.deliverable.view')
+        ->name('verificacion.cola');
+    Route::get('/verificacion/{uuid}', [VerificacionController::class, 'ver'])
+        ->middleware('permiso:content.deliverable.view')
+        ->whereUuid('uuid')
+        ->name('verificacion.ver');
+    // El veredicto entra por `content.deliverable.view` --mirar la cola es ver--
+    // y `content.verify` se comprueba DENTRO: los dos veredictos llegan por el
+    // mismo formulario y esconder un boton no es una regla de autorizacion.
+    Route::post('/verificacion/{uuid}', [VerificacionController::class, 'verificar'])
+        ->middleware(['permiso:content.deliverable.view', 'throttle:30,1'])
+        ->whereUuid('uuid')
+        ->name('verificacion.verificar');
 
     // Los candidatos (7.4). Buscar es VER --un revisor puede mirar a quien se
     // esta considerando-- pero armar la lista corta es gestionar.

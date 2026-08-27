@@ -6,7 +6,7 @@
 #   uq_pub_fingerprint            el mismo post no se reclama dos veces
 #   ck_pub_published_no_futuro    un post no se publica manana
 #   ck_pub_fingerprint            la huella mide 64
-#   ck_pub_rejected               rechazada dice cuando se reviso
+#   ck_pub_rejected               rechazada dice cuando se reviso (y por que, desde 8.7)
 #
 # Misma disciplina que 8.1, 8.2 y 8.3: trabaja sobre SU participacion.
 #
@@ -135,8 +135,11 @@ probar "registrar el post de B" \
   "$(publicar "$B" "$VB" 'https://instagram.com/p/BBB' "$HUELLA_B" 'NOW(3)')" OK
 porque "marcarla rechazada sin fecha de revision" \
   "UPDATE publications SET status='rejected' WHERE deliverable_id=$B;" "ck_pub_rejected"
-probar "y con ella" \
-  "UPDATE publications SET status='rejected', verified_at=NOW(3) WHERE deliverable_id=$B;" OK
+# Y con el motivo: desde 8.7 `ck_pub_rejected` exige tambien el POR QUE, que es
+# lo que el creador necesita para arreglarlo.
+probar "y con ella y con su motivo" \
+  "UPDATE publications SET status='rejected', verified_at=NOW(3),
+     rejected_reason='El enlace no lleva a ningun post' WHERE deliverable_id=$B;" OK
 
 echo ""
 echo "--- Lo publicado no se toca por debajo ---"

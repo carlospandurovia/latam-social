@@ -224,11 +224,19 @@ final class Publicaciones
             ->exists();
     }
 
-    /** ¿Alguien más reclamó ya este post? */
+    /**
+     * ¿Alguien más reclamó ya este post?
+     *
+     * Las **rechazadas no cuentan**, igual que en `uq_pub_fingerprint` desde
+     * `8.7`: una publicación que se miró y no valía no reclama nada, y el enlace
+     * tiene que poder volver a registrarse — que es justo lo que se le pide al
+     * creador cuando se le rechaza por «el enlace no lleva a ningún post».
+     */
     public static function reclamadoPorOtro(string $url, int $entregableId): bool
     {
         return DB::table('publications')
             ->where('url_fingerprint', self::huella($url))
+            ->where('status', '!=', 'rejected')
             ->where('deliverable_id', '!=', $entregableId)
             ->exists();
     }

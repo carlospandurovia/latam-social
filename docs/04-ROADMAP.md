@@ -183,7 +183,7 @@ Iterativa y exhaustiva, tal como pide la especificación. **Nada de frontend aqu
 | 8.4 | Aprobación interna y límite de rondas |
 | 8.5 | Aprobación del cliente por **enlace firmado** (sin portal completo) |
 | 8.6 | ✅ **Cerrada (2026-08-26).** El creador pega el enlace de su post desde su portal, y el equipo puede hacerlo por él (`DEC-139`). **Sólo se publica lo aprobado, y esa versión** (`DEC-140`), guardada como snapshot con clave ajena compuesta. La red se **deduce** del enlace con `platforms.url_pattern` y tiene que ser la del brief (`DEC-141`); la huella normaliza la URL para que `?utm_source=…` no esquive «el mismo post no se reclama dos veces». La **programación** queda fuera: hoy se registra lo ya publicado |
-| 8.7 | **Verificación de publicación + archivado de evidencia** (captura del post en vivo) |
+| 8.7 | ✅ **Cerrada (2026-08-26).** La evidencia es una **captura**, no una comprobación HTTP: Instagram y TikTok responden igual a un post vivo que a un bloqueo, así que un `http_status` no prueba nada y de `verified` cuelga el pago (`DEC-142`). Permiso propio `content.verify` (`DEC-143`). Si el post no está, el entregable vuelve al **creador** —el contenido estaba bien, falla el enlace— y se le avisa (`DEC-144`). `permanence_until` se calcula al verificar, que es lo que 8.8 necesita. De paso, `T-50`: una rechazada bloqueaba su propio enlace |
 | 8.8 | Control de permanencia mínima del post |
 | 8.9 | Hilos de mensajes creador ↔ equipo por campaña |
 | 8.10 | Derechos de uso (`UsageRight`): alcance, territorio, canales, exclusividad, vigencia |

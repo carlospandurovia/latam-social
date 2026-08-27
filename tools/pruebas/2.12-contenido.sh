@@ -124,9 +124,9 @@ probar "evidence: payload que no es JSON" \
 probar "evidence: tipo inventado" \
  "INSERT INTO publication_evidence (uuid,publication_id,evidence_type,http_status,captured_at) VALUES (UUID(),$PUB,'foto_del_movil',200,NOW(3));" RECHAZO
 probar "permanence: el post sigue vivo" \
- "INSERT INTO permanence_checks (publication_id,checked_at,is_live,http_status) VALUES ($PUB,NOW(3),1,200);" OK
+ "INSERT INTO permanence_checks (uuid,publication_id,checked_at,is_live,http_status) VALUES (UUID(),$PUB,NOW(3),1,200);" OK
 probar "permanence: el post desaparecio" \
- "INSERT INTO permanence_checks (publication_id,checked_at,is_live,http_status,notes) VALUES ($PUB,NOW(3),0,404,'Eliminado por el creador');" OK
+ "INSERT INTO permanence_checks (uuid,publication_id,checked_at,is_live,http_status,notes) VALUES (UUID(),$PUB,NOW(3),0,404,'Eliminado por el creador');" OK
 
 echo ""
 echo -n "  Tablas de solo insercion con updated_at (debe ser 0): "
