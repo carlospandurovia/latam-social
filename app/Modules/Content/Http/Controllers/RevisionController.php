@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace App\Modules\Content\Http\Controllers;
 
+use App\Modules\Content\Http\Requests\PedirAprobacionRequest;
 use App\Modules\Content\Http\Requests\ReabrirRequest;
 use App\Modules\Content\Http\Requests\RevisarRequest;
+use App\Modules\Content\Services\Aprobaciones;
 use App\Modules\Content\Services\Entregables;
 use App\Modules\Content\Services\Revisiones;
 use App\Shared\Auth\Permisos;
@@ -78,6 +80,12 @@ final class RevisionController
             'versiones' => Entregables::versiones((int) $entregable->id),
             'historial' => Revisiones::historial((int) $entregable->id),
             'rondas' => Revisiones::rondas($entregable),
+            // 8.5: lo que el cliente contestó y todavía no ha cerrado nadie, y
+            // el enlace vivo si lo hay. La respuesta NO mueve la pieza
+            // (`DEC-151`): se enseña aquí para que quien revisa emita el
+            // veredicto con ella delante.
+            'respuestaCliente' => Aprobaciones::respuestaPendiente((int) $entregable->id),
+            'enlaceCliente' => Aprobaciones::vivoDe((int) $entregable->id),
             'lados' => Revisiones::LADOS,
             'facturacion' => Revisiones::FACTURACION,
             // 8.2: cuando está aprobado, la pantalla deja de ofrecer un veredicto
@@ -89,6 +97,37 @@ final class RevisionController
             'puedeAutorizar' => Permisos::tiene((int) Auth::id(), 'content.extra_round'),
             'puedeReabrir' => Permisos::tiene((int) Auth::id(), 'content.reopen'),
         ]);
+    }
+
+    /**
+     * Le manda la pieza al cliente para que dé su visto bueno (8.5).
+     *
+     * No estrena permiso: entra por `content.review`, porque pedirle el visto
+     * bueno al cliente es parte de revisar y quien revisa es quien habla con él.
+     *
+     * `tg_apl_version_aprobada` impone en la base lo que aquí se comprueba con
+     * palabras: al cliente sólo se le manda una pieza **aprobada**, y **la
+     * versión aprobada**. Es la otra mitad de `BR-CONTENT-002`.
+     */
+    public function pedirAprobacion(PedirAprobacionRequest $peticion, string $uuid): RedirectResponse
+    {
+        $entregable = self::entregable($uuid);
+
+        if ((string) $entregable->status !== 'approved' || $entregable->approved_version_id === null) {
+            return back()->with('aviso',
+                'Al cliente solo se le manda lo aprobado. Apruebe la pieza antes de pedirle su visto bueno.');
+        }
+
+        /** @var array<string, mixed> $datos */
+        $datos = $peticion->validated();
+
+        Aprobaciones::pedir($entregable, (string) $datos['correo'], (int) Auth::id());
+
+        return back()->with('exito', sprintf(
+            'Enlace enviado a %s. Vence en %d dias y si ya habia uno vivo, queda anulado.',
+            $datos['correo'],
+            (int) (Aprobaciones::HORAS / 24),
+        ));
     }
 
     /**
@@ -164,7 +203,18 @@ final class RevisionController
             return back()->with('aviso', 'Este entregable no tiene ninguna version que revisar.');
         }
 
-        Revisiones::emitir($entregable, $version, $datos, $usuarioId, $peticion->ip());
+        $uuidRevision = Revisiones::emitir($entregable, $version, $datos, $usuarioId, $peticion->ip());
+
+        // 8.5: si esto cierra una respuesta del cliente, quedan atadas. Sin
+        // esto la respuesta se quedaría para siempre en la bandeja de
+        // pendientes — y con esto queda escrito QUÉ veredicto contestó a qué
+        // cliente, que es lo que alguien va a querer leer dentro de dos años.
+        $pendiente = Aprobaciones::respuestaPendiente((int) $entregable->id);
+
+        if ($pendiente !== null) {
+            $revisionId = (int) DB::table('content_reviews')->where('uuid', $uuidRevision)->value('id');
+            Aprobaciones::transcribir((int) $pendiente->id, $revisionId);
+        }
 
         return redirect()->route('revision.cola')->with('exito', $veredicto === Revisiones::APROBAR
             ? 'Aprobado. El entregable queda listo.'

@@ -11,6 +11,7 @@ use App\Modules\Client\Http\Controllers\ContactosController;
 use App\Modules\Client\Http\Controllers\MarcasController;
 use App\Modules\Client\Http\Controllers\PerfilesFiscalesController;
 use App\Modules\Communication\Http\Controllers\CorreosController;
+use App\Modules\Content\Http\Controllers\AprobacionController;
 use App\Modules\Content\Http\Controllers\EntregablesController;
 use App\Modules\Content\Http\Controllers\MisEntregasController;
 use App\Modules\Content\Http\Controllers\PermanenciaController;
@@ -106,6 +107,27 @@ Route::get('/invitacion/estado/gracias', [InvitacionController::class, 'gracias'
     ->name('invitacion.gracias');
 Route::get('/invitacion/estado/no-disponible', [InvitacionController::class, 'caducada'])
     ->name('invitacion.caducada');
+
+// ---- La aprobacion del cliente (`8.5`) --------------------------------------
+//
+// La SEGUNDA parte del sistema hecha para alguien de fuera, y la primera para
+// alguien de la MARCA. Sin `auth` y sin `guest`: el cliente no tiene cuenta, y
+// la autorizacion es el token.
+//
+// Mismo tratamiento que la invitacion y el enlace de contrasena: la ruta que
+// lleva el token lo guarda en la sesion y redirige a una URL limpia (`DEC-117`).
+Route::get('/aprobacion/{token}', [AprobacionController::class, 'ver'])
+    ->middleware('throttle:20,1')
+    ->where('token', '[a-f0-9]{64}')
+    ->name('aprobacion.ver');
+Route::get('/aprobacion', [AprobacionController::class, 'pieza'])->name('aprobacion.pieza');
+Route::post('/aprobacion/responder', [AprobacionController::class, 'responder'])
+    ->middleware('throttle:10,1')
+    ->name('aprobacion.responder');
+Route::get('/aprobacion/estado/gracias', [AprobacionController::class, 'gracias'])
+    ->name('aprobacion.gracias');
+Route::get('/aprobacion/estado/no-disponible', [AprobacionController::class, 'caducada'])
+    ->name('aprobacion.caducada');
 
 Route::middleware('auth')->group(function (): void {
     Route::post('/salir', [AccesoController::class, 'salir'])->name('salir');
@@ -623,6 +645,14 @@ Route::middleware('auth')->group(function (): void {
         ->middleware(['permiso:content.review', 'throttle:30,1'])
         ->whereUuid('uuid')
         ->name('revision.reabrir');
+
+    // 8.5: mandarle la pieza al cliente para que la vea. Entra por
+    // `content.review` y no estrena permiso: pedirle el visto bueno al cliente
+    // es parte de revisar, y quien revisa es quien habla con el.
+    Route::post('/revision/{uuid}/enlace-cliente', [RevisionController::class, 'pedirAprobacion'])
+        ->middleware(['permiso:content.review', 'throttle:10,1'])
+        ->whereUuid('uuid')
+        ->name('revision.enlace_cliente');
 
     // 8.7: la cola de verificacion. Bandeja global, como la de revision de 8.3:
     // verificar es trabajo por lotes, y un post sin verificar es un pago que no

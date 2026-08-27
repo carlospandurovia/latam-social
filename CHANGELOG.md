@@ -2,6 +2,36 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 
+## [8.5 · El visto bueno del cliente] — 2026-08-27
+
+La primera vez que entra al sistema alguien de la **marca**. Sin portal, sin
+cuenta y sin contraseña. Cierra el ciclo de contenido.
+
+### Añadido
+- **`approval_links`** y la pantalla pública del cliente: ve la campaña, el
+  formato, la versión aprobada y el contenido — y **ni un solo importe**
+  (`BR-SEC-001`). La frontera es `Aprobaciones::pieza()`, que enumera columnas.
+- **Su respuesta se registra y no mueve la pieza** (`DEC-151`). No es
+  burocracia: su corrección gasta ronda, y desde `8.4` una ronda de más exige
+  firma y decisión de facturación — que él no puede poner contra sí mismo.
+- **El silencio no hace nada** (`DEC-152`), y por eso esto **no estrena comando
+  de caducidad** al revés que `7.6`: allí una invitación sin contestar dejaba
+  dinero comprometido; aquí no hay nada que cerrar.
+- **Una petición sin rondas queda pendiente de autorizar** (`DEC-153`).
+- **`tg_apl_version_aprobada`** cierra la otra mitad de `BR-CONTENT-002`: al
+  cliente le llega lo aprobado **y esa versión**. El puntero de `8.2` es lo que
+  hace comprobable esa frase.
+- **Decimoséptima columna puerta**: un enlace vivo por pieza. Dos son dos
+  respuestas contradictorias del mismo cliente sin forma de saber cuál vale.
+- **`approval_links` entra en la lista de `3.12`**: es la conformidad del
+  cliente, y de ella depende que se publique.
+
+### Notas
+- Del token se guarda **la huella**, y no se queda en la barra de direcciones
+  (`DEC-117`). Misma pieza de `5.9` y `7.6`.
+- `ck_apl_cambios` exige diez caracteres al pedir cambios y **no al aprobar**: un
+  «Perfecto» de ocho letras es una respuesta válida.
+
 ## [8.4 · El techo de rondas, en la base] — 2026-08-27
 
 `8.3` construyó el límite entero y lo dejó todo en PHP. Un `if` de un servicio

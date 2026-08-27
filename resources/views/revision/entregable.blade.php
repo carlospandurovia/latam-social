@@ -91,6 +91,76 @@
       </p>
     </div>
 
+    {{-- 8.5: lo que dijo el cliente, y el enlace para preguntárselo.
+
+         Va ANTES del formulario del veredicto y por lo mismo que las rondas:
+         quien va a emitirlo tiene que tenerlo delante mientras lo escribe. --}}
+    @if ($respuestaCliente)
+      <div class="bg-white rounded-xl border {{ $respuestaCliente->response === 'approved' ? 'border-emerald-300' : 'border-amber-300' }} p-5">
+        <h2 class="text-sm font-medium text-slate-700">El cliente ya contestó</h2>
+        <p class="mt-1 text-sm text-slate-600">
+          <strong>{{ $respuestaCliente->sent_to }}</strong>,
+          el {{ \Illuminate\Support\Carbon::parse($respuestaCliente->responded_at)->format('d/m/Y H:i') }}:
+          @if ($respuestaCliente->response === 'approved')
+            <span class="text-emerald-800 font-medium">le vale.</span>
+          @else
+            <span class="text-amber-800 font-medium">pide cambios.</span>
+          @endif
+        </p>
+        @if ($respuestaCliente->comments)
+          <p class="mt-2 text-sm text-slate-800 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 whitespace-pre-line">{{ $respuestaCliente->comments }}</p>
+        @endif
+        {{-- `DEC-151`: su respuesta no movió nada. Lo que la mueve es el
+             veredicto de abajo, y por eso hay que decirlo aquí. --}}
+        <p class="mt-2 text-xs text-slate-500">
+          Su respuesta queda registrada y <strong>no ha movido la pieza</strong>. Emita el
+          veredicto de abajo del lado «cliente» para cerrarla — y si ya no quedan rondas,
+          diga si se le cobra o la absorbemos.
+        </p>
+      </div>
+    @endif
+
+    @if ($aprobado)
+      <div class="bg-white rounded-xl border border-slate-200 p-5">
+        <h2 class="text-sm font-medium text-slate-700">Visto bueno del cliente</h2>
+        @if ($enlaceCliente)
+          <p class="mt-1 text-sm text-slate-600">
+            Enlace enviado a <strong>{{ $enlaceCliente->sent_to }}</strong> el
+            {{ \Illuminate\Support\Carbon::parse($enlaceCliente->sent_at)->format('d/m/Y') }}.
+            Vence el {{ \Illuminate\Support\Carbon::parse($enlaceCliente->expires_at)->format('d/m/Y') }}.
+            @if ($enlaceCliente->opened_at)
+              Lo abrió el {{ \Illuminate\Support\Carbon::parse($enlaceCliente->opened_at)->format('d/m/Y') }}.
+            @else
+              <span class="text-amber-700">Todavía no lo ha abierto.</span>
+            @endif
+          </p>
+          <p class="mt-1 text-xs text-slate-500">
+            Si vuelve a mandarlo, el anterior queda anulado: sólo puede haber un enlace vivo por pieza.
+          </p>
+        @else
+          <p class="mt-1 text-sm text-slate-600">
+            Mándele la pieza para que la vea y la apruebe. Verá la campaña, el formato y el
+            contenido — <strong>nunca importes ni presupuesto</strong>.
+          </p>
+        @endif
+
+        <form method="POST" action="{{ route('revision.enlace_cliente', $entregable->uuid) }}"
+              class="mt-3 flex flex-wrap gap-2 items-end">
+          @csrf
+          <div>
+            <label for="correo" class="block text-xs text-slate-500 mb-1">Correo del cliente</label>
+            <input type="email" id="correo" name="correo" required maxlength="255"
+                   value="{{ old('correo', $enlaceCliente->sent_to ?? '') }}"
+                   class="text-sm border-slate-300 rounded-lg focus:border-marca-500 focus:ring-marca-500">
+          </div>
+          <button type="submit"
+                  class="text-sm px-3 py-2 rounded-lg bg-slate-700 text-white hover:bg-slate-800">
+            {{ $enlaceCliente ? 'Reenviar enlace' : 'Mandar enlace' }}
+          </button>
+        </form>
+      </div>
+    @endif
+
     {{-- 8.2: aprobado, la pantalla deja de ofrecer un veredicto y ofrece volver
          atrás. Sin esto, un entregable aprobado era un callejón sin salida y el
          único camino cuando el cliente cambiara de opinión —que va a pasar— era

@@ -1,5 +1,9 @@
 # 09 — Estado del proyecto y siguiente iteración
 
+> **Versión 2.8 — 2026-08-27.** Actualizado al cerrar `8.5`. El ciclo de
+> contenido queda entero: entregar, revisar, aprobar internamente, **que lo vea
+> el cliente**, publicar, verificar y vigilar la permanencia.
+>
 > **Versión 2.7 — 2026-08-27.** Actualizado al cerrar `8.4`. **Y con una
 > corrección:** la versión 2.6 decía que el contador de rondas «cuenta hacia
 > arriba sin techo y la autorización no se dispara nunca». Era falso — el límite
@@ -59,13 +63,13 @@
 
 | | |
 |---|---|
-| Tablas | 69 |
-| Migraciones | 57, verdes desde cero en MySQL 8 y con vuelta atrás completa |
-| Pruebas de PHPUnit | **692**, 2.114 aserciones |
-| Aserciones de restricción (SQL) | **1.542** en MariaDB, **1.532** en MySQL 8 |
+| Tablas | 70 |
+| Migraciones | 58, verdes desde cero en MySQL 8 y con vuelta atrás completa |
+| Pruebas de PHPUnit | **711**, 2.247 aserciones |
+| Aserciones de restricción (SQL) | **1.586** en MariaDB, **1.576** en MySQL 8 |
 | Puertas de calidad | 6: formato, análisis estático, fronteras, pruebas, vigencias, nombres entre capas |
 | Verificadores fuera de PHPUnit | 4: fixturas, periodos, nombres entre capas y **mensajes de la base** (nuevo en 8.1) |
-| Decisiones registradas | hasta `DEC-150` |
+| Decisiones registradas | hasta `DEC-153` |
 
 ### Lo que se puede hacer hoy por pantalla
 
@@ -144,6 +148,12 @@ sube la captura, que queda archivada y no se borra nunca. Si no está, el
 entregable vuelve al creador con el motivo. Es lo que convierte
 `BR-CONTENT-004` en algo real y lo que el pago va a mirar.
 
+Y desde `8.5`, **el cliente ve su pieza y da el visto bueno**: un enlace de un
+solo uso, sin portal ni contraseña, donde ve la campaña, el formato y el
+contenido — y ni un solo importe. Lo que conteste queda registrado con su hora y
+su IP, y lo cierra una persona: su corrección gasta ronda, y una ronda de más
+exige una firma que él no puede poner contra sí mismo.
+
 Y desde `8.4`, **el techo de rondas lo impone la base**: sólo la corrección del
 cliente gasta ronda, una ronda de más no se cuela sin declararse —y esa columna
 es la que se factura— y el contador no baja. Lo que hasta entonces protegía un
@@ -212,27 +222,29 @@ Ninguna bloquea código hoy; todas bloquean una iteración futura concreta.
 
 ## 4. Lo que propongo como siguiente iteración
 
-**`8.5` — la aprobación del cliente por enlace firmado.** Es la última pieza del
-ciclo y la primera vez que entra alguien de la marca: un enlace de un solo uso,
-sin portal ni cuenta, con el que el cliente ve la versión y dice si vale o qué
-cambiar. Misma mecánica que la invitación de `7.6`, que ya está construida y
-probada.
+Con `8.5` cerrada, **el ciclo de contenido está entero**: el creador entrega, el
+equipo revisa, el cliente aprueba, se publica, se verifica y se vigila la
+permanencia. De la Fase 8 quedan tres piezas, y ninguna es del camino crítico:
 
-Y es la que hace que `8.4` haya valido la pena: hasta hoy, *«sólo la corrección
-del cliente gasta ronda»* y *«una ronda de más se declara»* las garantizaba
-`Revisiones::emitir()`. `8.5` escribe revisiones del cliente **sin pasar por
-ahí**, así que las garantías tenían que estar en la base antes — y ya lo están.
+| It. | Qué es | Por qué puede esperar |
+|---|---|---|
+| `8.9` | Hilos de mensajes creador ↔ equipo | hoy se habla por correo y funciona |
+| `8.10` | Derechos de uso (alcance, territorio, exclusividad, vigencia) | es contractual, y `T-09` sigue bloqueando el texto |
+| `8.11` | QA de fase + Phase Review Report | se hace **al final**, y ese final es ahora |
 
-Tiene al menos una decisión de negocio que hay que tomar contigo y que prefiero
-preguntar antes de escribir nada: **qué pasa si el cliente no contesta**. La
-invitación al creador caduca y libera presupuesto (`7.6`); un enlace de
-aprobación que caduca deja una pieza aprobada por nadie o rechazada por nadie, y
-las dos cosas son decisiones con dinero detrás.
+Así que propongo **`8.11`, el QA de la Fase 8**, antes que `8.9` y `8.10`.
 
-Después, `8.9` (mensajería), `8.10` (derechos de uso) y `8.11`, que es el QA de
-la fase.
+Es lo que el propio roadmap manda, y hay una razón concreta para no saltárselo:
+en las ocho iteraciones de esta fase han salido `T-43`, `T-48`, `T-49`, `T-50`,
+`T-51`, `T-52`, `T-53` y `T-54` — ocho defectos, y **seis de ellos eran pruebas
+que estaban verdes por el motivo equivocado**. Un QA de fase que mire eso de
+frente vale más que dos funcionalidades nuevas encima.
 
-### Lo que 8.8 y 8.4 dejaron abierto y no es mío
+Y hay una cosa que sólo se puede mirar ahora: `F9` es facturación y pagos, y
+entra a leer `over_included`, `verified`, `fulfilled` y `approval_links`. Todo lo
+que la Fase 8 dejó a medias se convierte allí en dinero.
+
+### Lo que la Fase 8 dejó abierto y no es mío
 
 `Q-59`: **¿la ventana de permanencia se alarga por los días que el post estuvo
 caído?** Hoy no. Si el post estuvo tres días fuera, la marca perdió tres días de

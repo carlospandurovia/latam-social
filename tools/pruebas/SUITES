@@ -44,3 +44,7 @@
 # clave ajena encadena publicacion y entregable. Va detras de 8.7 y usa SU
 # entregable --el numero 2 de luisvega-- para no pisarse con ella.
 8.8-permanencia
+# 8.5 tampoco limpia: `approval_links` entro en la lista de 3.12 --es la
+# conformidad del cliente-- y su clave ajena encadena version y entregable. Usa
+# la pieza numero 3 de luisvega, para no pisarse con 8.7 ni con 8.8.
+8.5-aprobacion

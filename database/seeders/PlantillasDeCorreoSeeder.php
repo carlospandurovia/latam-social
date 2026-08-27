@@ -218,6 +218,33 @@ final class PlantillasDeCorreoSeeder extends Seeder
                 ."Tu contenido sigue aprobado: lo unico que falta es el enlace.\n\n"
                 .'LATAM Social',
             ],
+            // ---- `8.5`: el visto bueno del cliente -------------------------
+            //
+            // El primer correo del sistema dirigido a alguien de la MARCA. No
+            // lleva ni un solo numero: ni el importe del creador, ni el
+            // presupuesto, ni el margen (`BR-SEC-001`, rojo). Lleva la campana,
+            // el formato, quien lo hizo y el enlace.
+            //
+            // Y dice que la respuesta la revisa una persona, porque un cliente
+            // que pulsa «me vale» y no ve nada moverse tiene derecho a saberlo
+            // (`DEC-151`).
+            [
+                'content.client_approval',
+                'Una pieza de {{ campana }} espera su visto bueno',
+                "Buenos dias:\n\n"
+                ."Ya tenemos lista una pieza de {{ campana }} y nos gustaria que le\n"
+                ."diera un vistazo antes de publicarla.\n\n"
+                ."  Marca:    {{ marca }}\n"
+                ."  Formato:  {{ formato }}\n"
+                ."  Creador:  {{ creador }}\n\n"
+                ."Desde este enlace puede verla y decirnos si le vale o que habria que\n"
+                ."cambiar. No hace falta usuario ni contrasena:\n\n"
+                ."{{ enlace }}\n\n"
+                ."El enlace vence el {{ limite }}.\n\n"
+                ."Lo que nos conteste queda registrado y lo revisa su contacto en LATAM\n"
+                ."Social, que le confirmara los siguientes pasos.\n\n"
+                .'LATAM Social',
+            ],
             // ---- `8.8`: el post ya no esta -------------------------------
             //
             // No dice «incumpliste»: dice «no lo encontramos» y le pregunta. La

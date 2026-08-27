@@ -177,6 +177,77 @@ CREATE TABLE content_reviews (
   CONSTRAINT ck_cvw_firma CHECK (reviewer_side <> 'platform' OR reviewer_user_id IS NOT NULL)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- El visto bueno del cliente, por enlace firmado (8.5).
+--
+-- La primera vez que entra al sistema alguien de la MARCA. Sin portal, sin
+-- cuenta y sin contrasena: la autorizacion es el token, igual que la invitacion
+-- del creador (7.6) y el enlace de contrasena (5.9).
+--
+-- `DEC-151`: la respuesta se REGISTRA y no mueve el entregable. La corrección
+-- del cliente gasta ronda, y desde 8.4 una ronda de mas exige firma y decision
+-- de facturacion; el cliente no puede firmar un cargo contra si mismo.
+CREATE TABLE approval_links (
+  id                     BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  uuid                   CHAR(36)      NOT NULL,
+  -- Las DOS, para poder cerrar la clave ajena COMPUESTA de 8.2 y 8.6: una
+  -- simple diria que la version existe; esta dice que es DE LA PIEZA.
+  deliverable_id         BIGINT UNSIGNED NOT NULL,
+  deliverable_version_id BIGINT UNSIGNED NOT NULL,
+  -- Se guarda la HUELLA, nunca el token.
+  token_hash             CHAR(64)      NOT NULL,
+  -- A que direccion salio ESTE enlace. No es clave ajena a `contacts` a
+  -- proposito: quien aprueba una pieza no es necesariamente el contacto de
+  -- facturacion, y atarlo al catalogo convertiria un clic en un tramite.
+  sent_to                VARCHAR(255)  NOT NULL,
+  sent_by_user_id        BIGINT UNSIGNED NULL,
+  sent_at                DATETIME(3)   NOT NULL,
+  expires_at             DATETIME(3)   NOT NULL,
+  opened_at              DATETIME(3)   NULL,
+  responded_at           DATETIME(3)   NULL,
+  response               VARCHAR(20)   NULL,
+  comments               VARCHAR(2000) NULL,
+  responded_ip           VARBINARY(16) NULL,
+  -- La revision que TRANSCRIBIO esta respuesta. Hasta entonces NULL: es lo que
+  -- hace visible que hay una respuesta del cliente esperando a que alguien
+  -- decida (`DEC-153`).
+  content_review_id      BIGINT UNSIGNED NULL,
+  revoked_at             DATETIME(3)   NULL,
+  revoked_reason         VARCHAR(40)   NULL,
+  created_at             DATETIME(3)   NULL,
+  updated_at             DATETIME(3)   NULL,
+  -- Decimoseptima columna puerta: UN enlace vivo por pieza. Dos enlaces vivos
+  -- son dos respuestas posibles y contradictorias del mismo cliente, y ninguna
+  -- forma de saber cual vale. Mismo mecanismo que `uq_inv_viva` en 7.6.
+  viva_gate TINYINT UNSIGNED GENERATED ALWAYS AS
+    (CASE WHEN responded_at IS NULL AND revoked_at IS NULL THEN 1 ELSE NULL END) STORED,
+  UNIQUE KEY uq_apl_uuid (uuid),
+  UNIQUE KEY uq_apl_token (token_hash),
+  UNIQUE KEY uq_apl_viva (viva_gate, deliverable_id),
+  KEY ix_apl_deliverable (deliverable_id, sent_at),
+  KEY ix_apl_expires (expires_at, responded_at),
+  KEY ix_apl_remitente (sent_by_user_id),
+  KEY ix_apl_revision (content_review_id),
+  KEY ix_apl_version (deliverable_version_id),
+  CONSTRAINT fk_apl_version FOREIGN KEY (deliverable_version_id, deliverable_id)
+    REFERENCES deliverable_versions(id, deliverable_id) ON DELETE RESTRICT,
+  CONSTRAINT fk_apl_remitente FOREIGN KEY (sent_by_user_id) REFERENCES users(id) ON DELETE RESTRICT,
+  CONSTRAINT fk_apl_revision FOREIGN KEY (content_review_id) REFERENCES content_reviews(id) ON DELETE RESTRICT,
+  CONSTRAINT ck_apl_response CHECK (response IS NULL OR response IN ('approved','changes_requested')),
+  -- Contestada implica respuesta, y respuesta implica contestada.
+  CONSTRAINT ck_apl_respondida CHECK ((responded_at IS NULL AND response IS NULL)
+      OR (responded_at IS NOT NULL AND response IS NOT NULL)),
+  -- Pedir cambios exige decir CUALES, igual que `ck_cvw_comments` en 8.3.
+  CONSTRAINT ck_apl_cambios CHECK (response <> 'changes_requested'
+      OR CHAR_LENGTH(TRIM(COALESCE(comments,''))) >= 10),
+  CONSTRAINT ck_apl_plazo CHECK (expires_at > sent_at),
+  CONSTRAINT ck_apl_transcrita CHECK (content_review_id IS NULL OR responded_at IS NOT NULL),
+  CONSTRAINT ck_apl_revocada CHECK (revoked_at IS NULL
+      OR CHAR_LENGTH(TRIM(COALESCE(revoked_reason,''))) >= 3),
+  -- O lo contesta el cliente, o se anula sin que contestara. Las dos no.
+  CONSTRAINT ck_apl_una_salida CHECK (responded_at IS NULL OR revoked_at IS NULL),
+  CONSTRAINT ck_apl_token CHECK (CHAR_LENGTH(token_hash) = 64)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- La publicacion real. El negocio lo pidio explicito: el creador adjunta el
 -- enlace publicado y la aplicacion debe poder validar que ese enlace es de la
 -- red que dice (platforms.url_pattern, iteracion 2.6).
@@ -658,6 +729,55 @@ BEGIN
     SIGNAL SQLSTATE '45000'
       SET MESSAGE_TEXT = 'El contador de rondas no baja. Bajarlo regala rondas ya gastadas y el techo deja de valer nada.';
   END IF;
+END//
+-- ===========================================================================
+-- 8.5 -- El visto bueno del cliente
+-- ===========================================================================
+
+-- La otra mitad de `BR-CONTENT-002`. Al cliente no le llega nada sin aprobacion
+-- interna --eso ya estaba-- y ademas le llega LA VERSION APROBADA, no otra
+-- cualquiera de la pieza. El puntero de 8.2 es lo que hace que esa frase se
+-- pueda comprobar.
+CREATE TRIGGER `tg_apl_version_aprobada`
+BEFORE INSERT ON `approval_links`
+FOR EACH ROW
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM `deliverables` d
+                  WHERE d.`id` = NEW.`deliverable_id`
+                    AND d.`status` = 'approved'
+                    AND d.`approved_version_id` = NEW.`deliverable_version_id`)
+  THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'Al cliente solo se le manda lo aprobado, y la version aprobada: apruebe la pieza antes de pedirle su visto bueno.';
+  END IF;
+END//
+
+-- La fila SI se actualiza --`opened_at`, la respuesta, la transcripcion-- asi
+-- que no es append-only entera. Lo que no se toca es la RESPUESTA una vez dada:
+-- es la conformidad del cliente, con su hora y su IP, y de ella cuelga que la
+-- pieza se publique.
+CREATE TRIGGER `tg_apl_respuesta_inmutable`
+BEFORE UPDATE ON `approval_links`
+FOR EACH ROW
+BEGIN
+  IF OLD.`responded_at` IS NOT NULL
+     AND NOT ((NEW.`responded_at` <=> OLD.`responded_at`)
+              AND (NEW.`response`     <=> OLD.`response`)
+              AND (NEW.`comments`     <=> OLD.`comments`)
+              AND (NEW.`responded_ip` <=> OLD.`responded_ip`))
+  THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'El cliente ya contesto y eso no se reescribe. Si hay que volver a preguntarle, mandele otro enlace.';
+  END IF;
+END//
+
+-- 3.12 / T-16: la fila es evidencia y de ella depende dinero.
+CREATE TRIGGER `tg_apl_no_delete`
+BEFORE DELETE ON `approval_links`
+FOR EACH ROW
+BEGIN
+  SIGNAL SQLSTATE '45000'
+    SET MESSAGE_TEXT = 'approval_links no admite borrado: es la conformidad del cliente, y de ella depende que se publique.';
 END//
 
 DELIMITER ;
