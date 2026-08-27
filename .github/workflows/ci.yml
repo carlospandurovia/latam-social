@@ -2,7 +2,17 @@ name: CI
 
 on:
   push:
-    branches: [main, develop]
+    # `feat/**` y `fix/**` ESTAN aqui a proposito, y no estaban.
+    #
+    # Con `[main, develop]` a secas, empujar una rama de trabajo no disparaba
+    # nada: ni un solo job. Ocho iteraciones --de 5.9 a 8.6-- vivieron en
+    # `feat/7.6-invitaciones` sin que el CI las mirara una sola vez, y `main`
+    # llevaba desde 4.9 sin recibir nada, asi que tampoco corria alli.
+    #
+    # Un CI que no se dispara no falla: no dice nada, que es la forma mas cara
+    # de estar en verde. Es el mismo defecto que `tools/sincronizar-ci.php`
+    # documenta para un CI desactualizado, pero un escalon antes.
+    branches: [main, develop, 'feat/**', 'fix/**', 'hotfix/**']
   pull_request:
 
 jobs:
@@ -166,6 +176,18 @@ jobs:
       # comprueba que sigue siendo unico, en `app/` y en `tests/`.
       - name: La aritmetica de vigencias vive en un solo sitio
         run: php tools/verificar-vigencias.php
+
+      # `MESSAGE_TEXT` es VARCHAR(128) y Percona --el motor de produccion-- NO
+      # trunca: da 1648 en vez del 45000 del disparador. MariaDB, que es donde
+      # se desarrolla, si lo deja pasar. Cuatro mensajes llevaban rotos desde
+      # 7.4 y ninguna suite lo vio, porque todas comprobaban «esto falla» y
+      # 1648 tambien es fallar. Este paso corre contra Percona a proposito.
+      - name: Lo que la base le dice al usuario le cabe en la boca
+        run: |
+          python3 tools/verificar-mensajes.py latam_p57_triggers \
+            --cliente "mysql -h127.0.0.1 -P3307 --protocol=TCP -uroot -proot"
+          python3 tools/verificar-mensajes.py latam_p57 \
+            --cliente "mysql -h127.0.0.1 -P3307 --protocol=TCP -uroot -proot"
 
       - name: El esquema y las migraciones dicen lo mismo sobre periodos
         run: |

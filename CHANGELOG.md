@@ -2,7 +2,210 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 
-## [7.7 · El panel de seguimiento] — 2026-08-26
+## [8.6 · El post publicado] — 2026-08-26
+
+Donde el trabajo sale de nuestras pantallas y aparece en las de todo el mundo.
+`publications` estaba diseñada desde la Fase 2 con cero filas — la **sexta** tabla
+del proyecto en esa situación.
+
+### Añadido
+- **El creador pega el enlace de su post** desde `/mis-entregas`, en cuanto
+  publica. Y **el equipo puede hacerlo por él** (`DEC-139`), porque el caso real
+  existe: el enlace llega por WhatsApp y el creador no entra. Las dos puertas
+  pasan por el mismo servicio y el mismo veto; sólo cambia quién firma.
+- **Sólo se publica lo aprobado, y esa versión** (`DEC-140`). Se guarda **qué**
+  versión se publicó, como snapshot y con clave ajena compuesta, porque de esa
+  fila cuelga el pago: `8.7` la verifica y `8.8` cuenta su permanencia.
+- **La red se deduce del enlace** y tiene que ser la del brief (`DEC-141`).
+  Estrena `platforms.url_pattern`, en el catálogo desde `2.6` sin usar.
+- **La huella normaliza la URL** antes de firmarla, que es lo único que hace útil
+  a `uq_pub_fingerprint`: con la URL cruda, `?utm_source=ig` basta para reclamar
+  dos veces el mismo post. Y **lo que identifica el post no se toca** — la ruta
+  conserva mayúsculas, y la lista de parámetros que se quitan es explícita
+  porque `youtube.com/watch?v=…` lleva el identificador en la query.
+
+### Corregido
+- **La suite de `2.12` pasaba en un motor y no en el otro** (`T-49`). Al exigir
+  aprobación antes de publicar, pasó a hacer `UPDATE … WHERE id = (SELECT … FROM
+  la misma tabla)`: MariaDB lo tolera, MySQL da `1093`. Misma trampa que la suite
+  de `8.1` ya documentaba. De paso apareció que esa suite insertaba entregables
+  sin `submitted_at`, algo que `ck_del_approved` —de la propia `2.12`— prohibía
+  desde el primer día y que nadie había visto porque nadie había aprobado nada allí.
+
+### Verificación
+**638 pruebas / 2.006 aserciones** · **1.398** aserciones de restricción en
+MariaDB y **1.388** en MySQL 8 · 18 mutaciones, **las 18 detectadas a la
+primera** · las seis puertas en verde.
+
+Ocho de esas mutaciones son sobre la normalización de la URL, en las dos
+direcciones: las que la aflojan —no quitar `utm`, no quitar `www`, no ordenar los
+parámetros— y las que la aprietan de más —bajar la ruta a minúsculas, borrar la
+query entera—. Las segundas importan igual: una huella demasiado agresiva rechaza
+un post legítimo diciendo que ya está reclamado, y quien lo reporta no tiene
+forma de saber por qué.
+
+---
+
+## [8.2 · Qué versión es la buena] — 2026-08-26## [8.2 · Qué versión es la buena] — 2026-08-26
+
+Y cómo se vuelve atrás cuando la buena deja de serlo.
+
+### Añadido
+- **`deliverables.approved_version_id`**: qué versión se aprobó (`DEC-137`). No
+  «la última» —eso sale de un `MAX()` y guardarlo sería una copia que se
+  desvía— sino **la aprobada**, que es el dato del que van a colgar `8.6` y `8.7`.
+- La clave ajena es **compuesta**, y ahí está casi todo el valor: una simple
+  garantizaría que la versión existe; ésta garantiza que es **de este
+  entregable**. Sin la segunda columna, un `UPDATE` mal escrito deja el
+  entregable de uno apuntando a lo aprobado del otro y la fila sigue siendo
+  válida para la base.
+- **Reabrir** un entregable aprobado, con motivo de lista cerrada y firma
+  (`DEC-138`). **No deshace nada**: la aprobación anterior se queda en el
+  historial y la reapertura es otra línea. Permiso `content.reopen`, en los dos
+  roles que revisan — «se aprobó por error» lo descubre normalmente quien aprobó.
+- **`tg_dv_entregable_abierto`** (`T-47`): «no se entrega sobre un entregable
+  cerrado» vivía en el servicio desde `8.1` y **la base no lo conocía**. Un
+  comando o un import podían meter una versión encima de algo ya aprobado.
+
+### Corregido
+- **Una aserción que dependía del orden de evaluación de los CHECK** (`T-48`).
+  `8.3` afirmaba que aprobar sin firma se rechaza por `ck_del_aprobador`; con la
+  restricción nueva encima, MariaDB seguía rechazando por el primero y MySQL
+  empezó por el segundo. El orden no está garantizado. Es `T-43` en otra forma.
+- **La limpieza de la suite de `8.3` dejó de funcionar en silencio**: borrar la
+  versión apuntada es justo lo que la nueva clave ajena impide. Lo cazó la
+  aserción de premisa que `8.1` introdujo — que es literalmente para lo que está.
+
+### Verificación
+**606 pruebas / 1.952 aserciones** · **1.360** aserciones de restricción en
+MariaDB y **1.350** en MySQL 8 · 11 mutaciones, 2 sobrevivieron y las dos están
+cerradas · las seis puertas en verde.
+
+Las dos supervivientes eran vetos del servicio que la pantalla nunca alcanza
+porque el `FormRequest` los filtra antes. Los dos siguen haciendo falta: sin el
+del motivo, `reabrir()` compone su texto con una clave inventada y eso es un
+fatal; sin el del estado, escribe una revisión sobre un puntero nulo y la clave
+ajena lo tumba con un error crudo en la cara de quien revisa.
+
+---
+
+## [8.3 · La revisión] — 2026-08-26## [8.3 · La revisión] — 2026-08-26
+
+Lo que cierra el ciclo: un creador entrega, alguien lo mira, y la pieza pasa a
+estar buena o a volver.
+
+### Añadido
+- **La cola de revisión**, en `/revision`. **Bandeja global** y no una por
+  campaña (`DEC-136`): revisar es trabajo por lotes, y una cola por campaña
+  obliga a recorrer campañas para descubrir si hay algo esperando. Ordenada por
+  **lo que lleva más esperando**, no por lo que vence antes.
+- **El veredicto**, con el brief al lado y el historial debajo. Pedir cambios
+  exige decir cuáles (`ck_cvw_comments`).
+- **Las rondas incluidas dejan de ser una frase del contrato**: son un contador
+  que bloquea. Sólo cuentan las que pide el **cliente** (`DEC-133`) —las nuestras
+  son control de calidad y cobrárselas sería cobrarle nuestro propio error— y
+  hasta `8.5` quien lleva la cuenta marca de parte de quién viene (`DEC-134`).
+- **Pasarse exige decidir y firmar** (`DEC-135`): se cobra o se absorbe, y queda
+  quién lo autorizó. El cargo **no** va a `campaign_costs` —eso es lo que
+  gastamos nosotros y resta del margen; una ronda de más al cliente es ingreso—.
+  La pantalla de entregables la enseña como pendiente de facturar.
+- **Tres permisos**: `content.review`, `content.approve` y `content.extra_round`,
+  comprobados **en el POST** y no sólo en la ruta.
+- **Aviso al creador** cuando le piden cambios, con el comentario dentro. Sólo la
+  corrección manda correo: una aprobación no le pide nada y la ve en su portal.
+
+### Cambiado
+- **El contador de rondas se mudó de tabla.** Estaba en `campaign_creators` —dos
+  rondas **por creador**—, así que con un creador que entrega dos reels y tres
+  stories, dos correcciones sobre el primer reel dejaban las otras cuatro piezas
+  sin ninguna, habiéndolas pagado el cliente. Ahora vive en `deliverables`, y la
+  columna vieja **se fue**: la suma por creador sale de `content_reviews` con un
+  `SUM()` que nunca se desvía.
+
+### Corregido
+- **`tg_cvw_inmutable`** (`T-45`). *«Append-only: un veredicto no se edita, se
+  emite otro»* lo decía el documento de `2.12` desde el primer día y **no lo
+  impedía nada**. Un veredicto justifica una ronda cobrada.
+- **Una puerta que daba rojo por algo que nadie podía arreglar** (`T-46`), desde
+  `4.9`. MariaDB no tiene tipo `JSON` y añade un CHECK implícito `json_valid`
+  que se llama como la columna; `verificar-equivalencia.py` lo contaba como una
+  diferencia entre motores. En el CI salía verde —allí la base con CHECK es
+  MySQL— y en la máquina de quien desarrolla, roja siempre.
+- **En `2.12`, cinco aserciones sobre una versión que nadie revisaría nunca**:
+  apuntaban a la *primera* versión de un entregable que ya tenía dos.
+
+### Verificación
+**591 pruebas / 1.922 aserciones** · **1.320** aserciones de restricción en
+MariaDB y **1.310** en MySQL 8 · 20 mutaciones, **1 sobrevivió y está cerrada** ·
+las seis puertas en verde.
+
+La superviviente fue `lockForUpdate()` sobre el contador de rondas, que no tiene
+resultado observable en una conexión. Se cerró como en `8.1`: la prueba mira **el
+SQL**. Sin ese `FOR UPDATE`, dos revisores sobre la misma pieza leen el mismo
+contador y la segunda ronda del cliente **no se cuenta** — el cliente consigue
+una corrección gratis y nadie se entera, porque el número que queda es plausible.
+
+---
+
+## [8.1 · Los entregables] — 2026-08-26## [8.1 · Los entregables] — 2026-08-26
+
+La primera pantalla que ve un **creador**. Hasta aquí el sistema hablaba sólo con
+el equipo.
+
+### Añadido
+- **Los entregables se generan solos al aceptar** (`DEC-129`), del brief
+  **efectivo** del mercado y no del general (`DEC-130`). Va por evento, porque
+  `Campaign` no puede conocer `Content`. Es idempotente: un reintento de la cola
+  no duplica el trabajo de nadie.
+- **`/mis-entregas`**, el portal del creador, con `creator.portal` — el **primer
+  permiso de ámbito EXTERNAL** del sistema. Lo que ata la pantalla a sus datos no
+  es el permiso sino `creators.user_id = Auth::id()`, comprobado en cada acción;
+  lo de otro devuelve **404, no 403**.
+- **Entregar es un enlace `https://`, y opcionalmente una imagen** (`DEC-131`).
+  El `https://` se comprueba en el formulario, en el servicio y en la base, a
+  propósito: sin el último, un import mete `javascript:` en una columna que una
+  vista pinta dentro de un `href`.
+- **Si al caption le faltan los hashtags del brief, no se envía y se le dice
+  cuáles** (`DEC-132`). Sin distinguir mayúsculas, y con todos los motivos a la
+  vez.
+- **Pantalla interna** de lo entregado por campaña, con acción de recuperación
+  para un aceptado que se quedó sin entregables.
+- **`tools/verificar-mensajes.py`**, gate nuevo (ver abajo).
+
+### Corregido
+- **Cuatro mensajes de la base que en producción no caben**, rotos desde 7.4
+  (`T-43`). `MESSAGE_TEXT` es `VARCHAR(128)` y MySQL 8 y Percona 5.7 **no
+  truncan**: sueltan `1648` en lugar del `45000` del disparador. MariaDB sí lo
+  deja pasar, o sea que el motor de desarrollo perdona y el de **producción** no.
+  Ninguna suite lo vio porque todas comprobaban «esto tiene que fallar» y **1648
+  también es fallar**.
+- **Una suite que se creía limpia y corría sobre filas de otra** (`T-44`). El
+  `DELETE` de apertura de `8.1-entregables.sh` fallaba con `1451` y el
+  `2>/dev/null` se comía el error; varias aserciones pasaban **por el motivo
+  equivocado**. La premisa correcta no era «la tabla está vacía» sino «no hay
+  filas mías».
+
+### Cambiado
+- Las suites de **7.3, 7.4, 7.6 y 8.1** ya no comprueban «esto falla» sino «esto
+  falla **por esto**» (`porque` en vez de `probar`). Es lo que destapó `T-43` y
+  es lo único que lo habría destapado.
+
+### Verificación
+**562 pruebas / 1.872 aserciones** · **1.260** aserciones de restricción en
+MariaDB y **1.250** en MySQL 8 · 17 mutaciones, **5 sobrevivieron** y las cinco
+están cerradas · las seis puertas en verde.
+
+Las cinco supervivientes valen más que las doce que murieron. Dos eran agujeros
+de verdad —se podía entregar sobre un entregable ya **aprobado**, y la fecha de
+la primera entrega se reescribía en cada corrección—, una era dos pruebas usando
+**el mismo número** (7 y 7, así que sustituir el plazo por un 7 a pelo no rompía
+nada), y otra era `lockForUpdate()`, que no tiene resultado observable en una
+conexión: esa prueba mira **el SQL**, y dice en su comentario que eso es lo que
+hace y por qué.
+
+---
+
+## [7.7 · El panel de seguimiento] — 2026-08-26## [7.7 · El panel de seguimiento] — 2026-08-26
 
 *«La pantalla más usada del sistema»*, según el roadmap. Lo que decide una pantalla
 así no es qué se puede enseñar: es **qué pregunta contesta**.

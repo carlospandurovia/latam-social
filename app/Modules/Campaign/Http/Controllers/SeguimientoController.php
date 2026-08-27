@@ -62,6 +62,12 @@ final class SeguimientoController
             // enseñar», no por «tiene permiso». Así el dato ni siquiera existe
             // cuando no toca.
             'margen' => $puedeVerMargen ? Compromiso::margen($campana) : null,
+            // 8.1: si esta persona puede ver los entregables, el panel le ofrece
+            // el enlace a esa pantalla. **El conteo NO se calcula aquí**:
+            // `deptrac.yaml` dice `Campaign: [..., Creator, Client]` y Content
+            // no está en la lista. Es la misma frontera que impide llamar a
+            // Communication, y la salida es la misma: no llamarse.
+            'verEntregables' => Permisos::tiene((int) Auth::id(), 'content.deliverable.view'),
         ]);
     }
 }

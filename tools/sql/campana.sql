@@ -128,6 +128,13 @@ CREATE TABLE campaign_requirements (
   -- Cuanto debe seguir publicado. El negocio lo pidio por campana y por red.
   permanence_days    SMALLINT UNSIGNED NOT NULL DEFAULT 30,
   notes              VARCHAR(255)  NULL,
+  -- 8.1: lo que el caption tiene que llevar. 7.2 los dejo fuera a proposito
+  -- --«sin mercados un requisito no se puede partir por pais»-- y 7.3 trajo
+  -- los mercados, asi que ya se puede pedir un hashtag distinto por pais.
+  -- Texto separado por espacios y no tabla aparte: nadie va a consultar
+  -- «campanas que usaron #verano» desde aqui.
+  hashtags           VARCHAR(255)  NULL,
+  mentions           VARCHAR(255)  NULL,
   created_at         DATETIME(3)   NULL,
   updated_at         DATETIME(3)   NULL,
   -- DOS indices unicos, y hacen falta los dos.
@@ -180,7 +187,11 @@ CREATE TABLE campaign_creators (
   -- BR-FIN-012: el plazo se congela tambien, para que cambiarlo despues no
   -- altere lo que se prometio a quien ya acepto.
   payment_term_days_snapshot SMALLINT UNSIGNED NOT NULL DEFAULT 30,
-  revision_rounds_used TINYINT UNSIGNED NOT NULL DEFAULT 0,
+  -- 8.3: `revision_rounds_used` se fue de aqui. Las rondas incluidas en el
+  -- precio son POR ENTREGABLE --dos correcciones sobre un reel no pueden
+  -- dejar sin ninguna a las otras cuatro piezas-- asi que el contador vive
+  -- en `deliverables`. La suma por creador, la que alimenta el Creator
+  -- Score, sale de `content_reviews` con un SUM() que nunca se desvia.
   invited_at         DATETIME(3)   NULL,
   accepted_at        DATETIME(3)   NULL,
   declined_at        DATETIME(3)   NULL,
@@ -364,7 +375,7 @@ BEGIN
               WHERE `id` = OLD.`campaign_id` AND `confirmed_at` IS NOT NULL)
   THEN
     SIGNAL SQLSTATE '45000'
-      SET MESSAGE_TEXT = 'De una campana confirmada no se quita un mercado (BR-CAMPAIGN-003): puede dejar fuera a creadores ya invitados. Anadir si se puede.';
+      SET MESSAGE_TEXT = 'De una campana confirmada no se quita un mercado (BR-CAMPAIGN-003): deja fuera a creadores ya invitados. Anadir si se puede.';
   END IF;
 END//
 
@@ -390,7 +401,7 @@ BEGIN
               WHERE `id` = NEW.`campaign_id` AND `closed_at` IS NOT NULL)
   THEN
     SIGNAL SQLSTATE '45000'
-      SET MESSAGE_TEXT = 'No se anaden creadores a una campana cerrada: lo que se entrego ahi ya se conto. Si hay que sumar a alguien, es una campana nueva.';
+      SET MESSAGE_TEXT = 'No se anaden creadores a una campana cerrada: lo que se entrego ahi ya se conto. Sumar a alguien es una campana nueva.';
   END IF;
 END//
 
@@ -431,7 +442,7 @@ BEGIN
                   WHERE `campaign_creator_id` = OLD.`id` AND `viva_gate` = 1)
   THEN
     SIGNAL SQLSTATE '45000'
-      SET MESSAGE_TEXT = 'No se cambia el monto de una participacion con una invitacion viva (BR-CREATOR-008): el creador esta mirando la cifra anterior. Anule la invitacion y mandele otra.';
+      SET MESSAGE_TEXT = 'No se cambia el monto con una invitacion viva (BR-CREATOR-008): el creador mira la cifra anterior. Anule esa invitacion.';
   END IF;
 END//
 CREATE TRIGGER `tg_ccr_compromiso`

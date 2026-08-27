@@ -177,12 +177,12 @@ Iterativa y exhaustiva, tal como pide la especificación. **Nada de frontend aqu
 ### F8 — Contenido, revisión y evidencia
 | It. | Contenido |
 |---|---|
-| 8.1 | Entregables: tipos, subida desde móvil, enlaces, captions, hashtags |
-| 8.2 | Versionado append-only + puntero de versión actual |
-| 8.3 | Cola de revisión interna + comentarios por versión + solicitud de corrección |
+| 8.1 | ✅ **Cerrada (2026-08-26).** Los entregables se generan **solos** al aceptar, del brief **efectivo** del mercado (`DEC-129`, `DEC-130`). Se entrega un enlace `https://` y opcionalmente una imagen (`DEC-131`); si al caption le faltan los hashtags del brief, **no se envía y se le dice cuáles** (`DEC-132`). Primera pantalla del **portal del creador** —y primer permiso de ámbito EXTERNAL—, que `T-09` no bloquea: para llegar aquí ya hay que haber aceptado los términos. De paso, `T-43`: cuatro mensajes de la base que en **Percona no caben** y llevaban rotos desde 7.4 |
+| 8.2 | ✅ **Cerrada (2026-08-26).** El puntero apunta a la versión **aprobada** —no a la última, que sale de un `MAX()`— con clave ajena **compuesta** para que la base garantice que es de **ese** entregable (`DEC-137`). Y un entregable aprobado deja de ser un callejón sin salida: se **reabre** con motivo de lista cerrada y firma, sin deshacer nada (`DEC-138`). De paso, `T-47`: «no se entrega sobre un entregable cerrado» vivía en el servicio desde 8.1 y la base no lo conocía |
+| 8.3 | ✅ **Cerrada (2026-08-26).** Bandeja **global** de lo pendiente, ordenada por lo que lleva más esperando. Sólo las rondas del **cliente** cuentan contra el precio y son **por entregable** —el contador estaba en `campaign_creators`, o sea dos rondas por creador (`DEC-133`)—. Pasarse **bloquea** y exige decir si se cobra o se absorbe, firmado (`DEC-135`); el cargo **no** va a `campaign_costs`. Tres permisos: revisar, aprobar y autorizar el cargo (`DEC-136`). Y `tg_cvw_inmutable` cierra el «append-only» que 2.12 afirmaba sin impedir nada |
 | 8.4 | Aprobación interna y límite de rondas |
 | 8.5 | Aprobación del cliente por **enlace firmado** (sin portal completo) |
-| 8.6 | Programación y registro de publicación (URL) |
+| 8.6 | ✅ **Cerrada (2026-08-26).** El creador pega el enlace de su post desde su portal, y el equipo puede hacerlo por él (`DEC-139`). **Sólo se publica lo aprobado, y esa versión** (`DEC-140`), guardada como snapshot con clave ajena compuesta. La red se **deduce** del enlace con `platforms.url_pattern` y tiene que ser la del brief (`DEC-141`); la huella normaliza la URL para que `?utm_source=…` no esquive «el mismo post no se reclama dos veces». La **programación** queda fuera: hoy se registra lo ya publicado |
 | 8.7 | **Verificación de publicación + archivado de evidencia** (captura del post en vivo) |
 | 8.8 | Control de permanencia mínima del post |
 | 8.9 | Hilos de mensajes creador ↔ equipo por campaña |

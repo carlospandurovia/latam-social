@@ -235,9 +235,12 @@ final class CompromisoTest extends TestCase
         $id = $this->participacion(400.0);
         $this->aceptar($id);
 
-        DB::table('campaign_creators')->where('id', $id)->update(['revision_rounds_used' => 1]);
+        // Era `revision_rounds_used`, que en 8.3 se fue de esta tabla: las rondas
+        // son por ENTREGABLE. Sirve igual cualquier columna que no sea el monto;
+        // lo que se afirma es que el congelado es del importe, no de la fila.
+        DB::table('campaign_creators')->where('id', $id)->update(['completed_at' => now()]);
 
-        $this->assertSame(1, (int) DB::table('campaign_creators')->where('id', $id)->value('revision_rounds_used'));
+        $this->assertNotNull(DB::table('campaign_creators')->where('id', $id)->value('completed_at'));
     }
 
     // ------------------------------------ no se invita sin decir cuanto

@@ -211,8 +211,17 @@
       <div class="bg-white rounded-xl border border-slate-200 p-5">
         <div class="flex items-baseline justify-between mb-3">
           <h2 class="text-sm font-medium text-slate-700">Quién es quién</h2>
-          <a href="{{ route('campanas.candidatos', $campana->uuid) }}"
-             class="text-xs text-marca-600 hover:underline">Buscar más creadores</a>
+          <div class="flex gap-3">
+            @if ($verEntregables)
+              {{-- 8.1: el conteo NO está en esta pantalla, y no por diseño de
+                   producto: `Campaign` no puede conocer `Content`. Lo que hay es
+                   el enlace, que es un nombre de ruta y no una clase. --}}
+              <a href="{{ route('campanas.entregables', $campana->uuid) }}"
+                 class="text-xs text-marca-600 hover:underline">Ver entregables</a>
+            @endif
+            <a href="{{ route('campanas.candidatos', $campana->uuid) }}"
+               class="text-xs text-marca-600 hover:underline">Buscar más creadores</a>
+          </div>
         </div>
 
         <table class="w-full text-sm">

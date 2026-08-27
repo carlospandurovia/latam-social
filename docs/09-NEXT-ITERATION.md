@@ -1,5 +1,13 @@
 # 09 — Estado del proyecto y siguiente iteración
 
+> **Versión 2.4 — 2026-08-26.** Actualizado al cerrar `8.6`.
+>
+> **Versión 2.3 — 2026-08-26.** Actualizado al cerrar `8.2`.
+>
+> **Versión 2.2 — 2026-08-26.** Actualizado al cerrar `8.3`.
+>
+> **Versión 2.1 — 2026-08-26.** Actualizado al cerrar `8.1`.
+>
 > **Versión 2.0 — 2026-08-26.** Actualizado al cerrar `7.7`.
 >
 > **Versión 1.9 — 2026-08-26.** Actualizado al cerrar `7.6b`.
@@ -42,11 +50,12 @@
 | | |
 |---|---|
 | Tablas | 69 |
-| Migraciones | 50, verdes desde cero en MySQL 8 y con vuelta atrás completa |
-| Pruebas de PHPUnit | **530**, 1.806 aserciones |
-| Aserciones de restricción (SQL) | **1.196** en MariaDB, **1.186** en MySQL 8 |
+| Migraciones | 54, verdes desde cero en MySQL 8 y con vuelta atrás completa |
+| Pruebas de PHPUnit | **638**, 2.006 aserciones |
+| Aserciones de restricción (SQL) | **1.398** en MariaDB, **1.388** en MySQL 8 |
 | Puertas de calidad | 6: formato, análisis estático, fronteras, pruebas, vigencias, nombres entre capas |
-| Decisiones registradas | hasta `DEC-128` |
+| Verificadores fuera de PHPUnit | 4: fixturas, periodos, nombres entre capas y **mensajes de la base** (nuevo en 8.1) |
+| Decisiones registradas | hasta `DEC-141` |
 
 ### Lo que se puede hacer hoy por pantalla
 
@@ -98,7 +107,30 @@ Y desde `7.7`, **el panel de seguimiento**: qué hay que atender hoy, por dónde
 cada creador, qué mercado va corto y cuánto queda de presupuesto. Es la pantalla
 que el roadmap llama «la más usada del sistema».
 
-Eso completa **7.0 a 7.7 del roadmap**, más `F4.9`, `5.9` y `4.1`.
+Y desde `8.1`, **el creador entra a trabajar**: al aceptar se le crean solos sus
+entregables —del brief del **mercado** que le toca, no del general—, y en
+`/mis-entregas` manda su enlace. Si al texto le faltan los hashtags del brief, no
+se envía y se le dice cuáles. Cada corrección es una **versión nueva**: nunca se
+pisa la anterior.
+
+Y desde `8.3`, **el ciclo se cierra**: lo entregado cae en una cola, alguien lo
+mira, y o queda aprobado o vuelve con lo que hay que cambiar —y el creador recibe
+ese texto por correo—. Las «2 rondas incluidas en el precio» dejan de ser una
+frase del contrato: son un contador por pieza que **bloquea**, y pasarse exige
+decir si se le cobra al cliente o lo asumimos nosotros, firmado.
+
+Y desde `8.2`, el sistema sabe **cuál es la buena**: aprobar apunta a una versión
+concreta, y esa versión no se puede borrar ni sustituir por debajo. Volver atrás
+sobre algo aprobado deja de exigir tocar la base a mano: se reabre con motivo y
+firma, y la aprobación anterior se queda donde estaba.
+
+Y desde `8.6`, **el ciclo del creador se cierra**: acepta, entrega, corrige, se
+le aprueba, publica y pega el enlace — y ahí termina su parte. Sólo se registra
+lo aprobado, la red se comprueba contra la que pedía el brief, y el mismo post no
+se puede reclamar desde dos entregables.
+
+Eso completa **7.0 a 7.7 del roadmap**, más `F4.9`, `5.9`, `4.1`, `8.1`, `8.2`,
+`8.3` y `8.6`.
 
 > **Y por primera vez el sistema se ha usado.** Tres fallos salieron de ahí en una
 > tarde: un 500 al repetir un formato en el brief de un mercado, la bitácora
@@ -138,6 +170,9 @@ Ninguna bloquea código hoy; todas bloquean una iteración futura concreta.
 | `Q-46` | Al publicar términos nuevos, ¿qué pasa con los creadores **ya activos**? | Antes de la 2ª versión de los términos |
 | `Q-47` | El periodo de gracia de 30 días, ¿global o por creador? | Iteración de rechazo de creadores |
 | `Q-50` | ¿`campaign_creators` y compañía son **evidencia** (no se borran)? | **Al construir campañas — o sea, ahora** |
+| `Q-56` | ¿`deliverable_versions` y `content_reviews` son **evidencia**? Hoy se pueden borrar, y son lo que el cliente aprueba y lo que justifica un cargo | **Antes de facturar (F9)** |
+| `Q-57` | ¿Dónde acaba la línea del **cargo por una ronda de más**? Hoy la decisión queda en `content_reviews` y la pantalla la enseña; no hay factura todavía | **Al construir facturación (F9)** |
+| `Q-58` | ¿Se puede **reabrir** un entregable ya publicado o verificado? Hoy no, y hoy da igual porque `publications` se llena en 8.6 | **Al construir publicación (8.6)** |
 | `Q-52` | ¿Un cliente debería exigir contacto de facturación antes de estar `active`? | Facturación (F9) |
 | `Q-53` | ¿El mismo correo repetido en el mismo cliente y tipo es un error? | Importación de clientes |
 | `Q-54` | ¿Se puede corregir un periodo fiscal ya **cerrado**? | Primera corrección real |
@@ -149,26 +184,45 @@ Ninguna bloquea código hoy; todas bloquean una iteración futura concreta.
 
 ## 4. Lo que propongo como siguiente iteración
 
-Aquí la Fase 7 se parte en dos, y conviene elegir a sabiendas.
+Hay un post registrado y nadie ha comprobado que exista. Propongo **`8.7` —
+verificación y evidencia archivada**, que es lo único que convierte
+`BR-CONTENT-004` en algo real: *«una publicación no se considera verificada hasta
+que existe evidencia archivada del post en vivo, con fecha y hora de captura»*.
 
-**Lo que queda de F7 son cosas laterales.** `7.8` es logística de producto (envíos
-y tracking), `7.9` campañas UGC, `7.10` reemplazos, `7.11` conflictos de marca,
-`7.12` calendario. Ninguna bloquea a las demás y ninguna es el camino crítico.
+Es también donde el dinero empieza a depender de un dato nuestro: hoy la fila
+nace en `reported` y ahí se queda, y **de `verified` cuelga el pago**.
 
-**El camino crítico es la Fase 8: los entregables.** Hoy un creador acepta una
-campaña y ahí se acaba el sistema — `in_production`, `delivered`, `published` están
-en el embudo y **siempre valen cero**, porque nada los escribe. Sin `F8` no hay
-nada que revisar, nada que publicar y nada que facturar.
+Trae tres cosas concretas:
 
-Yo iría a **`8.1` — entregables**: qué entrega el creador, cómo lo sube, y cómo
-pasa la participación de `accepted` a `delivered`. Es lo que hace que el embudo
-deje de terminar en su tercer paso.
+- `publication_evidence` —diseñada en la Fase 2, con cero filas, y ya con
+  `no_delete` desde `3.12`— empieza a llenarse.
+- `permanence_until` se calcula al verificar, que es lo que `8.8` necesita para
+  vigilar que el post siga vivo.
+- Y aparece la pregunta que hay que decidir con datos delante: **cómo se
+  captura**. Una comprobación HTTP es barata y demuestra poco; una captura de
+  pantalla demuestra más y no se puede automatizar sin un navegador. El esquema
+  ya admite las tres formas (`file_id`, `http_status`, `raw_payload`), así que la
+  decisión es de operación, no de modelo.
+
+### Y una cosa que no es una iteración pero bloquea igual
+
+**El CI no ha corrido ni una vez desde `4.9`.** El workflow sólo se disparaba en
+`push` a `main` y `develop`; el trabajo vive en `feat/7.6-invitaciones`, así que
+empujar ahí no lanzaba ningún job, y `main` no recibía nada desde entonces.
+
+Ocho iteraciones —`5.9` a `8.6`— se empujaron sin que Percona 5.7 las mirara, y
+Percona es el motor de producción y lo único que el CI prueba y el contenedor no.
+Un CI que no se dispara **no falla: no dice nada**.
+
+Arreglado (el `on: push` incluye ahora `feat/**`), y los pasos de entrega están
+en **`docs/19-PROTOCOLO-DE-ENTREGA.md`**, que también documenta que `main` lleva
+ocho iteraciones de retraso y qué hacer con eso.
 
 ### Lo que sigue sin poder hacerse, y no es código
 
 `T-09` —el texto de los términos— lleva **cinco días** bloqueando toda activación
-de creadores. Todo lo construido en las fases 3, 5 y 7 funciona y está probado, y
-**no se puede usar con una persona real** hasta que exista ese texto.
+de creadores. El ciclo entero está construido y probado de punta a punta, y **no
+se puede usar con una persona real** hasta que exista ese texto.
 
 Es, con diferencia, lo más caro que hay abierto.
 

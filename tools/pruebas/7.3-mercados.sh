@@ -32,6 +32,18 @@ valor() {
   else printf "  \033[31m✗\033[0m %-70s esperaba '%s', obtuvo '%s'\n" "$1" "$3" "$real"; fail=$((fail+1)); fi
 }
 
+# Un RECHAZO solo prueba algo si rechaza por SU motivo. Un `SIGNAL` de mas de
+# 128 caracteres se convierte en MySQL/Percona en `1648 Data too long for
+# condition item`, que tambien es un error, y con `probar ... RECHAZO` sale
+# verde igual. Cuatro mensajes llevaban rotos asi desde 7.4. Gate permanente:
+# `tools/verificar-mensajes.py`; la leccion, aqui.
+porque() {
+  salida=$($CLIENTE $DB -e "$2" 2>&1)
+  if echo "$salida" | grep -q "$3"; then printf "  \033[32m✓\033[0m %-70s %s\n" "$1" "$3"; ok=$((ok+1))
+  else printf "  \033[31m✗\033[0m %-70s esperaba rechazo por '''%s'''\n" "$1" "$3"
+       echo "      $(echo "$salida"|grep -i error|head -1)"; fail=$((fail+1)); fi
+}
+
 echo ""
 echo "==================================================================================="
 echo "  7.3 - Los mercados de la campana (N-03, BR-CAMPAIGN-003, T-33)"
@@ -139,8 +151,8 @@ echo ""
 echo "--- De una campana confirmada se ANADE un mercado, no se quita ---"
 probar "anadir un mercado a la campana confirmada" \
   "INSERT INTO campaign_markets (campaign_id,country_id,created_at) VALUES ($CB,$P2,NOW(3));" OK
-probar "quitarle uno" \
-  "DELETE FROM campaign_markets WHERE id=$MB;" RECHAZO
+porque "quitarle uno" \
+  "DELETE FROM campaign_markets WHERE id=$MB;" "no se quita un mercado"
 valor "y sigue ahi" \
   "SELECT COUNT(*) FROM campaign_markets WHERE campaign_id=$CB;" "2"
 

@@ -164,6 +164,35 @@ final class PlantillasDeCorreoSeeder extends Seeder
                 ."cierra la campana para el, y quedan las dos rondas en el historial.\n\n"
                 .'LATAM Social',
             ],
+            // ---- `8.3`: la correccion -----------------------------------
+            //
+            // Solo se avisa de la CORRECCION, no de la aprobacion. No es un
+            // olvido: una correccion trae una fecha limite y una accion, y si el
+            // creador no la ve a tiempo el retraso es de la campana. Una
+            // aprobacion no le pide nada, y la ve en su portal la proxima vez
+            // que entre. Un buzon que recibe correos que no piden nada es un
+            // buzon que se filtra a una carpeta --y entonces tampoco se lee el
+            // que si pedia algo--.
+            //
+            // El comentario VA DENTRO a proposito, al contrario que en los
+            // avisos de datos sensibles: aqui el contenido del correo es
+            // exactamente lo que el creador necesita para trabajar, y obligarle
+            // a entrar al portal para leer una frase es una vuelta de mas en un
+            // proceso que existe para ahorrarlas.
+            [
+                'content.changes_requested',
+                'Hay que retocar tu entrega de {{ campana }}',
+                "Hola {{ nombre }}:\n\n"
+                ."Hemos revisado tu {{ formato }} de {{ campana }} y hay que retocarlo antes\n"
+                ."de darlo por bueno:\n\n"
+                ."  «{{ comentario }}»\n\n"
+                ."La fecha limite sigue siendo el {{ limite }}. Sube la version corregida\n"
+                ."desde tu portal:\n\n"
+                ."{{ enlace }}\n\n"
+                ."No hace falta que borres nada: cada envio es una version nueva y la\n"
+                ."anterior se queda en el historial.\n\n"
+                .'LATAM Social',
+            ],
             [
                 'creator.payment_method_changed',
                 'Se registro un cambio en sus datos de pago',

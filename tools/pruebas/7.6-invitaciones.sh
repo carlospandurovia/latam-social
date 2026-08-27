@@ -33,6 +33,18 @@ valor() {
   else printf "  \033[31m✗\033[0m %-70s esperaba '%s', obtuvo '%s'\n" "$1" "$3" "$real"; fail=$((fail+1)); fi
 }
 
+# Un RECHAZO solo prueba algo si rechaza por SU motivo. Un `SIGNAL` de mas de
+# 128 caracteres se convierte en MySQL/Percona en `1648 Data too long for
+# condition item`, que tambien es un error, y con `probar ... RECHAZO` sale
+# verde igual. Cuatro mensajes llevaban rotos asi desde 7.4. Gate permanente:
+# `tools/verificar-mensajes.py`; la leccion, aqui.
+porque() {
+  salida=$($CLIENTE $DB -e "$2" 2>&1)
+  if echo "$salida" | grep -q "$3"; then printf "  \033[32m✓\033[0m %-70s %s\n" "$1" "$3"; ok=$((ok+1))
+  else printf "  \033[31m✗\033[0m %-70s esperaba rechazo por '''%s'''\n" "$1" "$3"
+       echo "      $(echo "$salida"|grep -i error|head -1)"; fail=$((fail+1)); fi
+}
+
 echo ""
 echo "==================================================================================="
 echo "  7.6 - La invitacion a una campana"
@@ -139,8 +151,8 @@ valor "la premisa: esa participacion ya no esta aceptada" \
 valor "y la invitacion b1 sigue viva sobre ella" \
   "SELECT COUNT(*) FROM invitations WHERE token_hash=LPAD('b1',64,'0') AND viva_gate=1;" "1"
 
-probar "bajar el monto de la participacion invitada" \
-  "UPDATE campaign_creators SET agreed_amount=850 WHERE id=$PART;" RECHAZO
+porque "bajar el monto de la participacion invitada" \
+  "UPDATE campaign_creators SET agreed_amount=850 WHERE id=$PART;" "invitacion viva"
 probar "anulada la invitacion, el monto se mueve" \
   "UPDATE invitations SET revoked_at=NOW(3), revoked_reason='renegociacion'
      WHERE token_hash=LPAD('b1',64,'0');

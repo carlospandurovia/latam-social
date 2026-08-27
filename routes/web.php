@@ -11,6 +11,9 @@ use App\Modules\Client\Http\Controllers\ContactosController;
 use App\Modules\Client\Http\Controllers\MarcasController;
 use App\Modules\Client\Http\Controllers\PerfilesFiscalesController;
 use App\Modules\Communication\Http\Controllers\CorreosController;
+use App\Modules\Content\Http\Controllers\EntregablesController;
+use App\Modules\Content\Http\Controllers\MisEntregasController;
+use App\Modules\Content\Http\Controllers\RevisionController;
 use App\Modules\Core\Http\Controllers\BitacoraController;
 use App\Modules\Core\Http\Controllers\CatalogosController;
 use App\Modules\Core\Http\Controllers\EntidadesLegalesController;
@@ -539,6 +542,28 @@ Route::middleware('auth')->group(function (): void {
         ->whereUuid('uuid')->whereNumber('mercado')
         ->name('campanas.mercados.ver');
 
+    // ---- El portal del creador (`8.1`) ----------------------------------
+    //
+    // `creator.portal` es el primer permiso de ambito EXTERNO. Dice «esta
+    // persona puede ver UN portal de creador»; **cual** lo decide
+    // `creators.user_id = Auth::id()`, comprobado en cada accion. Sin eso,
+    // cualquier creador con el permiso podria entregar en nombre de otro.
+    Route::get('/mis-entregas', [MisEntregasController::class, 'index'])
+        ->middleware('permiso:creator.portal')
+        ->name('entregas.mias');
+    Route::post('/mis-entregas/{uuid}', [MisEntregasController::class, 'entregar'])
+        ->middleware(['permiso:creator.portal', 'throttle:20,1'])
+        ->whereUuid('uuid')
+        ->name('entregas.entregar');
+
+    // 8.6: el creador pega el enlace de su post. Es quien lo sabe primero y quien
+    // lo tiene en la mano; el equipo puede hacerlo por el desde la pantalla
+    // interna, y en los dos casos queda quien lo reporto.
+    Route::post('/mis-entregas/{uuid}/publicado', [MisEntregasController::class, 'publicar'])
+        ->middleware(['permiso:creator.portal', 'throttle:20,1'])
+        ->whereUuid('uuid')
+        ->name('entregas.publicar');
+
     // 7.7: el panel de seguimiento. Es VER: contesta «como va», no cambia nada.
     // La ficha (`campanas.show`) contesta «que es»; mezclarlas daria una pagina
     // que hace las dos cosas a medias y en la que hay que buscar.
@@ -546,6 +571,56 @@ Route::middleware('auth')->group(function (): void {
         ->middleware('permiso:campaign.view')
         ->whereUuid('uuid')
         ->name('campanas.seguimiento');
+
+    // 8.1: los entregables de una campana, por dentro. Pantalla de CONTENT y no
+    // del panel de seguimiento, y no por organizacion: `deptrac.yaml` dice
+    // `Campaign: [..., Creator, Client]` y Content no esta en la lista, asi que
+    // el panel de 7.7 no puede ni contarlos.
+    Route::get('/campanas/{uuid}/entregables', [EntregablesController::class, 'index'])
+        ->middleware('permiso:content.deliverable.view')
+        ->whereUuid('uuid')
+        ->name('campanas.entregables');
+
+    // 8.6: y el equipo, por el creador. Mismo servicio y mismo veto que su
+    // portal: solo cambia quien firma la fila.
+    Route::post('/campanas/{uuid}/entregables/{entregable}/publicado', [EntregablesController::class, 'publicar'])
+        ->middleware(['permiso:content.publication.manage', 'throttle:30,1'])
+        ->whereUuid('uuid')->whereNumber('entregable')
+        ->name('campanas.entregables.publicar');
+
+    // La salida de emergencia cuando el evento que los crea fallo.
+    Route::post('/campanas/{uuid}/entregables/{participacion}', [EntregablesController::class, 'generar'])
+        ->middleware('permiso:content.deliverable.view')
+        ->whereUuid('uuid')->whereNumber('participacion')
+        ->name('campanas.entregables.generar');
+
+    // 8.3: la cola de revision. BANDEJA GLOBAL y no una por campana: revisar es
+    // trabajo por lotes --alguien se sienta y despacha lo que llego--, y una
+    // cola por campana obliga a recorrer campanas para descubrir si hay algo
+    // esperando. Lo que se descubre recorriendo se descubre tarde.
+    Route::get('/revision', [RevisionController::class, 'index'])
+        ->middleware('permiso:content.review')
+        ->name('revision.cola');
+    Route::get('/revision/{uuid}', [RevisionController::class, 'ver'])
+        ->middleware('permiso:content.review')
+        ->whereUuid('uuid')
+        ->name('revision.ver');
+    // El veredicto entra por `content.review`; APROBAR y AUTORIZAR una ronda de
+    // mas se comprueban dentro, porque los tres llegan por el mismo POST y la
+    // ruta solo sabe decir «puede entrar a revisar».
+    Route::post('/revision/{uuid}', [RevisionController::class, 'revisar'])
+        ->middleware(['permiso:content.review', 'throttle:30,1'])
+        ->whereUuid('uuid')
+        ->name('revision.revisar');
+
+    // 8.2: reabrir. Accion propia y no una rama del veredicto: no es una opinion
+    // sobre el contenido, es volver atras sobre una decision ya tomada. Entra por
+    // `content.review` y el permiso de verdad --`content.reopen`-- se comprueba
+    // dentro, como los otros tres de 8.3.
+    Route::post('/revision/{uuid}/reabrir', [RevisionController::class, 'reabrir'])
+        ->middleware(['permiso:content.review', 'throttle:30,1'])
+        ->whereUuid('uuid')
+        ->name('revision.reabrir');
 
     // Los candidatos (7.4). Buscar es VER --un revisor puede mirar a quien se
     // esta considerando-- pero armar la lista corta es gestionar.

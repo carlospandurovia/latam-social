@@ -63,6 +63,17 @@ python3 tools/verificar-periodos.py "$SIN" --cliente "$CLIENTE" || tot_fail=$((t
 # rompio: un nombre de ruta, de plantilla, de permiso, de rol, de metodo o de
 # clave validada que no existe. Errores de una letra que tumban la suite entera
 # y que se ven leyendo archivos, sin Laravel y sin base de datos.
+# Que lo que la base le dice al usuario le quepa en la boca.
+#
+# `MESSAGE_TEXT` es VARCHAR(128) y MySQL/Percona NO truncan: dan 1648 en vez
+# del 45000 del disparador. MariaDB si lo deja pasar, asi que el motor de
+# desarrollo perdona y el de produccion no. Cuatro mensajes llevaban rotos
+# desde 7.4 sin que ninguna suite lo viera, porque todas comprobaban «esto
+# falla» y 1648 tambien es fallar.
+echo ""; echo "===== mensajes de la base: caben en 128 ====="
+python3 tools/verificar-mensajes.py "$SIN" --cliente "$CLIENTE" || tot_fail=$((tot_fail+1))
+python3 tools/verificar-mensajes.py "$CON" --cliente "$CLIENTE" || tot_fail=$((tot_fail+1))
+
 echo ""; echo "===== nombres entre capas ====="
 python3 tools/verificar-pantallas.py || tot_fail=$((tot_fail+1))
 

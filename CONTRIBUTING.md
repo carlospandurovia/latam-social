@@ -15,14 +15,23 @@ powershell -ExecutionPolicy Bypass -File tools\bootstrap-laravel.ps1   # Windows
 
 ## Ramas y commits
 
-- `main` estable y desplegable · `develop` integración · `feature/F<fase>.<it>-<slug>` · `fix/<slug>` · `hotfix/<slug>`
-- Conventional Commits en imperativo, referenciando la iteración:
-  `feat(creator): añade cola de revisión de solicitudes (F5.7)`
-- **Un PR gigante no es revisable y por tanto no aporta calidad.** Una iteración son uno o pocos PRs.
+**Los pasos exactos para entregar una iteración están en
+`docs/19-PROTOCOLO-DE-ENTREGA.md`.** Esto es sólo la convención.
 
-## Las cuatro puertas
+- `main` estable y desplegable · `feat/<it>-<slug>` · `fix/<slug>` · `hotfix/<slug>`
+- El mensaje empieza por el **número de iteración**, en imperativo y en una línea:
+  `7.5: presupuesto de creadores y compromiso congelado al aceptar`
+  Es lo que permite leer `git log` y reconstruir el roadmap sin abrirlo.
+- **Una iteración, un commit.** Un commit que mezcla cuatro iteraciones no se puede
+  revertir sin llevarse las otras tres por delante.
+- **Una rama que no vuelve deja de proteger `main`.** Se abre para poder equivocarse
+  sin romper lo desplegable; si se queda ocho iteraciones sin fusionar, lo único que
+  consigue es que `main` no signifique nada. Pasó, y por eso existe el documento 19.
 
-`composer quality` corre lo mismo que CI:
+## Las puertas
+
+En tu máquina, `php tools/diagnostico.php` las corre todas y dice cuál falló y
+cómo arreglarla. `composer quality` corre las cuatro clásicas:
 
 | Puerta | Qué comprueba |
 |---|---|

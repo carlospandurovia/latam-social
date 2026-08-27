@@ -192,8 +192,13 @@ return new class extends Migration
     /** @return list<string> */
     private static function disparadores(): array
     {
-        $mensaje = 'No se cambia el monto de una participacion con una invitacion viva (BR-CREATOR-008): '
-            .'el creador esta mirando la cifra anterior. Anule la invitacion y mandele otra.';
+        // Cabe en 128 caracteres A PROPOSITO. `MESSAGE_TEXT` es VARCHAR(128) y
+        // MySQL/Percona no truncan: sueltan `1648 Data too long for condition
+        // item` en vez del `45000` que el mensaje queria dar. MariaDB si lo deja
+        // pasar, asi que esto solo se ve en produccion. Gate permanente:
+        // `tools/verificar-mensajes.py`, que lo mira contra Percona en el CI.
+        $mensaje = 'No se cambia el monto con una invitacion viva (BR-CREATOR-008): '
+            .'el creador mira la cifra anterior. Anule esa invitacion.';
 
         return [
             <<<SQL

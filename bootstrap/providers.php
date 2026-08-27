@@ -17,4 +17,8 @@ return [
     // invitaciones vencidas. Sin el, una invitacion sin contestar deja su
     // importe comprometido y su plaza del cupo ocupada para siempre.
     App\Modules\Campaign\Providers\CampaignServiceProvider::class,
+    // 8.1: escucha `campaign_creator.accepted` y crea lo que hay que entregar.
+    // Va por evento porque Campaign no puede conocer a Content --y no debe:
+    // si generar la lista de tareas falla, la aceptacion sigue siendo cierta--.
+    App\Modules\Content\Providers\ContentServiceProvider::class,
 ];
