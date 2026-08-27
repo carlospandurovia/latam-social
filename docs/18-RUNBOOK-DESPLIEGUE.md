@@ -49,6 +49,22 @@ un cron que arranca el worker, vacía lo que haya, y se muere.
 Sin `--max-time`, el cron de cada minuto va apilando procesos hasta tumbar el
 servidor. Es el modo de fallo que hay que conocer antes de poner la línea.
 
+### Lo que cuelga de la SEGUNDA línea
+
+`schedule:run` no es opcional ni es «para los avisos». De él cuelgan dos trabajos
+y los dos tienen consecuencias que nadie ve hasta que duelen:
+
+| Trabajo | Cada cuánto | Qué pasa si la línea no está |
+|---|---|---|
+| `invitaciones:caducar` (7.6) | 10 min | una invitación sin contestar deja su importe comprometido y su plaza del cupo ocupada **para siempre** |
+| `permanencia:vigilar` (8.8) | diario, 06:00 | ninguna ventana de permanencia se cierra, y **ningún pago se habilita** |
+
+Los dos escriben en `storage/logs/planificador.log` y los dos dicen lo que
+hicieron **también cuando son cero**: «0 ventanas cerradas» demuestra que el cron
+corrió, y el silencio no distingue entre «no había nada» y «la línea no está».
+
+Si al mirar ese log no hay una línea de hoy, la línea de cron no está puesta.
+
 ### Dos cosas que se rompen en silencio
 
 1. **`php` a secas puede no ser la versión correcta.** Muchos paneles tienen PHP

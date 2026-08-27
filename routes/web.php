@@ -13,6 +13,7 @@ use App\Modules\Client\Http\Controllers\PerfilesFiscalesController;
 use App\Modules\Communication\Http\Controllers\CorreosController;
 use App\Modules\Content\Http\Controllers\EntregablesController;
 use App\Modules\Content\Http\Controllers\MisEntregasController;
+use App\Modules\Content\Http\Controllers\PermanenciaController;
 use App\Modules\Content\Http\Controllers\RevisionController;
 use App\Modules\Content\Http\Controllers\VerificacionController;
 use App\Modules\Core\Http\Controllers\BitacoraController;
@@ -640,6 +641,23 @@ Route::middleware('auth')->group(function (): void {
         ->middleware(['permiso:content.deliverable.view', 'throttle:30,1'])
         ->whereUuid('uuid')
         ->name('verificacion.verificar');
+
+    // 8.8: la bandeja de permanencia. Las caidas abiertas primero --son las que
+    // tienen un pago parado detras-- y luego lo vigilado que nadie mira.
+    Route::get('/permanencia', [PermanenciaController::class, 'index'])
+        ->middleware('permiso:content.deliverable.view')
+        ->name('permanencia.bandeja');
+    Route::get('/permanencia/{uuid}', [PermanenciaController::class, 'ver'])
+        ->middleware('permiso:content.deliverable.view')
+        ->whereUuid('uuid')
+        ->name('permanencia.ver');
+    // Las tres acciones --anotar, firmar la caida y reponer-- entran por el
+    // mismo POST y `content.verify` se comprueba DENTRO: declarar un post caido
+    // es la misma firma que verificarlo, en el otro sentido.
+    Route::post('/permanencia/{uuid}', [PermanenciaController::class, 'comprobar'])
+        ->middleware(['permiso:content.deliverable.view', 'throttle:30,1'])
+        ->whereUuid('uuid')
+        ->name('permanencia.comprobar');
 
     // Los candidatos (7.4). Buscar es VER --un revisor puede mirar a quien se
     // esta considerando-- pero armar la lista corta es gestionar.

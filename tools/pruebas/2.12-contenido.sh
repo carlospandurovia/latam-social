@@ -123,10 +123,16 @@ probar "evidence: payload que no es JSON" \
  "INSERT INTO publication_evidence (uuid,publication_id,evidence_type,raw_payload,captured_at) VALUES (UUID(),$PUB,'api_snapshot','{roto',NOW(3));" RECHAZO
 probar "evidence: tipo inventado" \
  "INSERT INTO publication_evidence (uuid,publication_id,evidence_type,http_status,captured_at) VALUES (UUID(),$PUB,'foto_del_movil',200,NOW(3));" RECHAZO
-probar "permanence: el post sigue vivo" \
- "INSERT INTO permanence_checks (uuid,publication_id,checked_at,is_live,http_status) VALUES (UUID(),$PUB,NOW(3),1,200);" OK
-probar "permanence: el post desaparecio" \
- "INSERT INTO permanence_checks (uuid,publication_id,checked_at,is_live,http_status,notes) VALUES (UUID(),$PUB,NOW(3),0,404,'Eliminado por el creador');" OK
+# 8.8 endurecio esta tabla y estas dos aserciones cambiaron de signo: eran OK
+# porque nada impedia comprobar la permanencia de una publicacion que nadie
+# habia verificado --y `permanence_until` sale justo de verificar (8.7), asi que
+# una comprobacion asi no mide nada--. Se dejan aqui, afirmando el rechazo, para
+# que quede escrito que era un hueco y no una decision. El camino completo lo
+# prueba `8.8-permanencia`.
+probar "permanence: comprobar lo que nadie verifico" \
+ "INSERT INTO permanence_checks (uuid,publication_id,source,checked_at,is_live,http_status) VALUES (UUID(),$PUB,'probe',NOW(3),1,200);" RECHAZO
+probar "permanence: y una manual sin firma tampoco" \
+ "INSERT INTO permanence_checks (uuid,publication_id,checked_at,is_live,http_status,notes) VALUES (UUID(),$PUB,NOW(3),0,404,'Eliminado por el creador');" RECHAZO
 
 echo ""
 echo -n "  Tablas de solo insercion con updated_at (debe ser 0): "

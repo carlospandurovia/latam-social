@@ -40,12 +40,15 @@ CREATE TABLE deliverables (
   CONSTRAINT fk_del_participation FOREIGN KEY (campaign_creator_id) REFERENCES campaign_creators(id) ON DELETE RESTRICT,
   CONSTRAINT fk_del_requirement FOREIGN KEY (campaign_requirement_id) REFERENCES campaign_requirements(id) ON DELETE RESTRICT,
   CONSTRAINT fk_del_aprobador FOREIGN KEY (approved_by_user_id) REFERENCES users(id) ON DELETE RESTRICT,
-  CONSTRAINT ck_del_status CHECK (status IN ('pending','in_production','submitted','in_review','changes_requested','approved','published','verified','cancelled')),
+  -- 8.8: `removed` es el entregable cuyo post se retiro antes de tiempo. Va
+  -- aparte y no reutiliza `published` porque `published` significa «esperando a
+  -- que alguien lo mire»: un estado que significa dos cosas es el fallo de T-50.
+  CONSTRAINT ck_del_status CHECK (status IN ('pending','in_production','submitted','in_review','changes_requested','approved','published','verified','removed','cancelled')),
   CONSTRAINT ck_del_sequence CHECK (sequence_number >= 1),
   CONSTRAINT ck_del_approved CHECK (approved_at IS NULL OR submitted_at IS NOT NULL),
   -- 8.1: la otra mitad. `ck_del_approved` exigia que aprobado implicara
   -- entregado; faltaba que ENTREGADO implicara decir cuando.
-  CONSTRAINT ck_del_submitted CHECK (status NOT IN ('submitted','in_review','changes_requested','approved','published','verified') OR submitted_at IS NOT NULL),
+  CONSTRAINT ck_del_submitted CHECK (status NOT IN ('submitted','in_review','changes_requested','approved','published','verified','removed') OR submitted_at IS NOT NULL),
   -- Un plazo en el pasado nace vencido y no es un plazo: es un error de calculo
   -- que nadie mira hasta que la lista entera sale en rojo.
   CONSTRAINT ck_del_due_futuro CHECK (due_on >= DATE(created_at) OR created_at IS NULL),
@@ -202,6 +205,12 @@ CREATE TABLE publications (
   -- el por que es lo que el creador necesita para arreglarlo.
   rejected_reason VARCHAR(255) NULL,
   removed_at     DATETIME(3)   NULL,
+  -- 8.8: `removed_at` decia el CUANDO de algo que para un pago, sin el POR QUE
+  -- ni el QUIEN. Dar un post por caido es una firma con dinero detras.
+  removed_reason VARCHAR(255)  NULL,
+  removed_by_user_id BIGINT UNSIGNED NULL,
+  -- Cuando se cerro la ventana de permanencia habiendola cumplido.
+  fulfilled_at   DATETIME(3)   NULL,
   created_at     DATETIME(3)   NULL,
   updated_at     DATETIME(3)   NULL,
   viva_gate      TINYINT UNSIGNED GENERATED ALWAYS AS
@@ -223,6 +232,7 @@ CREATE TABLE publications (
   KEY ix_pub_verifier (verified_by_user_id),
   KEY ix_pub_version (deliverable_version_id),
   KEY ix_pub_reporter (reported_by_user_id),
+  KEY ix_pub_remover (removed_by_user_id),
   CONSTRAINT fk_pub_deliverable FOREIGN KEY (deliverable_id) REFERENCES deliverables(id) ON DELETE RESTRICT,
   -- COMPUESTA, como el puntero de 8.2 y por lo mismo: una simple diria que la
   -- version existe; esta dice que es DEL ENTREGABLE que se publica.
@@ -231,9 +241,16 @@ CREATE TABLE publications (
   CONSTRAINT fk_pub_reporter FOREIGN KEY (reported_by_user_id) REFERENCES users(id) ON DELETE RESTRICT,
   CONSTRAINT fk_pub_platform FOREIGN KEY (platform_id) REFERENCES platforms(id) ON DELETE RESTRICT,
   CONSTRAINT fk_pub_verifier FOREIGN KEY (verified_by_user_id) REFERENCES users(id) ON DELETE RESTRICT,
-  CONSTRAINT ck_pub_status CHECK (status IN ('reported','verified','rejected','removed','expired')),
+  CONSTRAINT fk_pub_remover FOREIGN KEY (removed_by_user_id) REFERENCES users(id) ON DELETE RESTRICT,
+  -- 8.8: `expired` era `fulfilled` mal llamado. La ventana cumplida es lo BUENO
+  -- --es lo que habilita el pago-- y `expired` se lee como «se le paso». Tenia
+  -- cero filas desde 2.12, asi que renombrarlo no costo nada.
+  CONSTRAINT ck_pub_status CHECK (status IN ('reported','verified','rejected','removed','fulfilled')),
   CONSTRAINT ck_pub_verified CHECK (status <> 'verified' OR (verified_at IS NOT NULL AND verified_by_user_id IS NOT NULL)),
-  CONSTRAINT ck_pub_removed CHECK (status <> 'removed' OR removed_at IS NOT NULL),
+  CONSTRAINT ck_pub_removed CHECK (status <> 'removed' OR (removed_at IS NOT NULL AND removed_by_user_id IS NOT NULL AND CHAR_LENGTH(TRIM(COALESCE(removed_reason,''))) >= 5)),
+  -- Un post no se puede haber retirado antes de publicarse.
+  CONSTRAINT ck_pub_removed_no_antes CHECK (removed_at IS NULL OR removed_at >= published_at),
+  CONSTRAINT ck_pub_fulfilled CHECK (status <> 'fulfilled' OR (fulfilled_at IS NOT NULL AND permanence_until IS NOT NULL)),
   CONSTRAINT ck_pub_fingerprint CHECK (CHAR_LENGTH(url_fingerprint) = 64),
   -- 8.6. Un post «publicado manana» no existe. `NOW()` no se puede usar en un
   -- CHECK --no es determinista-- asi que se compara contra el momento en que
@@ -245,7 +262,7 @@ CREATE TABLE publications (
   -- 8.7: `permanence_until` es `published_at + permanence_days` y se calcula AL
   -- VERIFICAR: hasta que alguien mira no se sabe si hay post que permanezca.
   CONSTRAINT ck_pub_permanence CHECK (permanence_until IS NULL
-      OR status IN ('verified','removed','expired'))
+      OR status IN ('verified','removed','fulfilled'))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- La evidencia. Append-only y con checksum: los posts se borran, y esto es lo
@@ -288,18 +305,42 @@ CREATE TABLE permanence_checks (
   id             BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
   uuid           CHAR(36)      NOT NULL,
   publication_id BIGINT UNSIGNED NOT NULL,
+  -- 8.8: de donde salio. Lista cerrada: «.cuantas caidas las vio una persona y
+  -- cuantas la sonda?» tiene que poder contestarse con un numero.
+  source         VARCHAR(20)   NOT NULL DEFAULT 'manual',
   checked_at     DATETIME(3)   NOT NULL,
   is_live        TINYINT(1)    NOT NULL,
+  checked_by_user_id BIGINT UNSIGNED NULL,
   http_status    SMALLINT UNSIGNED NULL,
   evidence_id    BIGINT UNSIGNED NULL,
   notes          VARCHAR(255)  NULL,
   created_at     DATETIME(3)   NULL,
+  -- Decimosexta columna puerta. `docs/18` §2: en produccion el planificador es
+  -- una linea de cron, y una linea duplicada --dos servidores, o alguien que lo
+  -- ejecuta a mano para ver si funciona-- mete la MISMA comprobacion dos veces
+  -- y manda dos correos al creador. La puerta hace la pasada diaria idempotente
+  -- sin limitar las comprobaciones MANUALES: una persona puede mirar tres veces
+  -- la misma tarde.
+  sonda_dia      DATE GENERATED ALWAYS AS
+                   (CASE WHEN source = 'probe' THEN DATE(checked_at) ELSE NULL END) STORED,
   UNIQUE KEY uq_pc_uuid (uuid),
+  UNIQUE KEY uq_pc_sonda_dia (publication_id, sonda_dia),
   KEY ix_pc_publication (publication_id, checked_at),
   KEY ix_pc_live (is_live, checked_at),
   KEY ix_pc_evidence (evidence_id),
+  KEY ix_pc_usuario (checked_by_user_id),
   CONSTRAINT fk_pc_publication FOREIGN KEY (publication_id) REFERENCES publications(id) ON DELETE RESTRICT,
-  CONSTRAINT fk_pc_evidence FOREIGN KEY (evidence_id) REFERENCES publication_evidence(id) ON DELETE RESTRICT
+  CONSTRAINT fk_pc_evidence FOREIGN KEY (evidence_id) REFERENCES publication_evidence(id) ON DELETE RESTRICT,
+  CONSTRAINT fk_pc_usuario FOREIGN KEY (checked_by_user_id) REFERENCES users(id) ON DELETE RESTRICT,
+  CONSTRAINT ck_pc_source CHECK (source IN ('probe','manual')),
+  -- TINYINT admite hasta 127. Un 7 ahi no es ni vivo ni caido, y quien cuente
+  -- caidas lo contaria como vivo.
+  CONSTRAINT ck_pc_is_live CHECK (is_live IN (0,1)),
+  CONSTRAINT ck_pc_manual CHECK (source <> 'manual' OR checked_by_user_id IS NOT NULL),
+  -- «No estaba» sin nada detras no vale para parar un pago.
+  CONSTRAINT ck_pc_caida_motivada CHECK (is_live = 1 OR http_status IS NOT NULL
+      OR CHAR_LENGTH(TRIM(COALESCE(notes,''))) >= 5),
+  CONSTRAINT ck_pc_no_futuro CHECK (created_at IS NULL OR checked_at <= created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ===========================================================================
@@ -385,7 +426,7 @@ BEGIN
   IF EXISTS (SELECT 1 FROM `deliverable_versions` v
                JOIN `deliverables` d ON d.`id` = v.`deliverable_id`
               WHERE v.`id` = NEW.`deliverable_version_id`
-                AND (d.`status` IN ('published','verified','cancelled')
+                AND (d.`status` IN ('published','verified','removed','cancelled')
                      OR (d.`status` = 'approved' AND NEW.`outcome` <> 'reopened')))
   THEN
     SIGNAL SQLSTATE '45000'
@@ -443,7 +484,7 @@ FOR EACH ROW
 BEGIN
   IF EXISTS (SELECT 1 FROM `deliverables` d
               WHERE d.`id` = NEW.`deliverable_id`
-                AND d.`status` IN ('approved','published','verified','cancelled'))
+                AND d.`status` IN ('approved','published','verified','removed','cancelled'))
   THEN
     SIGNAL SQLSTATE '45000'
       SET MESSAGE_TEXT = 'No se entrega sobre un entregable cerrado. Si hay que cambiarlo, alguien tiene que reabrirlo.';
@@ -461,4 +502,100 @@ BEGIN
   SIGNAL SQLSTATE '45000'
     SET MESSAGE_TEXT = 'Un veredicto no se edita: se emite otro. content_reviews solo admite insercion.';
 END//
+-- ===========================================================================
+-- 8.8 -- La permanencia minima del post
+-- ===========================================================================
+
+-- La sonda MARCA; una persona confirma. Instagram y TikTok responden igual ante
+-- un post borrado que ante un perfil en privado o un bloqueo geografico, asi que
+-- ningun 403 puede acusar a un creador de incumplir. Lo que mueve una
+-- publicacion a `removed` es una persona, y aqui se le exige la prueba: una
+-- comprobacion fallida Y una captura tomada DESPUES de haber verificado el post
+-- --la captura vieja probo que existia, no prueba que ya no este--.
+CREATE TRIGGER `tg_pub_permanencia`
+BEFORE UPDATE ON `publications`
+FOR EACH ROW
+BEGIN
+  IF NEW.`status` = 'removed' AND OLD.`status` <> 'removed' THEN
+    IF OLD.`status` <> 'verified' THEN
+      SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'Solo se cae lo que se habia verificado. Si nunca se verifico, esto es un rechazo, no una caida.';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM `permanence_checks` c
+                    WHERE c.`publication_id` = OLD.`id` AND c.`is_live` = 0) THEN
+      SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'Para dar un post por caido hace falta una comprobacion que diga que no esta.';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM `publication_evidence` e
+                    WHERE e.`publication_id` = OLD.`id`
+                      AND e.`evidence_type` = 'screenshot'
+                      AND e.`file_id` IS NOT NULL
+                      AND e.`captured_at` > OLD.`verified_at`) THEN
+      SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'Y una captura tomada DESPUES de verificarlo: la que probo que existia no prueba que ya no este.';
+    END IF;
+  END IF;
+
+  IF NEW.`status` = 'fulfilled' AND OLD.`status` <> 'fulfilled' THEN
+    IF OLD.`status` <> 'verified' THEN
+      SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'Solo se cierra la ventana de algo que estaba verificado.';
+    END IF;
+    -- Sin `IS NULL` a proposito: con NULL la comparacion es NULL --el IF no
+    -- entra-- y de los NULL responde `ck_pub_fulfilled`. Si el disparador los
+    -- cubriera tambien, ese CHECK no seria asertable: ganaria el que se evalue
+    -- primero, y cual es depende del motor. Es la leccion de T-48.
+    IF NEW.`permanence_until` > DATE(NEW.`fulfilled_at`) THEN
+      SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'La ventana no se puede dar por cumplida antes de su fecha.';
+    END IF;
+  END IF;
+
+  IF NEW.`status` = 'verified' AND OLD.`status` = 'removed'
+     AND NOT EXISTS (SELECT 1 FROM `publication_evidence` e
+                      WHERE e.`publication_id` = OLD.`id`
+                        AND e.`evidence_type` = 'screenshot'
+                        AND e.`file_id` IS NOT NULL
+                        AND e.`captured_at` > OLD.`removed_at`) THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'Para devolver a verificada una publicacion caida hace falta una captura posterior a la caida.';
+  END IF;
+END//
+
+-- `permanence_until` sale de verificar (8.7). Comprobar la permanencia de algo
+-- que nadie verifico no mide nada.
+CREATE TRIGGER `tg_pc_publicacion_verificada`
+BEFORE INSERT ON `permanence_checks`
+FOR EACH ROW
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM `publications` p
+                  WHERE p.`id` = NEW.`publication_id`
+                    AND p.`status` IN ('verified','removed','fulfilled'))
+  THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'No se comprueba la permanencia de un post que nadie verifico.';
+  END IF;
+END//
+
+-- Append-only, como `tg_cvw_inmutable` en 8.3 y por lo mismo: si una
+-- comprobacion se puede editar, el historico dice lo que convenga el dia que se
+-- discuta el pago.
+CREATE TRIGGER `tg_pc_inmutable`
+BEFORE UPDATE ON `permanence_checks`
+FOR EACH ROW
+BEGIN
+  SIGNAL SQLSTATE '45000'
+    SET MESSAGE_TEXT = 'Una comprobacion de permanencia no se edita: se anota otra.';
+END//
+
+-- 3.12 / T-16. El criterio la incluia desde el primer dia --la fila es
+-- evidencia y de ella depende dinero-- y nadie la habia mirado hasta 8.8.
+CREATE TRIGGER `tg_pc_no_delete`
+BEFORE DELETE ON `permanence_checks`
+FOR EACH ROW
+BEGIN
+  SIGNAL SQLSTATE '45000'
+    SET MESSAGE_TEXT = 'permanence_checks no admite borrado: es lo que para un pago, y de eso se discute despues.';
+END//
+
 DELIMITER ;

@@ -1,5 +1,7 @@
 # 09 — Estado del proyecto y siguiente iteración
 
+> **Versión 2.6 — 2026-08-27.** Actualizado al cerrar `8.8`.
+>
 > **Versión 2.5 — 2026-08-26.** Actualizado al cerrar `8.7`.
 >
 > **Versión 2.4 — 2026-08-26.** Actualizado al cerrar `8.6`.
@@ -52,12 +54,12 @@
 | | |
 |---|---|
 | Tablas | 69 |
-| Migraciones | 55, verdes desde cero en MySQL 8 y con vuelta atrás completa |
-| Pruebas de PHPUnit | **659**, 2.051 aserciones |
-| Aserciones de restricción (SQL) | **1.438** en MariaDB, **1.428** en MySQL 8 |
+| Migraciones | 56, verdes desde cero en MySQL 8 y con vuelta atrás completa |
+| Pruebas de PHPUnit | **687**, 2.109 aserciones |
+| Aserciones de restricción (SQL) | **1.506** en MariaDB, **1.496** en MySQL 8 |
 | Puertas de calidad | 6: formato, análisis estático, fronteras, pruebas, vigencias, nombres entre capas |
 | Verificadores fuera de PHPUnit | 4: fixturas, periodos, nombres entre capas y **mensajes de la base** (nuevo en 8.1) |
-| Decisiones registradas | hasta `DEC-144` |
+| Decisiones registradas | hasta `DEC-148` |
 
 ### Lo que se puede hacer hoy por pantalla
 
@@ -136,8 +138,15 @@ sube la captura, que queda archivada y no se borra nunca. Si no está, el
 entregable vuelve al creador con el motivo. Es lo que convierte
 `BR-CONTENT-004` en algo real y lo que el pago va a mirar.
 
+Y desde `8.8`, **el post se vigila hasta su fecha**: una bandeja con lo que hay
+que mirar, un histórico de comprobaciones que no se edita ni se borra, y un
+comando diario que cierra las ventanas cumplidas —que es lo que habilita el
+pago—. Si el post desaparece, alguien lo firma con la captura de lo que ve, el
+pago se para y el creador se entera por correo. Nada de eso lo decide una
+máquina, y eso es la iteración entera.
+
 Eso completa **7.0 a 7.7 del roadmap**, más `F4.9`, `5.9`, `4.1`, `8.1`, `8.2`,
-`8.3`, `8.6` y `8.7`.
+`8.3`, `8.6`, `8.7` y `8.8`.
 
 > **Y por primera vez el sistema se ha usado.** Tres fallos salieron de ahí en una
 > tarde: un 500 al repetir un formato en el brief de un mercado, la bitácora
@@ -191,23 +200,30 @@ Ninguna bloquea código hoy; todas bloquean una iteración futura concreta.
 
 ## 4. Lo que propongo como siguiente iteración
 
-**`8.8` — la permanencia mínima del post.** `permanence_until` ya se calcula al
-verificar y `permanence_checks` sigue con cero filas: falta lo que vigila que el
-post siga vivo hasta esa fecha y avisa cuando desaparece.
+**`8.4` — el límite de rondas.** Es lo único que queda abierto del ciclo de
+revisión, y `8.3` lo dejó a medio camino a propósito.
 
-Es la iteración natural y es pequeña —un comando planificado, como
-`invitaciones:caducar` de `7.6`, más la pantalla que enseña lo caído— pero tiene
-una decisión de negocio detrás que hay que tomar contigo: **qué pasa cuando un
-creador retira el post antes de tiempo.** `BR-CONTENT-006` dice que el sistema
-alerta; no dice si eso afecta al pago, y ahí es donde deja de ser técnico.
+Hoy `deliverables.revision_rounds_used` cuenta, `Revisiones::consumeRonda()`
+decide cuáles cuentan —sólo las del cliente— y `content.extra_round` autoriza una
+por encima. Lo que **no** existe es de dónde sale el número de rondas incluidas:
+está en el brief como intención y no lo mira nadie. Así que el contador cuenta
+hacia arriba sin techo, y la autorización que `8.3` construyó no se dispara nunca
+porque no hay límite que cruzar.
 
-Y arrastra la misma limitación que `8.7`: comprobar automáticamente si un post
-de Instagram sigue vivo choca con lo mismo —un `403` no significa que lo hayan
-borrado—. Lo honesto será una comprobación que **marca para revisar a mano**, no
-una que declare el post caído por su cuenta.
+Es una iteración pequeña —el techo, el veto, y la pantalla que enseña «ronda 2 de
+2»— y no tiene ninguna decisión de negocio oculta: `Q-08` ya la contestaste
+(*rondas por campaña, definidas en el brief*).
 
-Después, `8.4` (límite de rondas) y `8.5` (aprobación del cliente por enlace
-firmado) cierran la fase, y `8.11` es su QA.
+Después, `8.5` —la aprobación del cliente por enlace firmado— es la última pieza
+del ciclo y la primera vez que entra alguien de la marca; `8.9` y `8.10` son
+mensajería y derechos de uso, y `8.11` es el QA de fase.
+
+### Lo que 8.8 dejó abierto y no es mío
+
+`Q-59`: **¿la ventana de permanencia se alarga por los días que el post estuvo
+caído?** Hoy no. Si el post estuvo tres días fuera, la marca perdió tres días de
+exposición y el creador cumple igual. Alargarla sería lo justo, y alargarla por
+mi cuenta sería inventarme una cláusula del contrato. Va con `T-09`.
 
 ### Lo que sigue sin poder hacerse, y no es código
 

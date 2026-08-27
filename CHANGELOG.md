@@ -2,6 +2,52 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 
+## [8.8 · La permanencia mínima del post] — 2026-08-27
+
+Qué pasa cuando un creador retira el post antes de tiempo, y por qué eso **no**
+lo puede decidir una máquina.
+
+### Añadido
+- **La bandeja de permanencia**, en `/permanencia`. Las caídas abiertas primero
+  —son las que tienen un pago parado detrás— y luego lo vigilado que nadie mira.
+  `permanence_checks` estrena su primera fila.
+- **Retirar el post bloquea el pago, y el sistema no descuenta nada**
+  (`DEC-145`). La publicación pasa a `removed` con motivo, firma y fecha; el
+  entregable sale de `verified`; y ahí se para. La decisión de qué se le paga la
+  toma una persona con el expediente montado delante.
+- **La sonda marca, una persona confirma** (`DEC-146`). Una comprobación se
+  archiva y **no cambia el estado de nada**. `tg_pub_permanencia` exige una
+  comprobación fallida **y** una captura tomada después de haber verificado el
+  post: la que probó que existía no prueba que ya no esté.
+- **`permanencia:vigilar`**, diario a las 06:00. Cierra las ventanas cumplidas
+  —`verified` → `fulfilled`, que es lo que habilita el pago— y cuenta las
+  desatendidas. **No sale a Internet**, y eso es la decisión, no un descuido.
+- **Se avisa al creador y al equipo; al cliente no** (`DEC-147`). El correo no
+  dice «incumpliste»: dice «no lo encontramos», y dice que el pago está en pausa.
+- **El entregable caído estrena estado** (`DEC-148`). `removed`, y no `published`
+  reutilizado: `published` significa «esperando a que alguien lo mire», y un
+  estado que significa dos cosas es el fallo de `T-50`.
+- **Decimosexta columna puerta**: `uq_pc_sonda_dia`, una sonda por publicación y
+  día. Un cron duplicado —dos servidores, o alguien probando el comando a mano—
+  mandaba dos correos al creador por la misma caída.
+
+### Cambiado
+- **`expired` pasa a llamarse `fulfilled`** en `publications`. Tenía cero filas
+  desde `2.12` y un nombre que se lee al revés de lo que significa: la ventana
+  cumplida es lo bueno, es lo que habilita el pago.
+- **`permanence_checks` entra en la lista de `3.12`**: append-only y sin borrado.
+  El criterio de `T-16` la incluía desde el primer día —la fila es evidencia y de
+  ella depende dinero— y nadie la había mirado.
+- **`docs/18` §2** explica ahora qué cuelga de la línea de `schedule:run` y qué
+  se rompe en silencio si no está.
+
+### Corregido
+- **Dos aserciones que dependían del motor** (`T-51`). `is_live = 7` sin notas y
+  `status = 'expired'` con la permanencia puesta violaban **dos** restricciones a
+  la vez, y cuál responde depende del orden de evaluación: verde en MariaDB, rojo
+  en MySQL 8. Es `T-48` otra vez, y el arreglo es el mismo — un rechazo sólo
+  prueba algo si rechaza por su motivo.
+
 ## [8.7 · La prueba de que el post existió] — 2026-08-26
 
 Y por qué esa prueba es una captura de pantalla y no una comprobación

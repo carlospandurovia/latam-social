@@ -39,3 +39,7 @@
 # la publicacion, que impide borrar el entregable. Si anades una suite despues,
 # encontrara filas de `luisvega` puestas.
 8.7-evidencia
+# 8.8 tampoco puede limpiar: `permanence_checks` entro en la lista de 3.12 y su
+# clave ajena encadena publicacion y entregable. Va detras de 8.7 y usa SU
+# entregable --el numero 2 de luisvega-- para no pisarse con ella.
+8.8-permanencia

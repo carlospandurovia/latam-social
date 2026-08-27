@@ -218,6 +218,30 @@ final class PlantillasDeCorreoSeeder extends Seeder
                 ."Tu contenido sigue aprobado: lo unico que falta es el enlace.\n\n"
                 .'LATAM Social',
             ],
+            // ---- `8.8`: el post ya no esta -------------------------------
+            //
+            // No dice «incumpliste»: dice «no lo encontramos» y le pregunta. La
+            // mayoria de las veces la cuenta se puso privada o el post se movio,
+            // y acusar a alguien por eso cuesta mas que preguntarle.
+            //
+            // Y dice EXPRESAMENTE que el pago esta parado. Enterarse de eso
+            // cuando no llega el dinero es peor que enterarse ahora.
+            [
+                'content.permanence_broken',
+                'Tu post de {{ campana }} ya no aparece',
+                "Hola {{ nombre }}:\n\n"
+                ."Fuimos a comprobar tu post de {{ campana }} y ya no lo encontramos:\n\n"
+                ."  \u{ab}{{ motivo }}\u{bb}\n\n"
+                ."El enlace que revisamos fue este:\n"
+                ."{{ enlace_post }}\n\n"
+                ."El acuerdo era que siguiera publicado hasta el {{ hasta }}, asi que\n"
+                ."mientras tanto el pago de esa entrega queda en pausa.\n\n"
+                ."Si el post sigue publicado y el enlace cambio, o si la cuenta estaba\n"
+                ."en privado, escribenos y lo revisamos otra vez. Si lo bajaste por algo,\n"
+                ."cuentanoslo: se puede arreglar hablandolo.\n\n"
+                ."{{ enlace }}\n\n"
+                .'LATAM Social',
+            ],
             [
                 'creator.payment_method_changed',
                 'Se registro un cambio en sus datos de pago',
