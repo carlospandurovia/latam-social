@@ -2,17 +2,17 @@ name: CI
 
 on:
   push:
-    # `feat/**` y `fix/**` ESTAN aqui a proposito, y no estaban.
+    # Desde `DEC-149` se trabaja en `main`, asi que ese es el disparador que
+    # importa. `feat/**`, `fix/**` y `hotfix/**` se quedan a proposito: el dia
+    # que haya produccion vuelven las ramas por iteracion, y un disparador que
+    # falta no falla --no dice nada, que es la forma mas cara de estar en verde--.
     #
-    # Con `[main, develop]` a secas, empujar una rama de trabajo no disparaba
-    # nada: ni un solo job. Ocho iteraciones --de 5.9 a 8.6-- vivieron en
-    # `feat/7.6-invitaciones` sin que el CI las mirara una sola vez, y `main`
-    # llevaba desde 4.9 sin recibir nada, asi que tampoco corria alli.
+    # Eso paso: con `[main, develop]` a secas, ocho iteraciones --de 5.9 a 8.6--
+    # vivieron en `feat/7.6-invitaciones` sin que el CI las mirara una sola vez,
+    # y `main` llevaba desde 4.9 sin recibir nada, asi que tampoco corria alli.
     #
-    # Un CI que no se dispara no falla: no dice nada, que es la forma mas cara
-    # de estar en verde. Es el mismo defecto que `tools/sincronizar-ci.php`
-    # documenta para un CI desactualizado, pero un escalon antes.
-    branches: [main, develop, 'feat/**', 'fix/**', 'hotfix/**']
+    # `develop` se va: nunca ha existido esa rama.
+    branches: [main, 'feat/**', 'fix/**', 'hotfix/**']
   pull_request:
 
 jobs:

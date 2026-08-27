@@ -3,6 +3,10 @@
 > Qué pasa entre *«la iteración está verde aquí»* y *«la iteración está en
 > GitHub»*. Los pasos exactos, en orden, y qué hace cada uno.
 
+**Versión 2.0 — 2026-08-27.** `main` vuelve a ser la línea de trabajo
+(`DEC-149`). La versión 1.0 daba por buena una rama larga que no protegía nada;
+la sección 3 explica por qué se abandona y cuándo se vuelve a ella.
+
 **Versión 1.0 — 2026-08-26.**
 
 ---
@@ -160,46 +164,93 @@ Si no aparece ningún job, el CI no se disparó: vuelve al paso 1.
 
 ---
 
-## 3. Y cada cierto tiempo: llevarlo a `main`
+## 3. Dónde se trabaja: en `main`, hasta que haya producción
 
-Los pasos de arriba dejan el trabajo en una rama. `main` es *«estable y
-desplegable»* según `CONTRIBUTING.md`, y hoy lleva ocho iteraciones sin recibir
-nada — o sea que ni está al día ni es lo que se desplegaría.
+### `DEC-149`, y por qué se cambia de opinión
 
-Cuando una fase o un bloque coherente esté cerrado:
+La versión 1.0 de este documento defendía la rama de trabajo con el argumento
+correcto —*«para poder equivocarse sin romper lo desplegable»*— y con una
+condición que nunca se cumplió: **sólo funciona si la rama vuelve**.
+
+Miradas las cosas de cerca, el historial del repositorio era esto:
+
+```
+main (4.9) ── 5.9 ── 7.6 ── 7.6b ── 7.7 ── 8.1 ── 8.1-8.7 ── 8.8
+```
+
+Una **línea recta**. Nunca hubo dos cosas pasando a la vez. Las tres ramas que
+existían no eran tres caminos: eran tres nombres puestos sobre el mismo camino, y
+dos de ellos apuntaban a puntos que ya habían quedado atrás.
+
+Así que la pregunta no era «¿por qué ramas si al final se fusiona?» sino **«¿qué
+me ha dado esta rama?»**. Y la respuesta, medida, es: nada. Ni una vez.
+
+| Para lo que sirve una rama | ¿Aplica hoy? |
+|---|---|
+| Dos personas tocando cosas distintas sin pisarse | **No.** Un desarrollador |
+| Dejar algo a medias y atender una urgencia de producción | **No.** No hay producción todavía |
+| Que el CI opine antes de que el código llegue a la línea buena | Sí, pero `php tools/diagnostico.php` ya lo hace antes de commitear |
+| Revisión por otra persona | No |
+| Tener siempre un `main` desplegable | Sí — y es justo el que la rama dejó **nueve iteraciones** obsoleto |
+
+Y el coste sí se estaba pagando: quien clonara el repositorio sin cambiar de rama
+se llevaba un proyecto de hace nueve iteraciones. **La rama que se suponía que
+protegía a `main` lo que hizo fue dejarlo mentir.** Eso es lo peor de los dos
+mundos: la ceremonia sin ninguno de los beneficios.
+
+### La regla, entonces
+
+**Se trabaja en `main`.** Un commit por iteración, que es lo que ya se hacía. Sin
+ramas, sin fusiones y sin decidir cada vez cómo se llama la rama.
+
+Lo que sustituye a la rama no es la confianza: son las seis puertas. **No se
+commitea en rojo.** Esa es la disciplina entera, y ya existía.
+
+### Cuándo se vuelve a las ramas
+
+**El día que el sistema esté desplegado.** Ese día `main` pasa a significar algo
+real —*«esto es lo que está corriendo»*— y entonces sí duele meterle una
+iteración a medias.
+
+A partir de ahí: **una rama por iteración, fusionada el mismo día**. Tres órdenes
+más, y con `main` valiendo algo, valen la pena. Lo que no se vuelve a hacer nunca
+es una rama larga que acumula iteraciones: eso no es una rama, es un `main` con
+otro nombre.
+
+### La consolidación, una sola vez
+
+Para volver a `main` desde donde estamos. Se hace **una vez** y no se repite.
 
 ```bash
 git checkout main
 git pull
-git merge --no-ff feat/<rama>
+git merge --no-ff feat/7.6-invitaciones -m "Fusiona 5.9 a 8.8 desde la rama de trabajo"
 git push
 ```
 
-`--no-ff` deja un commit de merge, que es lo que hace visible en `git log` dónde
-empezó y terminó cada bloque.
+No hay conflictos posibles: `main` no ha recibido nada desde 4.9, así que la
+fusión es un avance limpio. `--no-ff` deja el commit de fusión, que es lo que hace
+visible en `git log` dónde empezó y terminó el bloque.
 
-**O por Pull Request**, que es mejor: dispara el CI antes de tocar `main` y deja
-la conversación escrita. Con el repositorio en GitHub y una sola persona
-escribiendo código, un PR sigue valiendo la pena por lo primero.
+Y después, borrar lo que ya no significa nada:
 
-### Sobre las ramas, ya que lo preguntaste
+```bash
+git branch -d feat/7.6-invitaciones
+git branch -d feat/5.9-4.1-enlace-contrasena
+git push origin --delete feat/7.6-invitaciones
+git push origin --delete feat/5.9-4.1-enlace-contrasena
+```
 
-Preguntaste en su día *«¿por qué creamos una rama nueva y no seguimos usando
-main?»*. La respuesta corta: **para poder equivocarse sin romper lo desplegable**.
-Una iteración en curso puede quedarse a medias —una migración a medio pensar, una
-regla que hay que revertir— y si eso vive en `main`, lo que está desplegado deja
-de ser lo que dice `main`.
+`-d` y no `-D` a propósito: `-d` se niega si la rama tiene algo sin fusionar, así
+que es la comprobación de que la fusión se llevó todo. Si protesta, **no la
+fuerces**: significa que quedó trabajo fuera y hay que mirarlo.
 
-La respuesta larga tiene una condición: eso sólo funciona **si la rama vuelve**.
-Una rama que se queda ocho iteraciones sin fusionar ya no protege `main`; lo que
-hace es que `main` deje de significar nada. Que es donde estamos.
+> `feat/5.9-4.1-enlace-contrasena` es un puntero muerto: su commit
+> (`20d9dd9c`) es el padre de la rama de 7.6, así que su trabajo entra en la
+> fusión igual. Comprobado antes de escribir esto, no supuesto.
 
-Hay además una incoherencia que conviene arreglar: `CONTRIBUTING.md` dice
-`feature/F<fase>.<it>-<slug>` y las ramas reales son `feat/<it>-<slug>`. Y
-menciona una rama `develop` que **no existe**. Elige una de las dos formas y
-corrige el documento; da igual cuál, pero no las dos.
-
----
+A partir de ese momento, el **paso 6** de la sección 2 empuja a `main` y el CI
+corre allí en cada push.
 
 ## 4. Cuando algo sale mal
 
@@ -222,12 +273,14 @@ veces:
 - un `UPDATE tabla WHERE id = (SELECT … FROM tabla)`, que MariaDB tolera y MySQL
   rechaza con `1093` (`T-49`),
 - un `CHECK` que en MariaDB se evalúa antes que otro y en MySQL después
-  (`T-48`).
+  (`T-48`, y otra vez en `T-51`). La fila violaba **dos** restricciones a la vez
+  y cada motor contestaba con una distinta.
 
 ### Empujé y no corrió ningún job
 
-La rama no está en el `on: push` del workflow, o `.github/workflows/ci.yml` está
-desactualizado. Paso 1.
+`.github/workflows/ci.yml` está desactualizado. Paso 1. (Desde `DEC-149` se
+trabaja en `main`, que siempre ha estado en el `on: push`, así que el disparador
+ya no es el sospechoso.)
 
 ---
 

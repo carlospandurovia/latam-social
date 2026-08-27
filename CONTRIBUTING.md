@@ -13,20 +13,25 @@ powershell -ExecutionPolicy Bypass -File tools\bootstrap-laravel.ps1   # Windows
 ./tools/bootstrap-laravel.sh                                          # Linux, macOS, WSL
 ```
 
-## Ramas y commits
+## Dónde se trabaja, y commits
 
 **Los pasos exactos para entregar una iteración están en
 `docs/19-PROTOCOLO-DE-ENTREGA.md`.** Esto es sólo la convención.
 
-- `main` estable y desplegable · `feat/<it>-<slug>` · `fix/<slug>` · `hotfix/<slug>`
+- **Se trabaja en `main`** (`DEC-149`). Un desarrollador, una línea de trabajo y
+  nada desplegado todavía: una rama aquí no protege nada y sí deja `main`
+  obsoleto, que fue lo que pasó durante nueve iteraciones.
+- Lo que sustituye a la rama son **las seis puertas**: `php tools/diagnostico.php`
+  en verde antes de commitear. **No se commitea en rojo.**
+- **El día que haya producción**, `main` pasa a significar *«esto es lo que está
+  corriendo»* y vuelven las ramas: `feat/<it>-<slug>`, `fix/<slug>`,
+  `hotfix/<slug>`, **fusionadas el mismo día**. Nunca una rama larga que acumula
+  iteraciones — eso no es una rama, es un `main` con otro nombre.
 - El mensaje empieza por el **número de iteración**, en imperativo y en una línea:
   `7.5: presupuesto de creadores y compromiso congelado al aceptar`
   Es lo que permite leer `git log` y reconstruir el roadmap sin abrirlo.
 - **Una iteración, un commit.** Un commit que mezcla cuatro iteraciones no se puede
   revertir sin llevarse las otras tres por delante.
-- **Una rama que no vuelve deja de proteger `main`.** Se abre para poder equivocarse
-  sin romper lo desplegable; si se queda ocho iteraciones sin fusionar, lo único que
-  consigue es que `main` no signifique nada. Pasó, y por eso existe el documento 19.
 
 ## Las puertas
 

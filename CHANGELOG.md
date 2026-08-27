@@ -2,6 +2,19 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 
+## [Proceso · `main` vuelve a ser la línea de trabajo] — 2026-08-27
+
+### Cambiado
+- **Se trabaja en `main`** (`DEC-149`). El historial era una línea recta —nunca
+  hubo dos cosas a la vez— así que las ramas no separaban nada, y la que existía
+  para proteger `main` lo dejó **nueve iteraciones obsoleto**. Lo que sustituye a
+  la rama son las seis puertas: no se commitea en rojo. Vuelven las ramas —una
+  por iteración, fusionada el mismo día— el día que haya producción.
+- **`develop` sale del `on: push` del CI.** Esa rama no ha existido nunca, y
+  `CONTRIBUTING.md` la nombraba desde el principio.
+- **`docs/19` §3** reescrito con la medición delante, y `CONTRIBUTING.md`
+  alineado con la realidad.
+
 ## [8.8 · La permanencia mínima del post] — 2026-08-27
 
 Qué pasa cuando un creador retira el post antes de tiempo, y por qué eso **no**
