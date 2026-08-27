@@ -111,7 +111,7 @@ final class PermanenciaTest extends TestCase
     }
 
     /**
-     * La decimosexta columna puerta, y el fallo real que tapa.
+     * La columna puerta, y el fallo real que tapa.
      *
      * `docs/18` §2: en producción el planificador es una línea de cron. Dos
      * servidores con la misma línea, o alguien que ejecuta el comando a mano

@@ -215,7 +215,7 @@ CREATE TABLE approval_links (
   revoked_reason         VARCHAR(40)   NULL,
   created_at             DATETIME(3)   NULL,
   updated_at             DATETIME(3)   NULL,
-  -- Decimoseptima columna puerta: UN enlace vivo por pieza. Dos enlaces vivos
+  -- Columna puerta: UN enlace vivo por pieza. Dos enlaces vivos
   -- son dos respuestas posibles y contradictorias del mismo cliente, y ninguna
   -- forma de saber cual vale. Mismo mecanismo que `uq_inv_viva` en 7.6.
   viva_gate TINYINT UNSIGNED GENERATED ALWAYS AS
@@ -299,7 +299,8 @@ CREATE TABLE publications (
   -- es lo que se le pide, y se estrellaba contra la clave con un 1062. Una fila
   -- rechazada no reclama nada: se miro y no valia.
   --
-  -- Decimoquinta columna puerta del esquema.
+  -- Otra columna puerta. El esquema tiene 24, y las cuenta
+  -- `verificar-nombres-sql.py`: la numeracion a mano iba por 17 (8.11).
   UNIQUE KEY uq_pub_fingerprint (viva_gate, url_fingerprint),
   KEY ix_pub_deliverable (deliverable_id, status),
   KEY ix_pub_platform (platform_id, published_at),
@@ -390,7 +391,7 @@ CREATE TABLE permanence_checks (
   evidence_id    BIGINT UNSIGNED NULL,
   notes          VARCHAR(255)  NULL,
   created_at     DATETIME(3)   NULL,
-  -- Decimosexta columna puerta. `docs/18` §2: en produccion el planificador es
+  -- Otra columna puerta. `docs/18` §2: en produccion el planificador es
   -- una linea de cron, y una linea duplicada --dos servidores, o alguien que lo
   -- ejecuta a mano para ver si funciona-- mete la MISMA comprobacion dos veces
   -- y manda dos correos al creador. La puerta hace la pasada diaria idempotente

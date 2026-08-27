@@ -40,8 +40,13 @@
           {{ $cargos->count() }} {{ \Illuminate\Support\Str::plural('ronda', $cargos->count()) }}
           de corrección por encima de las incluidas, para cobrar
         </h2>
+        {{-- 8.11: dice «autorizadas», y NO dice «pendientes». La consulta no
+             sabe cuáles se facturaron —no existe esa columna, y `content_reviews`
+             es append-only desde 8.3, así que nadie puede sellarla— y llamarlas
+             pendientes sería prometer un dato que no hay. Es `Q-61`. --}}
         <p class="mt-1 text-xs text-amber-800">
-          Autorizadas y pendientes de facturar. No están en ningún otro sitio todavía.
+          Autorizadas y cobrables. Esta lista <strong>no sabe cuáles ya se facturaron</strong>:
+          no están en ningún otro sitio todavía.
         </p>
         <ul class="mt-3 space-y-2 text-sm">
           @foreach ($cargos as $c)

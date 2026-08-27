@@ -30,7 +30,7 @@ use RuntimeException;
  * | `over_included` dice la verdad | `vetoParaRevisar()` | una ronda de más sin firma, sin decisión de facturación y **sin cargo** |
  * | El contador no baja | nada | ponerlo a cero regalaba las rondas ya gastadas |
  *
- * La segunda es la cara: `over_included` es lo que `Revisiones::cargosPendientes()`
+ * La segunda es la cara: `over_included` es lo que `Revisiones::rondasCobrables()`
  * cuenta para facturar. Una fila que miente ahí es dinero que no se cobra.
  *
  * ### Los disparadores siguen siendo GUARDAS, no mecanismos

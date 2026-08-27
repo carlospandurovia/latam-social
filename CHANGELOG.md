@@ -2,6 +2,33 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 
+## [8.11 · QA de la Fase 8] — 2026-08-27
+
+No añade funcionalidad. Añade la séptima puerta, y arregla tres cosas que la fase
+daba por hechas.
+
+### Añadido
+- **La séptima puerta**: `tools/verificar-suites.py`. Comprueba que las suites
+  comparten ayudantes y lleva un **trinquete** sobre las aserciones negativas que
+  sólo afirman que algo falló — hoy **297**, y sólo pueden bajar.
+- **`tools/pruebas/comun.sh`**: los cuatro ayudantes en un sitio. Estaban
+  copiados en las treinta suites, en **seis variantes**.
+- Cada `probar … RECHAZO` enseña ahora **qué restricción respondió**, en gris.
+
+### Corregido
+- **Nueve suites se habrían puesto verdes con el motor apagado** (`T-55`).
+  Medido con `7.6` contra una base que no existe: el ayudante viejo daba
+  `3 correctas, 0 fallidas`; el compartido da `0 correctas, 39 fallidas`. Y no
+  era una lección nueva: `2.13` lleva escrito desde la Fase 2 «25 aserciones en
+  verde contra un socket muerto».
+- **`cargosPendientes()` no sabía cuáles estaban pendientes** (`T-56`). Devolvía
+  todas las rondas de más para siempre, porque no existe la columna por la que
+  decía filtrar — y no puede existir, porque `content_reviews` es append-only.
+  Ahora se llama `rondasCobrables()` y la pantalla lo dice. Abre `Q-61`.
+- **El contador de columnas puerta iba por 17 y son 24** (`T-57`). Se numeraban
+  a mano y el número se heredaba de un documento al siguiente. Ahora sale de
+  contar el esquema, y los ordinales desaparecen de los documentos.
+
 ## [8.5 · El visto bueno del cliente] — 2026-08-27
 
 La primera vez que entra al sistema alguien de la **marca**. Sin portal, sin

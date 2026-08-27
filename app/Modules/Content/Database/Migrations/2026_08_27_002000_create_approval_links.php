@@ -108,7 +108,7 @@ return new class extends Migration
         // expresa.
         DB::statement('ALTER TABLE `approval_links` MODIFY `responded_ip` VARBINARY(16) NULL');
 
-        // --- Decimoseptima columna puerta: UN enlace vivo por pieza ----------
+        // --- Columna puerta: UN enlace vivo por pieza -------------------------
         //
         // Dos enlaces vivos sobre el mismo entregable son dos respuestas
         // posibles y contradictorias del mismo cliente, y ninguna forma de saber

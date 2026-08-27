@@ -81,7 +81,7 @@ return new class extends Migration
         //
         // Una fila rechazada no reclama nada: se miro y no valia. Asi que la
         // unicidad pasa a mirar solo las VIVAS, con el mismo mecanismo de
-        // columna puerta que el proyecto usa desde 2.4. Es la decimoquinta.
+        // columna puerta que el proyecto usa desde 2.4.
         DB::statement('ALTER TABLE `publications` DROP INDEX `uq_pub_fingerprint`');
         DB::statement('ALTER TABLE `publications` ADD COLUMN `viva_gate` TINYINT UNSIGNED '
             ."GENERATED ALWAYS AS (CASE WHEN `status` <> 'rejected' THEN 1 ELSE NULL END) STORED");

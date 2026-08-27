@@ -279,7 +279,7 @@ final class RevisionTest extends TestCase
 
     /**
      * Con las rondas agotadas, `over_included = 0` es mentira. Y es dinero:
-     * `cargosPendientes()` cuenta esa columna para facturar.
+     * `rondasCobrables()` cuenta esa columna para facturar.
      */
     public function test_la_base_no_deja_colar_una_ronda_de_mas_sin_declararla(): void
     {
@@ -375,7 +375,7 @@ final class RevisionTest extends TestCase
             'comments' => 'La tercera, y se cobra.', 'billing_decision' => 'charge',
         ], (int) $usuario->id, null);
 
-        $this->assertCount(1, Revisiones::cargosPendientes($this->campanaId));
+        $this->assertCount(1, Revisiones::rondasCobrables($this->campanaId));
     }
 
     /** La absorbida NO es un cargo: es lo contrario de un cargo. */
@@ -389,7 +389,7 @@ final class RevisionTest extends TestCase
             'comments' => 'Esta la asumimos nosotros.', 'billing_decision' => 'absorb',
         ], (int) $usuario->id, null);
 
-        $this->assertCount(0, Revisiones::cargosPendientes($this->campanaId));
+        $this->assertCount(0, Revisiones::rondasCobrables($this->campanaId));
     }
 
     // ------------------------------------------------------------- el veredicto

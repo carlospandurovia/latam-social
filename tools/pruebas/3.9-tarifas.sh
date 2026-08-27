@@ -11,28 +11,13 @@
 DB=${1:-latam_social}
 CLIENTE=${MYSQL_CMD:-mariadb}
 
-ok=0; fail=0
-probar() {
-  salida=$($CLIENTE $DB -e "$2" 2>&1)
-  if echo "$salida" | grep -qiE "ERROR (2002|2003|2005|1045|1049)|Can't connect|Unknown database|Access denied"; then
-    printf "  \033[31m!\033[0m %-70s LA BASE NO RESPONDE\n" "$1"
-    echo "      $(echo "$salida" | grep -i error | head -1)"
-    fail=$((fail+1)); return
-  fi
-  if [ -z "$salida" ] || ! echo "$salida" | grep -qi "ERROR"; then real="OK"; else real="RECHAZO"; fi
-  if [ "$real" == "$3" ]; then printf "  \033[32m✓\033[0m %-70s %s\n" "$1" "$real"; ok=$((ok+1))
-  else printf "  \033[31m✗\033[0m %-70s esperaba %s, obtuvo %s\n" "$1" "$3" "$real"; echo "      $(echo "$salida"|grep -i error|head -1)"; fail=$((fail+1)); fi
-}
-
+# Los cuatro ayudantes viven en UN sitio desde 8.11: estaban copiados en las
+# treinta suites y habian derivado en seis variantes, y nueve de ellas se
+# habrian puesto verdes con el motor apagado. Ver `tools/pruebas/comun.sh`.
+source "$(dirname "$0")/comun.sh"
 # El `grep -v` del aviso: en CI el cliente lleva la clave en la linea de
 # comandos y MySQL avisa por stderr. Sin filtrarlo, el aviso acaba dentro del
 # valor comparado. Ver el comentario largo en 3.8-pagos.sh.
-valor() {
-  real=$($CLIENTE $DB -N -B -e "$2" 2>&1 | grep -v '^mysql: \[Warning\]' | tr -d '\r')
-  if [ "$real" == "$3" ]; then printf "  \033[32m✓\033[0m %-70s %s\n" "$1" "$real"; ok=$((ok+1))
-  else printf "  \033[31m✗\033[0m %-70s esperaba '%s', obtuvo '%s'\n" "$1" "$3" "$real"; fail=$((fail+1)); fi
-}
-
 CR="(SELECT id FROM (SELECT id FROM creators WHERE display_name='anatorres') t)"
 U1="(SELECT id FROM (SELECT id FROM users ORDER BY id LIMIT 1) t)"
 F1="(SELECT id FROM (SELECT id FROM content_formats ORDER BY id LIMIT 1) t)"

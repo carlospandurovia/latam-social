@@ -1,5 +1,8 @@
 # 09 — Estado del proyecto y siguiente iteración
 
+> **Versión 2.9 — 2026-08-27.** Actualizado al cerrar `8.11`, el QA de la Fase
+> 8. Séptima puerta, y tres cosas que la fase daba por hechas.
+>
 > **Versión 2.8 — 2026-08-27.** Actualizado al cerrar `8.5`. El ciclo de
 > contenido queda entero: entregar, revisar, aprobar internamente, **que lo vea
 > el cliente**, publicar, verificar y vigilar la permanencia.
@@ -63,13 +66,13 @@
 
 | | |
 |---|---|
-| Tablas | 70 |
+| Tablas | 70 · **24 columnas puerta**, contadas y no heredadas (`T-57`) |
 | Migraciones | 58, verdes desde cero en MySQL 8 y con vuelta atrás completa |
 | Pruebas de PHPUnit | **711**, 2.247 aserciones |
 | Aserciones de restricción (SQL) | **1.586** en MariaDB, **1.576** en MySQL 8 |
-| Puertas de calidad | 6: formato, análisis estático, fronteras, pruebas, vigencias, nombres entre capas |
+| Puertas de calidad | **7**: formato, análisis estático, fronteras, pruebas, vigencias, nombres entre capas y **las suites** (8.11) |
 | Verificadores fuera de PHPUnit | 4: fixturas, periodos, nombres entre capas y **mensajes de la base** (nuevo en 8.1) |
-| Decisiones registradas | hasta `DEC-153` |
+| Decisiones registradas | hasta `DEC-154` |
 
 ### Lo que se puede hacer hoy por pantalla
 
@@ -222,27 +225,32 @@ Ninguna bloquea código hoy; todas bloquean una iteración futura concreta.
 
 ## 4. Lo que propongo como siguiente iteración
 
-Con `8.5` cerrada, **el ciclo de contenido está entero**: el creador entrega, el
-equipo revisa, el cliente aprueba, se publica, se verifica y se vigila la
-permanencia. De la Fase 8 quedan tres piezas, y ninguna es del camino crítico:
+**La Fase 8 está cerrada** salvo `8.9` (mensajería, que hoy cubre el correo) y
+`8.10` (derechos de uso, contractual y detrás de `T-09`). Lo siguiente en el
+roadmap es **`F9`: facturación y pagos**.
 
-| It. | Qué es | Por qué puede esperar |
-|---|---|---|
-| `8.9` | Hilos de mensajes creador ↔ equipo | hoy se habla por correo y funciona |
-| `8.10` | Derechos de uso (alcance, territorio, exclusividad, vigencia) | es contractual, y `T-09` sigue bloqueando el texto |
-| `8.11` | QA de fase + Phase Review Report | se hace **al final**, y ese final es ahora |
+Y ahí hay una conversación antes de escribir código, porque `F9` es la fase donde
+todo lo que la Fase 8 dejó abierto se convierte en dinero:
 
-Así que propongo **`8.11`, el QA de la Fase 8**, antes que `8.9` y `8.10`.
+| Abierta | Qué hay que decidir |
+|---|---|
+| `Q-61` | cómo se marca una ronda de más como facturada, siendo `content_reviews` append-only |
+| `Q-57` | dónde vive el cargo al cliente por esa ronda |
+| `Q-60` | si `revision_rounds_used` debe existir o derivarse |
+| `Q-40`, `Q-44` | **retención a creadores no domiciliados e IGV de exportación de servicios** — necesitan contador |
+| `DEC-085` | los dos usuarios de base de datos en producción, sin los cuales la bitácora es truncable |
 
-Es lo que el propio roadmap manda, y hay una razón concreta para no saltárselo:
-en las ocho iteraciones de esta fase han salido `T-43`, `T-48`, `T-49`, `T-50`,
-`T-51`, `T-52`, `T-53` y `T-54` — ocho defectos, y **seis de ellos eran pruebas
-que estaban verdes por el motivo equivocado**. Un QA de fase que mire eso de
-frente vale más que dos funcionalidades nuevas encima.
+Las dos de en medio son las que bloquean de verdad: `Q-40` y `Q-44` son
+tributarias peruanas y no las puedo decidir yo. `§56` del prompt maestro dice
+exactamente eso — no implementar supuestos legales sin identificarlos para
+revisión jurídica.
 
-Y hay una cosa que sólo se puede mirar ahora: `F9` es facturación y pagos, y
-entra a leer `over_included`, `verified`, `fulfilled` y `approval_links`. Todo lo
-que la Fase 8 dejó a medias se convierte allí en dinero.
+Así que antes de `9.1` conviene: llevar `Q-40` y `Q-44` a tu contador, y `T-09`
+—el texto de los términos, que lleva seis días bloqueando **toda** activación de
+creadores— a tu abogado.
+
+Mientras eso llega, lo que sí se puede hacer sin decisiones de fuera es **`8.9`**,
+que es pequeña y no toca dinero.
 
 ### Lo que la Fase 8 dejó abierto y no es mío
 

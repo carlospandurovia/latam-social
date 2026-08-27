@@ -7,21 +7,13 @@ DB=${1:-latam_c12}
 # lo que habria hecho fallar el CI entero en el primer INSERT.
 CLIENTE=${MYSQL_CMD:-mariadb}
 
-ok=0; fail=0
+# Los cuatro ayudantes viven en UN sitio desde 8.11: estaban copiados en las
+# treinta suites y habian derivado en seis variantes, y nueve de ellas se
+# habrian puesto verdes con el motor apagado. Ver `tools/pruebas/comun.sh`.
+source "$(dirname "$0")/comun.sh"
 # Un fallo de conexion NO es un rechazo. Sin esta distincion, una base caida
 # hace que todas las pruebas de rechazo "pasen" y el informe salga verde con el
 # motor apagado. Paso de verdad: 25 aserciones en verde contra un socket muerto.
-probar() {
-  salida=$($CLIENTE $DB -e "$2" 2>&1)
-  if echo "$salida" | grep -qiE "ERROR (2002|2003|2005|1045|1049)|Can't connect|Unknown database|Access denied"; then
-    printf "  \033[31m!\033[0m %-64s LA BASE NO RESPONDE\n" "$1"
-    echo "      $(echo "$salida" | grep -i error | head -1)"
-    fail=$((fail+1)); return
-  fi
-  if [ -z "$salida" ] || ! echo "$salida" | grep -qi "ERROR"; then real="OK"; else real="RECHAZO"; fi
-  if [ "$real" == "$3" ]; then printf "  \033[32m✓\033[0m %-62s %s\n" "$1" "$real"; ok=$((ok+1))
-  else printf "  \033[31m✗\033[0m %-62s esperaba %s, obtuvo %s\n" "$1" "$3" "$real"; echo "      $(echo "$salida"|grep -i error|head -1)"; fail=$((fail+1)); fi
-}
 P="(SELECT id FROM campaign_creators ORDER BY id LIMIT 1)"
 R="(SELECT id FROM campaign_requirements ORDER BY id LIMIT 1)"
 # Envueltos en una tabla derivada: desde 8.6 estos entregables hay que APROBARLOS

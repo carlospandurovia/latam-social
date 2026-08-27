@@ -56,7 +56,7 @@ final class EntregablesController
             // 8.3: las rondas cobradas de mas que todavia nadie facturo. No hay
             // tabla de cargos al cliente --`Q-57`-- asi que esta lista ES el
             // registro, y va aqui para que no se facture la campana sin verla.
-            'cargos' => Revisiones::cargosPendientes((int) $campana->id),
+            'cargos' => Revisiones::rondasCobrables((int) $campana->id),
             'puedePublicar' => Permisos::tiene((int) Auth::id(), 'content.publication.manage'),
             'participaciones' => $participaciones->map(function (object $p): object {
                 $p->entregables = Entregables::de((int) $p->id)->map(function (object $e): object {

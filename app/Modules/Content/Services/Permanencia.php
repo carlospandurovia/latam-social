@@ -273,7 +273,7 @@ final class Permanencia
      * `DEC-146` dice que la observación marca y la persona confirma.
      *
      * La sonda escribe como mucho una por publicación y día —`uq_pc_sonda_dia`,
-     * la decimosexta columna puerta—, así que llamarla dos veces el mismo día es
+     * una columna puerta más—, así que llamarla dos veces el mismo día es
      * un `1062` y no un correo repetido al creador.
      */
     public static function anotar(

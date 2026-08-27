@@ -547,7 +547,21 @@ final class Revisiones
     }
 
     /**
-     * Las rondas cobradas de más que todavía nadie facturó, de una campaña.
+     * Las rondas cobradas de más de una campaña.
+     *
+     * ### Se llamaba `cargosPendientes()` y mentía (8.11)
+     *
+     * El QA de la Fase 8 lo midió: no filtra por «facturada» **porque no existe
+     * esa columna**, así que devolvía todas las rondas de más de la campaña,
+     * para siempre. El día que `F9` facture la primera, ésta la seguiría
+     * enseñando como pendiente.
+     *
+     * Y no se arregla añadiendo `invoiced_at` aquí: `content_reviews` es
+     * append-only desde `8.3` (`tg_cvw_inmutable` bloquea **todo** UPDATE), así
+     * que nadie puede sellar la fila. El enlace tiene que ir al revés — de la
+     * línea de factura a la revisión — y eso lo decide `F9`. Es `Q-61`.
+     *
+     * Hasta entonces el nombre dice lo que hace: cobrables, no pendientes.
      *
      * No hay tabla de cargos al cliente todavía —`Q-57`—, así que esto **es** el
      * registro: una lista que la pantalla de la campaña enseña para que no se
@@ -555,7 +569,7 @@ final class Revisiones
      *
      * @return Collection<int, \stdClass>
      */
-    public static function cargosPendientes(int $campanaId): Collection
+    public static function rondasCobrables(int $campanaId): Collection
     {
         return DB::table('content_reviews as rv')
             ->join('deliverable_versions as v', 'v.id', '=', 'rv.deliverable_version_id')

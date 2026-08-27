@@ -114,7 +114,7 @@ final class AprobacionesTest extends TestCase
     }
 
     /**
-     * Un enlace vivo por pieza — la decimoséptima columna puerta.
+     * Un enlace vivo por pieza — otra columna puerta.
      *
      * Dos enlaces vivos son dos respuestas posibles y contradictorias del mismo
      * cliente, y ninguna forma de saber cuál vale.

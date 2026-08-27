@@ -70,7 +70,7 @@ final class Aprobaciones
      * tabla, no se lleva los enlaces. Misma pieza que `5.9` y `7.6`.
      *
      * Si ya había un enlace vivo sobre esta pieza, se **anula** antes. La
-     * decimoséptima columna puerta (`uq_apl_viva`) lo impondría igual con un
+     * columna puerta (`uq_apl_viva`) lo impondría igual con un
      * `1062`; esto es para que el operador no lo vea nunca.
      */
     public static function pedir(object $entregable, string $correo, ?int $usuarioId): string

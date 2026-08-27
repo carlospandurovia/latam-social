@@ -72,6 +72,20 @@ $puertas = [
         'cmd' => $php.' tools'.$ds.'verificar-vigencias.php',
         'arreglo' => null,
     ],
+    // 8.11, del QA de la Fase 8. Los cuatro ayudantes de las suites estaban
+    // copiados en las treinta y habian derivado en SEIS variantes; nueve no
+    // tenian la guarda de conexion, y sin ella un motor caido pone en verde
+    // cada asercion de rechazo. Medido: la suite de 7.6 contra una base que no
+    // existe daba 39 correctas y cero fallidas.
+    //
+    // Y no era una leccion nueva: 2.13 lleva escrito desde la Fase 2 «25
+    // aserciones en verde contra un socket muerto». Se arreglo en un archivo, y
+    // habia treinta.
+    'suites' => [
+        'titulo' => 'Las suites comparten ayudantes, y ninguna miente con el motor apagado',
+        'cmd' => 'python3 tools'.$ds.'verificar-suites.py',
+        'arreglo' => null,
+    ],
     'ci' => [
         'titulo' => 'El CI del repositorio esta al dia',
         'cmd' => $php.' tools'.$ds.'sincronizar-ci.php --comprobar',

@@ -37,7 +37,10 @@ set -u
 DB=${1:-latam_social}
 CLIENTE=${MYSQL_CMD:-mariadb}
 
-ok=0; fail=0
+# Los cuatro ayudantes viven en UN sitio desde 8.11: estaban copiados en las
+# treinta suites y habian derivado en seis variantes, y nueve de ellas se
+# habrian puesto verdes con el motor apagado. Ver `tools/pruebas/comun.sh`.
+source "$(dirname "$0")/comun.sh"
 
 comprobar() {   # nombre, esperado, obtenido
   if [ "$2" == "$3" ]; then

@@ -17,31 +17,15 @@ set -u
 DB=${1:-latam_social}
 CLIENTE=${MYSQL_CMD:-mariadb}
 
-ok=0; fail=0
-probar() {
-  salida=$($CLIENTE $DB -e "$2" 2>&1)
-  if [ -z "$salida" ] || ! echo "$salida" | grep -qi "ERROR"; then real="OK"; else real="RECHAZO"; fi
-  if [ "$real" == "$3" ]; then printf "  \033[32m✓\033[0m %-70s %s\n" "$1" "$real"; ok=$((ok+1))
-  else printf "  \033[31m✗\033[0m %-70s esperaba %s, obtuvo %s\n" "$1" "$3" "$real"; echo "      $(echo "$salida"|grep -i error|head -1)"; fail=$((fail+1)); fi
-}
-valor() {
-  real=$($CLIENTE $DB -N -B -e "$2" 2>&1 | grep -v '^mysql: \[Warning\]' | tr -d '\r')
-  if [ "$real" == "$3" ]; then printf "  \033[32m✓\033[0m %-70s %s\n" "$1" "$real"; ok=$((ok+1))
-  else printf "  \033[31m✗\033[0m %-70s esperaba '%s', obtuvo '%s'\n" "$1" "$3" "$real"; fail=$((fail+1)); fi
-}
-
+# Los cuatro ayudantes viven en UN sitio desde 8.11: estaban copiados en las
+# treinta suites y habian derivado en seis variantes, y nueve de ellas se
+# habrian puesto verdes con el motor apagado. Ver `tools/pruebas/comun.sh`.
+source "$(dirname "$0")/comun.sh"
 # Un RECHAZO solo prueba algo si rechaza por SU motivo. Un `SIGNAL` de mas de
 # 128 caracteres se convierte en MySQL/Percona en `1648 Data too long for
 # condition item`, que tambien es un error, y con `probar ... RECHAZO` sale
 # verde igual. Cuatro mensajes llevaban rotos asi desde 7.4. Gate permanente:
 # `tools/verificar-mensajes.py`; la leccion, aqui.
-porque() {
-  salida=$($CLIENTE $DB -e "$2" 2>&1)
-  if echo "$salida" | grep -q "$3"; then printf "  \033[32m✓\033[0m %-70s %s\n" "$1" "$3"; ok=$((ok+1))
-  else printf "  \033[31m✗\033[0m %-70s esperaba rechazo por '''%s'''\n" "$1" "$3"
-       echo "      $(echo "$salida"|grep -i error|head -1)"; fail=$((fail+1)); fi
-}
-
 echo ""
 echo "==================================================================================="
 echo "  7.4 - La lista corta de la campana (BR-CREATOR-008)"

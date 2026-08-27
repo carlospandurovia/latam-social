@@ -14,41 +14,13 @@
 DB=${1:-latam_social}
 CLIENTE=${MYSQL_CMD:-mariadb}
 
-ok=0; fail=0
-probar() {
-  salida=$($CLIENTE $DB -e "$2" 2>&1)
-  if echo "$salida" | grep -qiE "ERROR (2002|2003|2005|1045|1049)|Can't connect|Unknown database|Access denied"; then
-    printf "  \033[31m!\033[0m %-70s LA BASE NO RESPONDE\n" "$1"
-    echo "      $(echo "$salida" | grep -i error | head -1)"
-    fail=$((fail+1)); return
-  fi
-  if [ -z "$salida" ] || ! echo "$salida" | grep -qi "ERROR"; then real="OK"; else real="RECHAZO"; fi
-  if [ "$real" == "$3" ]; then printf "  \033[32m✓\033[0m %-70s %s\n" "$1" "$real"; ok=$((ok+1))
-  else printf "  \033[31m✗\033[0m %-70s esperaba %s, obtuvo %s\n" "$1" "$3" "$real"; echo "      $(echo "$salida"|grep -i error|head -1)"; fail=$((fail+1)); fi
-}
-
+# Los cuatro ayudantes viven en UN sitio desde 8.11: estaban copiados en las
+# treinta suites y habian derivado en seis variantes, y nueve de ellas se
+# habrian puesto verdes con el motor apagado. Ver `tools/pruebas/comun.sh`.
+source "$(dirname "$0")/comun.sh"
 # Para lo que no se comprueba aceptando o rechazando, sino leyendo el valor que
 # quedo. Las marcas de DEC-065 las pone un disparador: preguntar si el INSERT
 # "paso" no dice nada; hay que mirar QUE escribio.
-valor() {
-  # El `grep -v` no es adorno. En CI el cliente lleva la clave en la linea de
-  # comandos y MySQL avisa por STDERR:
-  #
-  #   mysql: [Warning] Using a password on the command line interface can be insecure.
-  #
-  # Con `2>&1` ese aviso se mezclaba con el valor leido y la comparacion fallaba
-  # con un mensaje absurdo: «esperaba 'unique', obtuvo 'mysql: [Warning]...'».
-  # Aqui no pasaba porque el cliente local no lleva clave. Cuarta divergencia de
-  # entorno de esta fase.
-  #
-  # Y NO se usa `2>/dev/null`: entonces un fallo de conexion daria una cadena
-  # vacia y la asercion diria «esperaba X, obtuvo ''», que es peor todavia
-  # porque parece un fallo de la regla y es un fallo de la base.
-  real=$($CLIENTE $DB -N -B -e "$2" 2>&1 | grep -v '^mysql: \[Warning\]' | tr -d '\r')
-  if [ "$real" == "$3" ]; then printf "  \033[32m✓\033[0m %-70s %s\n" "$1" "$real"; ok=$((ok+1))
-  else printf "  \033[31m✗\033[0m %-70s esperaba '%s', obtuvo '%s'\n" "$1" "$3" "$real"; fail=$((fail+1)); fi
-}
-
 CR="(SELECT id FROM (SELECT id FROM creators WHERE display_name='anatorres') t)"
 CR2="(SELECT id FROM (SELECT id FROM creators WHERE display_name='luisvega') t)"
 PA="(SELECT id FROM (SELECT id FROM countries WHERE iso2='PE') t)"

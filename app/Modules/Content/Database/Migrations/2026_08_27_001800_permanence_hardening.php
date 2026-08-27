@@ -91,7 +91,7 @@ return new class extends Migration
                 ->references('id')->on('users')->restrictOnDelete();
         });
 
-        // --- Decimosexta columna puerta: una sonda por publicación y día -----
+        // --- Columna puerta: una sonda por publicación y día ------------------
         //
         // `docs/18` §2 dice que en producción el planificador es una línea de
         // cron. Una línea de cron duplicada --dos servidores, o alguien que
