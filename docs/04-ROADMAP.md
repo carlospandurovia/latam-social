@@ -189,15 +189,17 @@ Iterativa y exhaustiva, tal como pide la especificación. **Nada de frontend aqu
 | 8.10 | Derechos de uso (`UsageRight`): alcance, territorio, canales, exclusividad, vigencia |
 | 8.11 | ✅ **Cerrada (2026-08-27).** No añade funcionalidad: añade la **séptima puerta**. De los trece defectos de la fase, **ocho eran comprobaciones que existían y no comprobaban lo que decían**. Los ayudantes de las suites estaban copiados treinta veces en seis variantes, y **nueve se habrían puesto verdes con el motor apagado** — medido: `3 correctas, 0 fallidas` contra una base que no existe (`T-55`). `cargosPendientes()` devolvía todas las rondas para siempre porque no existe la columna que decía filtrar (`T-56`, abre `Q-61`). Y el contador de columnas puerta iba por 17 cuando son 24 (`T-57`). `DEC-154` pone los ayudantes en un archivo y un trinquete sobre las 297 aserciones que todavía sólo afirman que algo falló |
 | 8.12 | ✅ **Cerrada (2026-08-27).** Sin migración. La sociedad que factura **no se elige, se resuelve** —`uq_lec_country` + `tg_lec_sin_solape_*` dejan como mucho una por país y fecha— y lo que faltaba era decirlo: la ficha da la sociedad **y su motivo** (`DEC-155`). Al ir a enseñarlo salió `T-58`: el bloque imprimía la sociedad que tocaría HOY bajo el rótulo de la guardada, y el comentario de encima describía código que nunca se escribió. Y `DEC-156` fija que **la campaña decide quién paga a cada creador**, sea cual sea su país: `BR-LE-009` pierde el «en el MVP» y sube a 🔴. Eso cambia el eje de `Q-40`, que pasa a ser dos tablas —CTS Perú paga, CTS Colombia paga— |
+| 8.13 | ✅ **Cerrada (2026-08-27).** Sin código. `T-59`: `DEC-156` decía que «`payouts` no tiene ninguna columna de sociedad» y era falso — `payout_batches.legal_entity_id` existe, y un pago no puede existir sin lote. Quien paga sí está dicho; lo que **no** está dicho es que sea quien debe, porque nada ata el lote a las campañas cuyos asientos liquida. `DEC-157` adelanta esa comprobación de `9.11` a la iteración que estrene `payout_batches`, y a la base. `DEC-020` deja de ser PROPUESTA |
 
 **Dependencias:** F7.
 
 ### F9 — Finanzas
 | It. | Contenido |
 |---|---|
-| 9.1 | Monedas, tipo de cambio con historial y proveedor configurable |
-| 9.2 | Ledger append-only del creador + estados de asiento |
-| 9.3 | Devengo automático por eventos de campaña |
+| 9.1 | ✅ **Cerrada (2026-08-27).** `exchange_rates` llevaba en el esquema desde la Fase 2 con cero filas y cero lecturas. Tres cosas que sólo se ven con datos: **(a)** dos fuentes podían tener tasa el mismo día y nada decía cuál se aplica —el `EMPATE` de `CoberturaFacturacion` otra vez—, y lo arregla `fx_official_sources` con periodos (`DEC-158`); **(b)** SUNAT publica compra y venta y en una columna `rate` sólo cabía una, así que nace `side` y **sin valor por defecto**, porque elegirlo es contable y no técnico (`DEC-159`, abre `Q-63`); **(c)** una tasa publicada se podía reescribir pese a `BR-FIN-009`, y ahora `tg_fx_inmutable` bloquea el `UPDATE` entero (abre `Q-62`). Un día sin tasa usa la anterior **y guarda la fecha de esa tasa**, con un corte de 10 días para que un cron parado no se disfrace de feriado (`DEC-160`). Vigesimoquinta columna puerta. De paso `T-60` —tres reglas que estaban puestas y no eran ellas las que contestaban— y `DEC-161`, que da a `porque()` la alternancia que faltaba para empezar a bajar las 297 |
+| 9.2 | **Adelantada:** el cron de Decolecta, la pantalla de tipos de cambio y las credenciales. `9.1` dejó la máquina y falta quien le dé cuerda |
+| 9.3 | Ledger append-only del creador + estados de asiento *(era 9.2)* |
+| 9.4 | Devengo automático por eventos de campaña *(era 9.3)* |
 | 9.4 | Aprobación de ganancias, ajustes, bonos, retenciones |
 | 9.5 | Requisitos documentales por país/régimen (recibo por honorarios, factura, etc.) |
 | 9.6 | Lotes de pago: generación, aprobación (doble control sobre umbral), exportación bancaria |
@@ -205,7 +207,7 @@ Iterativa y exhaustiva, tal como pide la especificación. **Nada de frontend aqu
 | 9.8 | Vista "Mis ingresos" en el portal del creador |
 | 9.9 | Facturación al cliente **emitida desde la entidad legal**: hitos, registro de OC, documento con snapshot del emisor, instrucciones de pago de sus cuentas, CxC, cobro, conciliación |
 | 9.10 | Rentabilidad por campaña (P&L interno) **y por sociedad**, con control de acceso estricto |
-| 9.11 | Validación que bloquea `billing_legal_entity ≠ settlement_legal_entity` en el MVP (`DEC-020`, `BR-LE-009`) |
+| ~~9.11~~ | ⬆️ **Adelantada por `DEC-157` a la iteración que estrene `payout_batches`.** Era la validación de `billing_legal_entity ≠ settlement_legal_entity`, y una regla 🔴 en la posición 11 de 14 llega después de que diez iteraciones la den por buena. Va **a la base** y es cross-table, así que es un disparador. `DEC-020` ya no es «en el MVP»: es la regla (`DEC-156`) |
 | 9.12 | **Series y numeración correlativa por entidad legal**, con asignación bajo bloqueo y tests de concurrencia (`DEC-021`, `BR-LE-007`) |
 | 9.13 | **Matriz de propósitos obligatorios por país** + bloqueo de activación sin cobertura + `integration_connection_id` en documentos (`DEC-028`, `DEC-033`) |
 | 9.14 | QA de fase + **auditoría de seguridad específica de finanzas** |

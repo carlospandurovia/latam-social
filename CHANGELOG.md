@@ -2,6 +2,80 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 
+## [9.1 · Tipos de cambio] — 2026-08-27
+
+Empieza la fase de finanzas. `exchange_rates` llevaba en el esquema desde la
+Fase 2 con **cero filas y cero lecturas**, y tenía tres agujeros que sólo se ven
+cuando la tabla tiene datos.
+
+### Añadido
+- **`fx_official_sources`**: qué fuente manda para cada par de monedas y desde
+  cuándo, con periodos. Antes, dos fuentes podían tener tasa el mismo día y nada
+  decía cuál se aplica — el mismo empate que una vez emitió una factura desde la
+  sociedad equivocada (`DEC-158`). Vigesimoquinta columna puerta.
+- **`side`** en `exchange_rates`: SUNAT publica compra y venta el mismo día y no
+  son intercambiables. `Cambio::tasa()` exige el lado **sin valor por defecto**,
+  porque un defecto ahí es cómo una decisión contable se toma sola (`DEC-159`).
+- **`Cambio`**: `tasa()`, `convertir()`, `declararOficial()`, `anotar()`.
+  `convertir()` devuelve las siete cosas de `BR-FIN-004`, no un número. La
+  multiplicación la hace el motor con `DECIMAL` — **`bcmath` no se usa a
+  propósito**: no está en todos los hostings compartidos, y descubrirlo en
+  producción sería descubrirlo convirtiendo dinero.
+- Un día sin tasa usa la última anterior y **guarda la fecha de esa tasa**, no la
+  de la operación. Con un corte de 10 días, para que un cron parado no se
+  disfrace de feriado (`DEC-160`).
+- Suite `9.1-cambio.sh`: 21 aserciones, verdes en los dos motores.
+
+### Corregido
+- **`tg_fx_inmutable`**: una tasa publicada se podía reescribir, pese a que
+  `BR-FIN-009` dice que los históricos no se recalculan. `tg_fx_no_delete` estaba
+  desde `3.12`; el `UPDATE` no lo miraba nadie.
+- **`fk_fx_source`**: la fuente era texto libre, así que una tasa podía decir que
+  la publicó `bcrp` sin que nadie hubiera dicho nunca quién es `bcrp`.
+- **`T-60`, tres reglas puestas que no eran las que contestaban**: `side` nació
+  `VARCHAR(4)` y el ancho de la columna respondía antes que `ck_fx_side`; el
+  comentario sobre mayúsculas en la clave ajena era falso (el cotejamiento no
+  distingue) y ahora está afirmado en la suite; y la primera migración del
+  proyecto que sembraba datos rompió `recolectar-esquema.php`.
+
+### Cambiado
+- **`porque()` admite alternancia** (`DEC-161`). Los dos motores contestan cosas
+  distintas a la misma regla —nombre en uno, mensaje en el otro— y eso obligaba a
+  dejar toda regla de `Restriccion` en un `probar … RECHAZO` a secas. Es la
+  herramienta que faltaba para bajar el trinquete de las 297.
+- El comentario de `BuscadorDeCreadores` decía «llega en 9.1». Llegó: ahora dice
+  lo que falta de verdad, que es `Q-63`.
+
+### No se hizo
+- **Traer tasas de ningún sitio.** El cron con Decolecta, la pantalla y las
+  credenciales son `9.2`. Aquí está la máquina; falta quien le dé cuerda.
+
+## [8.13 · Una corrección y un adelanto] — 2026-08-27
+
+Sin código. Un error mío de ayer, y una regla 🔴 que llegaba diez iteraciones
+tarde.
+
+### Corregido
+- **`T-59`: `DEC-156` afirmaba que «`payouts` no tiene ninguna columna de
+  sociedad», y es falso.** `payout_batches.legal_entity_id` existe desde la
+  migración de finanzas, y un pago no puede existir sin lote. Quien paga **sí**
+  está dicho. Lo escribí mirando `payouts` y no mirando su lote — el mismo error
+  que `T-58` una hora antes: afirmar sobre un dato sin leer la fila.
+- Lo que de verdad falta es otra cosa: **nada garantiza que sea quien debe.**
+  `ledger_entries` ata un asiento a su campaña y a su pago, la campaña lleva su
+  sociedad, y entre los dos extremos no hay ninguna restricción. Hoy un lote de
+  CTS Colombia podría pagar el trabajo de una campaña de CTS Perú.
+
+### Cambiado
+- **`DEC-157`: la comprobación de `BR-LE-009` se adelanta de `9.11` a la
+  iteración que estrene `payout_batches`**, y baja a la base. Una regla 🔴 en la
+  posición 11 de 14 llega después de que diez iteraciones se hayan construido
+  dándola por buena — es la forma de fallo de `8.4`, pero aquí lo que se cuela
+  no es una ronda: es dinero saliendo de la sociedad equivocada.
+- **`DEC-020` deja de ser PROPUESTA.** Preguntaba si permitir que la entidad que
+  factura y la que liquida divergieran; `DEC-156` la contesta con la opción C y
+  además le quita el «en el MVP».
+
 ## [8.12 · La sociedad que factura, y quién paga] — 2026-08-27
 
 Sin migración. Un defecto de dinero que llevaba escondido desde 7.1, y una
@@ -32,7 +106,8 @@ decisión de negocio que faltaba por escribir.
 - **`BR-LE-009` pierde el «en el MVP» y sube a 🔴** (`DEC-156`): la sociedad de la
   campaña paga a todos sus creadores, sea cual sea el país de cada uno. El país
   del creador determina **cómo** se le paga —retención, moneda, documento—, nunca
-  **quién**. Lo implementa `F9`: hoy `payouts` no tiene columna de sociedad.
+  **quién**. Lo implementa `F9`. *(La primera versión de esta línea decía que
+  `payouts` no tiene columna de sociedad. Es falso — ver 8.13, `T-59`.)*
 - **`Q-40` cambia de eje.** La columna «¿quién le paga?» no era función del país
   del creador, y con ella la tabla le pedía al contador peruano que opinara sobre
   pagos colombianos. Ahora son dos tablas: *CTS Perú paga* y *CTS Colombia paga*.

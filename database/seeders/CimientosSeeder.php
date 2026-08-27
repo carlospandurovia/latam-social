@@ -38,6 +38,25 @@ final class CimientosSeeder extends Seeder
             );
         }
 
+        // 9.1: quién publica tipos de cambio. Van aquí y no en la migración
+        // porque ninguna migración de este proyecto siembra datos —y la primera
+        // que lo intentó rompió `recolectar-esquema.php`, que ejecuta los
+        // `up()` sin Laravel entero—. La clave ajena de `exchange_rates` no las
+        // necesita para crearse; las necesita quien vaya a insertar una tasa.
+        $fuentes = [
+            ['code' => 'sunat', 'name' => 'SUNAT',
+                'description' => 'Tipo de cambio publicado por SUNAT. Es el que la ley peruana pide citar.'],
+            ['code' => 'manual', 'name' => 'Carga manual',
+                'description' => 'Tecleado por una persona del equipo, con su nombre en la bitacora.'],
+        ];
+
+        foreach ($fuentes as $f) {
+            DB::table('fx_sources')->updateOrInsert(
+                ['code' => $f['code']],
+                $f + ['is_active' => true, 'updated_at' => $ahora, 'created_at' => $ahora],
+            );
+        }
+
         // is_active marca dónde se opera hoy, no dónde existe el país.
         $paises = [
             ['iso2' => 'PE', 'iso3' => 'PER', 'numeric_code' => '604', 'name' => 'Perú',      'phone_code' => '+51',  'default_currency_code' => 'PEN', 'timezone' => 'America/Lima',        'is_active' => true],

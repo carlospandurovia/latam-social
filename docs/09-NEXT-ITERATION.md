@@ -1,5 +1,15 @@
 # 09 — Estado del proyecto y siguiente iteración
 
+> **Versión 3.2 — 2026-08-27.** Actualizado al cerrar `9.1`. **Empieza la fase
+> de finanzas.** `exchange_rates` llevaba desde la Fase 2 en el esquema con cero
+> filas y cero lecturas; ahora hay una fuente oficial por par con periodos, los
+> dos lados de SUNAT caben sin pisarse, y una tasa publicada no se reescribe.
+>
+> **Versión 3.1 — 2026-08-27.** Actualizado al cerrar `8.13`. **Con una
+> corrección:** la 3.0 daba por bueno que `payouts` no tenía columna de sociedad,
+> y `payout_batches` la tiene desde la migración de finanzas (`T-59`). Lo que
+> falta no es la columna: es que nada garantice que sea la correcta.
+>
 > **Versión 3.0 — 2026-08-27.** Actualizado al cerrar `8.12`. La sociedad que
 > factura una campaña ya se explica en pantalla, y `DEC-156` fija que **esa
 > sociedad paga a todos sus creadores**, sea cual sea el país de cada uno. Eso
@@ -71,13 +81,13 @@
 
 | | |
 |---|---|
-| Tablas | 70 · **24 columnas puerta**, contadas y no heredadas (`T-57`) |
-| Migraciones | 58, verdes desde cero en MySQL 8 y con vuelta atrás completa |
-| Pruebas de PHPUnit | **713**, 2.259 aserciones |
-| Aserciones de restricción (SQL) | **1.586** en MariaDB, **1.576** en MySQL 8 |
+| Tablas | 72 · **25 columnas puerta**, contadas y no heredadas (`T-57`) |
+| Migraciones | 59, verdes desde cero en MySQL 8 y con vuelta atrás completa |
+| Pruebas de PHPUnit | **726**, 2.322 aserciones |
+| Aserciones de restricción (SQL) | **1.628** en MariaDB, **1.618** en MySQL 8 · 31 suites |
 | Puertas de calidad | **7**: formato, análisis estático, fronteras, pruebas, vigencias, nombres entre capas y **las suites** (8.11) |
 | Verificadores fuera de PHPUnit | 4: fixturas, periodos, nombres entre capas y **mensajes de la base** (nuevo en 8.1) |
-| Decisiones registradas | hasta `DEC-156` |
+| Decisiones registradas | hasta `DEC-161` |
 
 ### Lo que se puede hacer hoy por pantalla
 
@@ -183,8 +193,15 @@ porque no hay nada que elegir: el esquema garantiza como mucho una por país y
 fecha. Al ir a enseñarlo salió `T-58` — la pantalla llevaba desde 7.1 imprimiendo
 la sociedad que tocaría **hoy** bajo el rótulo de la guardada.
 
+Y desde `9.1`, **el sistema sabe convertir dinero** — y sabe cuándo no debe.
+Quién publica el tipo de cambio de cada par se declara con periodos, así que el
+histórico se sigue explicando con la fuente de entonces; compra y venta caben sin
+pisarse; una tasa publicada no se reescribe; y un domingo se convierte con la
+tasa del viernes **guardando el viernes**. Lo que todavía no hace es traerlas:
+eso es `9.2`.
+
 Eso completa **7.0 a 7.7 del roadmap**, más `F4.9`, `5.9`, `4.1`, `8.1`, `8.2`,
-`8.3`, `8.6`, `8.7`, `8.8` y `8.12`.
+`8.3`, `8.6`, `8.7`, `8.8`, `8.12` y `9.1`.
 
 > **Y por primera vez el sistema se ha usado.** Tres fallos salieron de ahí en una
 > tarde: un 500 al repetir un formato en el brief de un mercado, la bitácora
@@ -233,67 +250,44 @@ Ninguna bloquea código hoy; todas bloquean una iteración futura concreta.
 | `Q-55` | ¿Se valida el formato del documento fiscal por país? | Alta de clientes en el 2º país |
 | `Q-34` | Colombia: ¿DIAN directo o proveedor certificado? *(recomendé proveedor, contra lo que dijiste — revísalo)* | F12 |
 | `Q-38` | ¿Cuántos desarrolladores? Con uno solo, las estimaciones ×1,7 | Todo el plan |
+| `Q-62` | Si la fuente **corrige** un tipo de cambio ya publicado, ¿qué se hace? Hoy `tg_fx_inmutable` no deja tocarlo, y hoy da igual porque la tabla está vacía | Antes de la primera corrección real |
+| `Q-63` | ¿Qué lado del tipo de cambio aplica a cada operación —**compra o venta**— y si depende de si es ingreso o egreso? Es contable, no técnica. Mientras no esté, el buscador de creadores sigue sin convertir tarifas | **Antes del primer pago o factura en otra moneda** |
 
 ---
 
 ## 4. Lo que propongo como siguiente iteración
 
-**La Fase 8 está cerrada** salvo `8.9` (mensajería, que hoy cubre el correo) y
-`8.10` (derechos de uso, contractual y detrás de `T-09`). Lo siguiente en el
-roadmap es **`F9`: facturación y pagos**.
+**`9.2` — que las tasas lleguen solas.**
 
-Y ahí hay una conversación antes de escribir código, porque `F9` es la fase donde
-todo lo que la Fase 8 dejó abierto se convierte en dinero:
+`9.1` dejó la máquina montada y vacía. Falta:
 
-| Abierta | Qué hay que decidir |
-|---|---|
-| `Q-61` | cómo se marca una ronda de más como facturada, siendo `content_reviews` append-only |
-| `Q-57` | dónde vive el cargo al cliente por esa ronda |
-| `Q-60` | si `revision_rounds_used` debe existir o derivarse |
-| `Q-40`, `Q-44` | **retención a creadores no domiciliados e IGV de exportación de servicios** — necesitan contador |
-| `DEC-085` | los dos usuarios de base de datos en producción, sin los cuales la bitácora es truncable |
+- el adaptador de **Decolecta** (`GET https://api.decolecta.com/v1/tipo-cambio/sunat?date=…`,
+  cabecera `Authorization: Bearer …`, devuelve `buy_price` y `sell_price`);
+- el comando y su **cron diario**;
+- la **pantalla de tipos de cambio**: fuente oficial por par, histórico y carga
+  manual;
+- y **dónde vive la credencial**.
 
-Las dos de en medio son las que bloquean de verdad: `Q-40` y `Q-44` son
-tributarias peruanas y no las puedo decidir yo. `§56` del prompt maestro dice
-exactamente eso — no implementar supuestos legales sin identificarlos para
-revisión jurídica.
+### La credencial: lo que voy a proponer, y por qué no es exactamente lo que pediste
 
-Así que antes de `9.1` conviene: llevar `Q-40` y `Q-44` a tu contador, y `T-09`
-—el texto de los términos, que lleva seis días bloqueando **toda** activación de
-creadores— a tu abogado.
+Dijiste que la configurarías en la pantalla de administración. Se puede, y lo voy
+a hacer — pero con una vuelta, porque tu propia regla dice *«no almacenar
+secretos en texto plano en BD cuando exista alternativa segura»*.
 
-Mientras eso llega, lo que sí se puede hacer sin decisiones de fuera es **`8.9`**,
-que es pequeña y no toca dinero.
+Lo que propongo: la clave se lee de **`.env`** si está ahí, y si no, de una
+columna **cifrada** que escribe la pantalla. La pantalla **nunca la muestra** —
+sólo los últimos cuatro caracteres y de dónde se está leyendo—. Así no tienes que
+entrar por SSH para configurarla, y la clave no queda en claro en ninguna tabla.
 
-### Las tres consultas de fuera están escritas
+Lo digo antes de construirlo porque es tu decisión, no mía. **Y te avisaré cuando
+esté lista para que la cargues**, como pediste.
 
-`docs/20-CONSULTAS-EXTERNAS.md`: `T-09` para el abogado, `Q-40` y `Q-44` para el
-contador, y los dos `GRANT` de `DEC-085` para el servidor. Cada sección está
-escrita para reenviarse tal cual, y dice **qué dato exacto** necesita el sistema
-de vuelta — no una explicación, un dato que se pueda guardar.
+**Una cosa que hay que saber antes de empezarla:** Decolecta publica el tipo de
+cambio **de SUNAT**, y SUNAT sólo publica **USD → PEN**. No hay ahí COP→PEN,
+MXN→PEN ni nada más. Para los demás pares hará falta otra fuente, o carga
+manual — y `fx_official_sources` es exactamente donde eso se dice, par por par,
+en vez de descubrirse el día que haya que pagar a un creador mexicano.
 
-### Lo que la Fase 8 dejó abierto y no es mío
-
-`Q-59`: **¿la ventana de permanencia se alarga por los días que el post estuvo
-caído?** Hoy no. Si el post estuvo tres días fuera, la marca perdió tres días de
-exposición y el creador cumple igual. Alargarla sería lo justo, y alargarla por
-mi cuenta sería inventarme una cláusula del contrato. Va con `T-09`.
-
-`Q-60`: **¿debería existir `deliverables.revision_rounds_used`?** Las revisiones
-son append-only, así que el número se puede derivar de un `COUNT(*)` y entonces
-no hay contador que proteger. Se decide en `F9`, cuando ese número sea una línea
-de factura.
-
-### Lo que sigue sin poder hacerse, y no es código
-
-`T-09` —el texto de los términos— lleva **cinco días** bloqueando toda activación
-de creadores. El ciclo entero está construido y probado de punta a punta —se
-recluta, se invita, se acepta, se entrega, se revisa, se aprueba, se publica y se
-verifica— y **no se puede usar con una persona real** hasta que exista ese texto.
-
-Es, con diferencia, lo más caro que hay abierto.
-
----
 
 ## 5. Deuda de documentación reconocida
 

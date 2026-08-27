@@ -8,6 +8,12 @@ INSERT INTO currencies (code,name,symbol,decimal_places,is_active) VALUES
  ('USD','Dolar estadounidense','$',2,1),
  ('COP','Peso colombiano','$',2,1);
 
+-- 9.1: las fuentes de tipo de cambio. Van antes que nada financiero porque
+-- `exchange_rates.source` es clave ajena contra ellas desde esa iteracion.
+INSERT INTO fx_sources (code,name,description,is_active,created_at) VALUES
+ ('sunat','SUNAT','Tipo de cambio publicado por SUNAT. Es el que la ley peruana pide citar.',1,NOW(3)),
+ ('manual','Carga manual','Tecleado por una persona del equipo, con su nombre en la bitacora.',1,NOW(3));
+
 INSERT INTO countries (iso2,iso3,numeric_code,name,phone_code,default_currency_code,timezone,is_active) VALUES
  ('PE','PER','604','Peru','+51','PEN','America/Lima',1),
  ('CO','COL','170','Colombia','+57','COP','America/Bogota',1),

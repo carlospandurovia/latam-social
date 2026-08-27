@@ -48,3 +48,8 @@
 # conformidad del cliente-- y su clave ajena encadena version y entregable. Usa
 # la pieza numero 3 de luisvega, para no pisarse con 8.7 ni con 8.8.
 8.5-aprobacion
+# 9.1 escribe en `exchange_rates` y `fx_official_sources`, que no las toca nadie
+# mas. Limpia sus propias filas de `fx_official_sources` al empezar --no puede
+# limpiar `exchange_rates`, que entro en la lista de 3.12-- y usa fechas de
+# agosto de 2026 que ninguna otra suite emplea.
+9.1-cambio

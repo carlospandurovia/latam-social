@@ -88,6 +88,18 @@ valor() {
 # La forma buena de afirmar un rechazo: no vale con que falle, tiene que fallar
 # POR ESO. Nacio en 8.1 despues de que cinco aserciones de aquella suite
 # estuvieran verdes por un `1451` que no tenia nada que ver con lo que probaban.
+#
+# El fragmento es una EXPRESION REGULAR, y eso importa (9.1). Los dos motores
+# contestan cosas distintas a la MISMA regla cuando la creo `Restriccion`:
+#
+#   MariaDB / MySQL 8 (CHECK nativo)  -> "CONSTRAINT `ck_fos_dates` failed"
+#   Percona 5.7 (disparador)          -> "Una fuente oficial no puede terminar..."
+#
+# El nombre sale en uno y el mensaje en el otro, y no coinciden en ningun texto.
+# Por eso se admite alternancia: `porque ... 'ck_fos_dates|antes de empezar'`
+# afirma el motivo en los dos motores. Sin esto, toda regla de `Restriccion`
+# tenia que quedarse en un `probar ... RECHAZO` a secas --que es la mitad de lo
+# que explica por que hay 297 de esos--.
 porque() {
   salida=$($CLIENTE $DB -e "$2" 2>&1)
 
@@ -96,7 +108,7 @@ porque() {
     fail=$((fail+1)); return
   fi
 
-  if echo "$salida" | grep -q "$3"; then _bien "$1" "$3"
+  if echo "$salida" | grep -qE "$3"; then _bien "$1" "$3"
   else _mal "$1" "esperaba rechazo por '$3'"
        echo "      $(echo "$salida" | grep -i error | head -1)"; fi
 }

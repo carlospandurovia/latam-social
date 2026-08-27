@@ -37,20 +37,74 @@ CREATE TABLE currencies (
 
 -- El tipo de cambio de una operacion es el de SU fecha (BR-FIN-009).
 -- rate_date es DATE: un tipo de cambio es de un dia, no de un instante.
+-- 9.1 -- El catalogo de fuentes. Hasta esa iteracion `exchange_rates.source`
+-- era texto libre: una tasa podia decir que la publico 'bcrp' sin que nadie
+-- hubiera dicho nunca quien es 'bcrp', y de comparar ese texto con
+-- `fx_official_sources.source_code` depende que tasa se aplica.
+--
+-- La clave ajena NO distingue mayusculas: el cotejamiento es
+-- `utf8mb4_unicode_ci` y 'SUNAT' entra igual que 'sunat'. Comprobado contra el
+-- motor, y afirmado en la suite para que no se suponga lo contrario.
+CREATE TABLE fx_sources (
+  id          BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  code        VARCHAR(40)  NOT NULL,
+  name        VARCHAR(80)  NOT NULL,
+  description VARCHAR(255) NULL,
+  is_active   TINYINT(1)   NOT NULL DEFAULT 1,
+  created_at  DATETIME(3)  NULL,
+  updated_at  DATETIME(3)  NULL,
+  UNIQUE KEY uq_fxs_code (code)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- `side` (9.1): SUNAT publica compra y venta el MISMO dia y no son
+-- intercambiables. Con una sola columna `rate` solo cabe una, y elegir cual
+-- guardar seria tomar por cuenta propia una decision contable. Entra en la
+-- clave para que las dos quepan sin pisarse. Cual aplica a cada operacion es
+-- `Q-63`.
 CREATE TABLE exchange_rates (
   id                 BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
   base_currency_code CHAR(3)        NOT NULL,
   quote_currency_code CHAR(3)       NOT NULL,
   rate_date          DATE           NOT NULL,
   rate               DECIMAL(18,8)  NOT NULL,
+  side               VARCHAR(10)    NOT NULL DEFAULT 'mid',
   source             VARCHAR(40)    NOT NULL,
   fetched_at         DATETIME(3)    NOT NULL,
   created_at         DATETIME(3)    NULL,
   updated_at         DATETIME(3)    NULL,
-  UNIQUE KEY uq_exchange_rates (base_currency_code, quote_currency_code, rate_date, source),
+  UNIQUE KEY uq_fx_rate (base_currency_code, quote_currency_code, rate_date, source, side),
   KEY ix_exchange_rates_lookup (base_currency_code, quote_currency_code, rate_date),
+  CONSTRAINT fk_fx_source FOREIGN KEY (source) REFERENCES fx_sources(code) ON DELETE RESTRICT,
   CONSTRAINT ck_exchange_rates_positive CHECK (rate > 0),
-  CONSTRAINT ck_exchange_rates_distinct CHECK (base_currency_code <> quote_currency_code)
+  CONSTRAINT ck_exchange_rates_distinct CHECK (base_currency_code <> quote_currency_code),
+  CONSTRAINT ck_fx_side CHECK (side IN ('buy','sell','mid'))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 9.1 -- Quien manda para cada par, y desde cuando.
+--
+-- `uq_exchange_rates` incluia `source` a proposito --dos fuentes pueden
+-- discrepar el mismo dia y hay que poder decir de cual salio la que se aplico--
+-- pero de ahi no salia CUAL SE APLICA. Es el mismo empate que una vez emitio
+-- una factura desde la sociedad equivocada, y la respuesta es la misma que
+-- entonces: la columna puerta mas la regla de no solape.
+CREATE TABLE fx_official_sources (
+  id                  BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  base_currency_code  CHAR(3)     NOT NULL,
+  quote_currency_code CHAR(3)     NOT NULL,
+  source_code         VARCHAR(40) NOT NULL,
+  valid_from          DATE        NOT NULL,
+  valid_to            DATE        NULL,
+  created_at          DATETIME(3) NULL,
+  updated_at          DATETIME(3) NULL,
+  current_gate TINYINT UNSIGNED GENERATED ALWAYS AS (CASE WHEN valid_to IS NULL THEN 1 ELSE NULL END) STORED,
+  UNIQUE KEY uq_fos_current (current_gate, base_currency_code, quote_currency_code),
+  KEY ix_fos_pair (base_currency_code, quote_currency_code),
+  KEY ix_fos_source (source_code),
+  CONSTRAINT fk_fos_base FOREIGN KEY (base_currency_code) REFERENCES currencies(code) ON DELETE RESTRICT,
+  CONSTRAINT fk_fos_quote FOREIGN KEY (quote_currency_code) REFERENCES currencies(code) ON DELETE RESTRICT,
+  CONSTRAINT fk_fos_source FOREIGN KEY (source_code) REFERENCES fx_sources(code) ON DELETE RESTRICT,
+  CONSTRAINT ck_fos_distinct CHECK (base_currency_code <> quote_currency_code),
+  CONSTRAINT ck_fos_dates CHECK (valid_to IS NULL OR valid_to >= valid_from)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Dos niveles y basta (2.2 P-10). depth se guarda y se restringe.
@@ -317,6 +371,59 @@ FOR EACH ROW
 BEGIN
   SIGNAL SQLSTATE '45000'
     SET MESSAGE_TEXT = 'exchange_rates no admite borrado: es el cambio con el que se convirtio dinero en una fecha.';
+END//
+
+-- 9.1 -- Y tampoco se reescribe (`BR-FIN-009`: los historicos no se recalculan).
+--
+-- `tg_fx_no_delete` existe desde 3.12, pero un UPDATE la reescribia entera. Un
+-- asiento guarda su `exchange_rate_snapshot`, asi que reescribir la tasa no
+-- cambia lo ya convertido: lo que rompe es poder explicarlo --el asiento diria
+-- 3,742 y su fuente diria 3,751--. Se bloquea el UPDATE ENTERO, como
+-- `tg_cvw_inmutable`, porque no hay ninguna columna de esta tabla que tenga
+-- sentido cambiar despues de publicada.
+CREATE TRIGGER `tg_fx_inmutable`
+BEFORE UPDATE ON `exchange_rates`
+FOR EACH ROW
+BEGIN
+  SIGNAL SQLSTATE '45000'
+    SET MESSAGE_TEXT = 'Un tipo de cambio publicado no se modifica: los historicos no se recalculan.';
+END//
+
+-- 9.1 -- Una sola fuente oficial por par Y POR FECHA.
+--
+-- `uq_fos_current` garantiza una VIGENTE. Convertir un importe del 3 de marzo
+-- resuelve por par y por fecha, asi que dos periodos cerrados que se pisen son
+-- el mismo empate para una fecha pasada. Generados por
+-- App\Shared\Database\Periodo, no escritos a mano.
+CREATE TRIGGER `tg_fos_sin_solape_ins`
+BEFORE INSERT ON `fx_official_sources`
+FOR EACH ROW
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM `fx_official_sources`
+         WHERE `base_currency_code` <=> NEW.`base_currency_code`
+           AND `quote_currency_code` <=> NEW.`quote_currency_code`
+           AND NEW.`valid_from` <= IFNULL(`valid_to`, '9999-12-31')
+           AND `valid_from` <= IFNULL(NEW.`valid_to`, '9999-12-31')
+    ) THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Ya hay una fuente oficial para ese par en esas fechas: cierre la anterior el dia antes.';
+    END IF;
+END//
+
+CREATE TRIGGER `tg_fos_sin_solape_upd`
+BEFORE UPDATE ON `fx_official_sources`
+FOR EACH ROW
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM `fx_official_sources`
+         WHERE `id` <> NEW.`id`
+           AND `base_currency_code` <=> NEW.`base_currency_code`
+           AND `quote_currency_code` <=> NEW.`quote_currency_code`
+           AND NEW.`valid_from` <= IFNULL(`valid_to`, '9999-12-31')
+           AND `valid_from` <= IFNULL(NEW.`valid_to`, '9999-12-31')
+    ) THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Ya hay una fuente oficial para ese par en esas fechas: cierre la anterior el dia antes.';
+    END IF;
 END//
 
 DELIMITER ;

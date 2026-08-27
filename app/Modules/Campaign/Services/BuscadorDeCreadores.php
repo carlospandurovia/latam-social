@@ -135,9 +135,14 @@ final class BuscadorDeCreadores
      * - le faltan tarifas para alguno de los formatos que sí ofrece;
      * - las tiene en otra moneda, y aquí no se convierte nada.
      *
-     * No se convierte a propósito. Hay `exchange_rates` en el esquema y **nadie
-     * los mantiene todavía** (llega en 9.1): convertir con una tabla vacía o
-     * vieja daría un número con pinta de presupuesto y sin nada detrás.
+     * No se convierte a propósito, y desde `9.1` el motivo es otro. La máquina
+     * ya existe —`Cambio::convertir()` devuelve las siete cosas de `BR-FIN-004`
+     * y se niega a usar una tasa rancia— pero **falta decidir qué lado se
+     * aplica**: SUNAT publica compra y venta, y cuál corresponde es una regla
+     * contable, no técnica (`Q-63`). Elegir uno aquí para que la pantalla
+     * enseñe algo sería decidirlo por mi cuenta en el sitio donde menos se ve.
+     * Sigue en pie lo de siempre: un número con pinta de presupuesto y sin nada
+     * detrás es peor que un hueco con su motivo al lado.
      *
      * @param list<int> $creadorIds
      * @return array<int, array{importe: float|null, aviso: string|null, formatos: int}>
