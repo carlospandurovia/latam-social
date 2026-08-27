@@ -263,6 +263,32 @@ del .git\index.lock
 Si aparece, avísame: significa que algo de mi lado ejecutó `git`, y eso no debe
 pasar.
 
+### El CI ve archivos que yo no veo
+
+Esto tumbó el CI durante **veinticuatro ejecuciones** y merece estar escrito.
+
+Mi contenedor no tiene una copia del repositorio: tiene `stage/`, que es
+**sólo lo que yo he entregado**. `tools/verificar-pantallas.py` lo sabe y elige
+la raíz según lo que encuentre:
+
+```python
+CODIGO = RAIZ / 'stage' if (RAIZ / 'stage/app').is_dir() else RAIZ
+```
+
+En tu máquina no hay `stage/`, así que escanea el repositorio entero. Aquí sí lo
+hay, así que escanea **lo mío**. Todo archivo que exista sólo en tu copia —lo que
+vino de `laravel new` y nunca toqué, por ejemplo— es **invisible para mis seis
+puertas**.
+
+Fue exactamente eso: `resources/views/welcome.blade.php`, la página de inicio que
+trae Laravel de fábrica, llamaba a `route('login')` y `route('register')`, que
+este proyecto no declara. La raíz redirige a `/panel` y nadie renderizaba esa
+vista, así que no rompía nada visible — pero el gate la veía y tenía razón.
+
+**Consecuencia práctica:** el paso 7 no es una formalidad. El CI es el único
+sitio donde se mira el árbol completo, y además el único donde corre Percona 5.7.
+Verde aquí no es verde.
+
 ### El CI sale rojo y aquí estaba verde
 
 Casi siempre es **Percona 5.7**, que es lo único que el CI prueba y aquí no.
