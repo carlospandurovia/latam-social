@@ -10,6 +10,33 @@
       La <strong>fecha de inicio</strong> decide qué sociedad del grupo emite la factura
       (<code>BR-LE-003</code>): se resuelve con la cobertura vigente ese día, no con la de hoy.
       Y en cuanto la campaña se confirma, esa sociedad ya no se puede cambiar (<code>BR-LE-002</code>).
+      Esa misma sociedad <strong>paga a todos los creadores</strong> de la campaña, sean del país
+      que sean (<code>BR-LE-009</code>).
+
+      {{-- No hay desplegable de sociedad: no se elige, se resuelve. En cualquier
+           fecha hay como mucho una sociedad que cubra un país, así que el
+           desplegable tendría siempre una opción --y una opción que se puede
+           cambiar es una que alguien puede cambiar mal--. Lo que sí se hace es
+           enseñar cuál va a ser, y por qué. --}}
+      @if ($sociedad && $sociedad['guardada'])
+        <p class="mt-3 rounded-lg bg-white border border-slate-200 p-3 text-sm">
+          Hoy factura <strong>{{ $sociedad['guardada']->legal_name }}</strong>.
+          @if ($sociedad['cobertura']->hay() && ! $sociedad['discrepa'])
+            <span class="text-slate-500">{{ $sociedad['cobertura']->explicacion }}</span>
+          @endif
+          <span class="text-slate-500">Si cambias el cliente o la fecha de inicio, se vuelve a
+          resolver al guardar.</span>
+        </p>
+      @elseif ($sociedad)
+        <p class="mt-3 rounded-lg bg-amber-50 border border-amber-200 p-3 text-sm text-amber-900">
+          {{ $sociedad['cobertura']->explicacion }}
+        </p>
+      @else
+        <p class="mt-3 text-xs text-slate-500">
+          Cuál sea depende del país del cliente y de la fecha que pongas, así que se dice
+          al guardar. No se elige a mano.
+        </p>
+      @endif
     </div>
 
     <form method="POST"

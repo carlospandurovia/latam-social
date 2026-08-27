@@ -69,6 +69,23 @@ final class Cobertura
     }
 
     /**
+     * La sociedad GUARDADA en un documento, leída por su id.
+     *
+     * No resuelve nada: devuelve la fila que le pidan. Existe porque
+     * `BR-LE-001` dice que un documento **almacena** su sociedad y que nunca se
+     * deduce de la configuración vigente, y para poder cumplirlo hay que poder
+     * leer la guardada sin pasar por el resolver. Antes de 8.12 la pantalla de
+     * campaña enseñaba el nombre que devolvía `quienCubre()` bajo el rótulo del
+     * dato guardado: mientras coincidieran no se notaba, y el día que dejaran de
+     * coincidir la pantalla habría contado la versión equivocada (`T-58`).
+     */
+    public static function sociedad(int $entidadId): ?object
+    {
+        return DB::table('legal_entities')->where('id', $entidadId)
+            ->first(['id', 'code', 'legal_name', 'status', 'default_currency_code']);
+    }
+
+    /**
      * La cobertura ABIERTA de un país, la cubra quien la cubra.
      *
      * A diferencia de `quienCubre()`, **no filtra por estado de la sociedad**.

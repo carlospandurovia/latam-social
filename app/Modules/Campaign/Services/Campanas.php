@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Campaign\Services;
 
 use App\Modules\Client\Services\CoberturaFacturacion;
+use App\Modules\Core\Services\Cobertura;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -56,6 +57,42 @@ final class Campanas
         $paisId = (int) DB::table('client_organizations')->where('id', $clienteId)->value('country_id');
 
         return CoberturaFacturacion::resolver($paisId, $empieza);
+    }
+
+    /**
+     * Quién factura **esta** campaña, con el dato GUARDADO por delante.
+     *
+     * Devuelve las dos cosas y si discrepan, y ese es todo el punto. `quienFactura()`
+     * contesta *«quién debería»*; la campaña ya lleva escrito *«quién»*. Mientras la
+     * cobertura no se toque, las dos respuestas coinciden y da igual cuál se enseñe;
+     * el día que alguien corrija un periodo de `legal_entity_countries`, dejan de
+     * coincidir y **manda la guardada** (`BR-LE-001`), porque es la que va a ir en la
+     * factura. Enseñar la resuelta bajo el rótulo de la guardada es contar la versión
+     * equivocada de un dato de dinero sin que nada avise: es `T-58`.
+     *
+     * `discrepa` es `false` cuando no hay sociedad guardada todavía —un borrador sin
+     * cobertura no discrepa de nada, le falta—.
+     *
+     * @return array{guardada: ?object, cobertura: CoberturaFacturacion, discrepa: bool}
+     */
+    public static function quienFacturaEsta(object $campana): array
+    {
+        $cobertura = self::quienFactura(
+            (int) $campana->client_organization_id,
+            (string) $campana->starts_on,
+        );
+
+        $guardada = $campana->billing_legal_entity_id === null
+            ? null
+            : Cobertura::sociedad((int) $campana->billing_legal_entity_id);
+
+        return [
+            'guardada' => $guardada,
+            'cobertura' => $cobertura,
+            'discrepa' => $guardada !== null
+                && $cobertura->hay()
+                && (int) $cobertura->entidad->id !== (int) $guardada->id,
+        ];
     }
 
     /**

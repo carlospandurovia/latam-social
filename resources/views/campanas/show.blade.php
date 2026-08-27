@@ -324,16 +324,46 @@
       @endif
 
       <div class="bg-white rounded-xl border border-slate-200 p-5">
-        <h2 class="text-sm font-medium text-slate-700 mb-3">Quién la factura</h2>
+        <h2 class="text-sm font-medium text-slate-700 mb-3">Quién la factura y quién paga</h2>
 
-        @if ($campana->billing_legal_entity_id)
-          <p class="text-sm font-medium">
-            {{ $cobertura->hay() ? $cobertura->entidad->legal_name : 'Sociedad #'.$campana->billing_legal_entity_id }}
-          </p>
+        @if ($sociedad['guardada'])
+          {{-- El nombre sale de la fila GUARDADA en la campaña, no de resolver la
+               cobertura otra vez. Es `BR-LE-001` y es `T-58`. --}}
+          <p class="text-sm font-medium">{{ $sociedad['guardada']->legal_name }}</p>
+          <p class="text-xs text-slate-500">{{ $sociedad['guardada']->code }}</p>
+
+          {{-- El PORQUÉ, no sólo el qué. Una sociedad a secas no se puede
+               comprobar; con su motivo y su fecha, quien la lee sabe si es la
+               que esperaba y puede discutirla. --}}
+          @if ($sociedad['cobertura']->hay() && ! $sociedad['discrepa'])
+            <p class="mt-2 text-xs text-slate-600">{{ $sociedad['cobertura']->explicacion }}</p>
+          @endif
           <p class="mt-1 text-xs text-slate-500">
             Resuelto al {{ $campana->starts_on }}, la fecha en que empieza el servicio
-            (<code>BR-LE-003</code>).
+            (<code>BR-LE-003</code>). No se elige a mano: en cualquier fecha hay como
+            mucho una sociedad que cubra un país.
           </p>
+
+          {{-- `BR-LE-009`: la que factura al cliente es la que liquida a TODOS los
+               creadores de la campaña, sea cual sea el país de cada uno. Se dice
+               aquí porque es donde se mira antes de invitar a nadie. --}}
+          <p class="mt-3 rounded-lg bg-slate-50 p-3 text-xs text-slate-600">
+            Paga a <strong>todos</strong> los creadores de esta campaña, también a los de
+            otro país (<code>BR-LE-009</code>). El país del creador cambia cómo se le
+            paga —retenciones, moneda, documento—, no quién le paga.
+          </p>
+
+          {{-- Si la cobertura de hoy diría otra cosa, se dice. Callarlo sería
+               dejar que la pantalla y la factura cuenten cosas distintas. --}}
+          @if ($sociedad['discrepa'])
+            <p class="mt-3 rounded-lg bg-amber-50 border border-amber-200 p-3 text-xs text-amber-900">
+              <strong>Hay algo que mirar.</strong> Con la cobertura tal como está hoy, a esta
+              campaña le tocaría {{ $sociedad['cobertura']->entidad->code }}
+              ({{ $sociedad['cobertura']->explicacion }}). Manda la guardada, que es la que
+              va en la factura; la diferencia significa que alguien corrigió un periodo de
+              cobertura después de crearse esta campaña.
+            </p>
+          @endif
 
           @if ($campana->confirmed_at)
             <p class="mt-3 rounded-lg bg-slate-50 p-3 text-xs text-slate-600">
@@ -343,7 +373,7 @@
             </p>
           @endif
         @else
-          <p class="text-sm text-amber-800">{{ $cobertura->explicacion }}</p>
+          <p class="text-sm text-amber-800">{{ $sociedad['cobertura']->explicacion }}</p>
           <p class="mt-2 text-xs text-slate-500">
             Hasta que exista esa cobertura, la campaña no puede salir de borrador.
           </p>

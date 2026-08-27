@@ -2,6 +2,49 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 
+## [8.12 · La sociedad que factura, y quién paga] — 2026-08-27
+
+Sin migración. Un defecto de dinero que llevaba escondido desde 7.1, y una
+decisión de negocio que faltaba por escribir.
+
+### Añadido
+- La ficha de campaña dice **por qué** es esa sociedad —«CTS Perú factura a Perú
+  desde el … (sociedad local)»—, no sólo cuál. Una sociedad a secas no se puede
+  comprobar (`DEC-155`).
+- Y dice que esa sociedad **paga a todos los creadores** de la campaña, también a
+  los de otro país (`BR-LE-009`). Es donde se mira antes de invitar a nadie.
+- El formulario de **edición** adelanta quién va a facturar. El de alta no: sin
+  cliente ni fecha no hay respuesta, y resolver «con la cobertura de hoy» para
+  enseñarlo es el «deducirlo de la configuración vigente» que prohíbe
+  `BR-LE-001`.
+- `Cobertura::sociedad()` y `Campanas::quienFacturaEsta()`.
+
+### Corregido
+- **`T-58`: la ficha enseñaba la sociedad que tocaría HOY bajo el rótulo de la
+  guardada.** Imprimía lo que devuelve el resolver, con la única condición de que
+  la campaña tuviera alguna sociedad guardada — mientras nadie tocara la
+  cobertura, las dos coinciden y no se nota. El comentario de encima del bloque
+  decía «se enseña el dato GUARDADO… cuando los dos no coinciden se dice»:
+  describía código que nunca se escribió. Ahora manda la guardada y la
+  discrepancia se avisa.
+
+### Cambiado
+- **`BR-LE-009` pierde el «en el MVP» y sube a 🔴** (`DEC-156`): la sociedad de la
+  campaña paga a todos sus creadores, sea cual sea el país de cada uno. El país
+  del creador determina **cómo** se le paga —retención, moneda, documento—, nunca
+  **quién**. Lo implementa `F9`: hoy `payouts` no tiene columna de sociedad.
+- **`Q-40` cambia de eje.** La columna «¿quién le paga?» no era función del país
+  del creador, y con ella la tabla le pedía al contador peruano que opinara sobre
+  pagos colombianos. Ahora son dos tablas: *CTS Perú paga* y *CTS Colombia paga*.
+  España deja de ser un hueco ahí — sigue siéndolo en `Q-15`, que es otra cosa.
+
+### No se hizo
+- **Un desplegable «CTS Perú / CTS Colombia» en la campaña.** `uq_lec_country` y
+  `tg_lec_sin_solape_*` garantizan como mucho una sociedad por país y fecha, así
+  que tendría siempre una opción — y una opción que se puede cambiar es una que
+  alguien puede cambiar mal. Antes de 3.10 ese empate existía, y fue una factura
+  emitida por la sociedad equivocada.
+
 ## [8.11 · QA de la Fase 8] — 2026-08-27
 
 No añade funcionalidad. Añade la séptima puerta, y arregla tres cosas que la fase

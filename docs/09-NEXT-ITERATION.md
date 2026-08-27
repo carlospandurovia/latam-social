@@ -1,5 +1,10 @@
 # 09 — Estado del proyecto y siguiente iteración
 
+> **Versión 3.0 — 2026-08-27.** Actualizado al cerrar `8.12`. La sociedad que
+> factura una campaña ya se explica en pantalla, y `DEC-156` fija que **esa
+> sociedad paga a todos sus creadores**, sea cual sea el país de cada uno. Eso
+> cambia el eje de `Q-40`: la pregunta al contador pasa a ser dos tablas.
+>
 > **Versión 2.9 — 2026-08-27.** Actualizado al cerrar `8.11`, el QA de la Fase
 > 8. Séptima puerta, y tres cosas que la fase daba por hechas.
 >
@@ -68,11 +73,11 @@
 |---|---|
 | Tablas | 70 · **24 columnas puerta**, contadas y no heredadas (`T-57`) |
 | Migraciones | 58, verdes desde cero en MySQL 8 y con vuelta atrás completa |
-| Pruebas de PHPUnit | **711**, 2.247 aserciones |
+| Pruebas de PHPUnit | **713**, 2.259 aserciones |
 | Aserciones de restricción (SQL) | **1.586** en MariaDB, **1.576** en MySQL 8 |
 | Puertas de calidad | **7**: formato, análisis estático, fronteras, pruebas, vigencias, nombres entre capas y **las suites** (8.11) |
 | Verificadores fuera de PHPUnit | 4: fixturas, periodos, nombres entre capas y **mensajes de la base** (nuevo en 8.1) |
-| Decisiones registradas | hasta `DEC-154` |
+| Decisiones registradas | hasta `DEC-156` |
 
 ### Lo que se puede hacer hoy por pantalla
 
@@ -170,8 +175,16 @@ pago—. Si el post desaparece, alguien lo firma con la captura de lo que ve, el
 pago se para y el creador se entera por correo. Nada de eso lo decide una
 máquina, y eso es la iteración entera.
 
+Y desde `8.12`, la ficha de campaña **explica quién factura y por qué** —«CTS
+Perú factura a Perú desde el … (sociedad local)»— en vez de dar un nombre a
+secas, y dice que esa sociedad **paga a todos los creadores de la campaña**, sean
+del país que sean (`BR-LE-009`, `DEC-156`). No hay desplegable de sociedad
+porque no hay nada que elegir: el esquema garantiza como mucho una por país y
+fecha. Al ir a enseñarlo salió `T-58` — la pantalla llevaba desde 7.1 imprimiendo
+la sociedad que tocaría **hoy** bajo el rótulo de la guardada.
+
 Eso completa **7.0 a 7.7 del roadmap**, más `F4.9`, `5.9`, `4.1`, `8.1`, `8.2`,
-`8.3`, `8.6`, `8.7` y `8.8`.
+`8.3`, `8.6`, `8.7`, `8.8` y `8.12`.
 
 > **Y por primera vez el sistema se ha usado.** Tres fallos salieron de ahí en una
 > tarde: un 500 al repetir un formato en el brief de un mercado, la bitácora
@@ -192,7 +205,7 @@ o sin abrir un módulo nuevo.
 | # | Qué está parado | Quién lo desbloquea | Qué pasa mientras tanto |
 |---|---|---|---|
 | `T-09` | Publicar la **primera versión real de los términos del creador** | **Tu abogado** | 🔴 **Ningún creador puede activarse.** La pantalla lo dice explícitamente |
-| `Q-40` | Con qué **tasa** se retiene a un creador no domiciliado | **Tu contador** | Un perfil fiscal con retención sin decidir no se puede aprobar (`DEC-048`) |
+| `Q-40` | Con qué **tasa** se retiene a un creador no domiciliado. **Desde `DEC-156` son dos tablas**: «CTS Perú paga» —contador peruano— y «CTS Colombia paga» —contador colombiano—, porque quien paga lo decide la campaña y no el país del creador | **Tu contador** | Un perfil fiscal con retención sin decidir no se puede aprobar (`DEC-048`) |
 | `DEC-085` | Ejecutar los dos `GRANT` en el servidor de producción | **Tú, al desplegar** | La bitácora es truncable por la aplicación hasta que se haga. **Pasos en `docs/18-RUNBOOK-DESPLIEGUE.md` §3.1** |
 | `Q-44` | ¿Los servicios a un cliente **no domiciliado** son exportación de servicios (sin IGV) o van al 18 %? | **Tu contador** | El modelo admite las cuatro opciones y no fuerza ninguna |
 
@@ -251,6 +264,13 @@ creadores— a tu abogado.
 
 Mientras eso llega, lo que sí se puede hacer sin decisiones de fuera es **`8.9`**,
 que es pequeña y no toca dinero.
+
+### Las tres consultas de fuera están escritas
+
+`docs/20-CONSULTAS-EXTERNAS.md`: `T-09` para el abogado, `Q-40` y `Q-44` para el
+contador, y los dos `GRANT` de `DEC-085` para el servidor. Cada sección está
+escrita para reenviarse tal cual, y dice **qué dato exacto** necesita el sistema
+de vuelta — no una explicación, un dato que se pueda guardar.
 
 ### Lo que la Fase 8 dejó abierto y no es mío
 

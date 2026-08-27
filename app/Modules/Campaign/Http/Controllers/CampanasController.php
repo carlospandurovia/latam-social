@@ -89,10 +89,11 @@ final class CampanasController
             // Solo las transiciones que ESTE usuario puede hacer. Ensenar un
             // boton que va a dar 403 es peor que no ensenarlo.
             'transiciones' => $this->transicionesDisponibles((string) $campana->status),
-            'cobertura' => Campanas::quienFactura(
-                (int) $campana->client_organization_id,
-                (string) $campana->starts_on,
-            ),
+            // Las DOS respuestas: la guardada, que es la que manda (`BR-LE-001`),
+            // y la que resolveria la cobertura de hoy. La pantalla ensena la
+            // primera y avisa si difieren, en vez de contar la segunda bajo el
+            // rotulo de la primera, que es lo que hacia hasta `T-58`.
+            'sociedad' => Campanas::quienFacturaEsta($campana),
             'requisitos' => Campanas::requisitos((int) $campana->id),
             'mercados' => Mercados::de((int) $campana->id),
             'paises' => Mercados::paisesDisponibles((int) $campana->id),
@@ -191,7 +192,13 @@ final class CampanasController
             abort(409, 'Una campana confirmada no se edita: sus datos ya se comprometieron con el cliente.');
         }
 
-        return view('campanas.form', $this->datosDelFormulario() + ['campana' => $campana]);
+        // El formulario de edicion SI puede decir quien va a facturar: la campana
+        // ya tiene cliente y fecha. El de alta no --no hay ni uno ni otra-- y por
+        // eso no se inventa una respuesta ahi: ver `datosDelFormulario()`.
+        return view('campanas.form', $this->datosDelFormulario() + [
+            'campana' => $campana,
+            'sociedad' => Campanas::quienFacturaEsta($campana),
+        ]);
     }
 
     public function update(GuardarCampanaRequest $peticion, string $uuid): RedirectResponse
@@ -574,6 +581,15 @@ final class CampanasController
             'objetivos' => Campanas::OBJETIVOS,
             'hoy' => now()->toDateString(),
             'campana' => null,
+            // El alta no sabe todavia quien facturara: la respuesta depende del
+            // pais del cliente Y de la fecha de inicio, y no hay ninguno de los
+            // dos hasta que se teclean. Se deja en `null` a proposito en vez de
+            // resolver «con la cobertura de hoy» y ensenarlo: eso es exactamente
+            // el «deducirlo de la configuracion vigente» que prohibe `BR-LE-001`,
+            // y una pantalla que nombra una sociedad que luego no es la que
+            // factura es peor que una que dice que todavia no lo sabe. Se
+            // contesta al guardar, en el mensaje de la redireccion.
+            'sociedad' => null,
         ];
     }
 }

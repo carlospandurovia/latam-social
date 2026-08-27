@@ -6,6 +6,7 @@ namespace Tests\Feature;
 
 use App\Models\User;
 use App\Modules\Campaign\Services\EstadosDeCampana as E;
+use App\Modules\Core\Services\Cobertura;
 use App\Shared\Auth\Permisos;
 use Database\Seeders\CimientosSeeder;
 use Illuminate\Database\QueryException;
@@ -222,6 +223,75 @@ final class CampanasTest extends TestCase
 
         $this->assertNull(DB::table('campaigns')->where('uuid', $uuid)->value('billing_legal_entity_id'),
             'mover la fecha mueve quien factura, mientras se pueda');
+    }
+
+    /**
+     * **`T-58`.** La pantalla enseña la sociedad **guardada**, no la que
+     * resolvería la cobertura de hoy.
+     *
+     * Hasta 8.12 el bloque «Quién la factura» imprimía el nombre que devolvía el
+     * resolver, con la única condición de que la campaña tuviera alguna sociedad
+     * guardada. Mientras nadie tocara `legal_entity_countries` las dos respuestas
+     * coincidían y no se notaba. Aquí se hacen divergir a propósito: se releva la
+     * cobertura de Perú justo el día en que empieza la campaña, así que el
+     * resolver pasa a decir «la nueva» mientras la factura la va a emitir la
+     * vieja, que es la que la campaña lleva escrita (`BR-LE-001`).
+     *
+     * La aserción que muerde es la negativa: el nombre de la sociedad de relevo
+     * **no puede aparecer** en la ficha de esta campaña.
+     */
+    public function test_la_pantalla_ensena_la_sociedad_guardada_y_no_la_que_tocaria_hoy(): void
+    {
+        $gestor = $this->usuarioCon('campaign_manager');
+        $uuid = $this->crear($gestor);
+
+        $guardada = (int) DB::table('campaigns')->where('uuid', $uuid)->value('billing_legal_entity_id');
+        $nombreGuardado = (string) DB::table('legal_entities')->where('id', $guardada)->value('legal_name');
+
+        $relevo = $this->entidadLegal(['code' => 'RELEVO-58', 'legal_name' => 'Sociedad Relevo SAC']);
+
+        // `abrir()` cierra la cobertura anterior el dia antes, que es lo que
+        // `uq_lec_country` y `tg_lec_sin_solape_*` obligan a hacer. Desde el 1 de
+        // septiembre --el `starts_on` de la campana-- cubre Peru la de relevo.
+        DB::transaction(fn () => Cobertura::abrir($relevo, $this->paisPE, 'local_entity', '2026-09-01'));
+
+        $this->assertSame(
+            $relevo,
+            (int) Cobertura::quienCubre($this->paisPE, '2026-09-01')->first()->id,
+            'la premisa: hoy el resolver diria otra cosa',
+        );
+
+        $respuesta = $this->actingAs($gestor)->get("/campanas/{$uuid}");
+
+        $respuesta->assertOk();
+        $respuesta->assertSee($nombreGuardado, false);
+        $respuesta->assertDontSee('Sociedad Relevo SAC', false);
+        $respuesta->assertSee('Hay algo que mirar', false);
+    }
+
+    /**
+     * La pantalla dice **por qué** es esa sociedad, y que paga a todos los
+     * creadores.
+     *
+     * Una sociedad a secas no se puede comprobar: quien la lee no sabe si es la
+     * que esperaba. Con el motivo y la fecha —«factura a Perú desde el … »— sí,
+     * y puede discutirla antes de que salga una factura. Y `BR-LE-009` se dice
+     * aquí porque aquí es donde se mira antes de invitar a un creador de otro
+     * país (`DEC-156`).
+     */
+    public function test_la_pantalla_dice_por_que_es_esa_sociedad_y_que_paga_a_todos(): void
+    {
+        $gestor = $this->usuarioCon('campaign_manager');
+        $uuid = $this->crear($gestor);
+
+        $respuesta = $this->actingAs($gestor)->get("/campanas/{$uuid}");
+
+        $respuesta->assertOk();
+        // El «desde el» sale de `CoberturaFacturacion::HAY`: es el porque.
+        $respuesta->assertSee('desde el', false);
+        $respuesta->assertSee('los creadores de esta campaña', false);
+        $respuesta->assertSee('BR-LE-009', false);
+        $respuesta->assertDontSee('Hay algo que mirar', false);
     }
 
     public function test_una_campana_confirmada_no_se_edita(): void
