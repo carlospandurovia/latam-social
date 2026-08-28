@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Modules\Core\Services;
 
+use App\Shared\Database\Vigencia;
 use Illuminate\Support\Facades\DB;
+use RuntimeException;
 
 /**
  * Convertir dinero de una moneda a otra, y poder explicar cómo (iteración 9.1).
@@ -248,6 +250,12 @@ final class Cambio
         $base = mb_strtoupper($base);
         $quote = mb_strtoupper($quote);
 
+        $veto = self::vetoParaDeclarar($base, $quote, $desde);
+
+        if ($veto !== null) {
+            throw new RuntimeException($veto);
+        }
+
         $abierta = DB::table('fx_official_sources')
             ->where('base_currency_code', $base)->where('quote_currency_code', $quote)
             ->whereNull('valid_to')
@@ -255,7 +263,7 @@ final class Cambio
 
         if ($abierta !== null) {
             DB::table('fx_official_sources')->where('id', $abierta->id)->update([
-                'valid_to' => date('Y-m-d', strtotime($desde.' -1 day')),
+                'valid_to' => Vigencia::cerrarElDiaAntesDe($desde),
                 'updated_at' => now(),
             ]);
         }
@@ -269,6 +277,43 @@ final class Cambio
             'created_at' => now(),
             'updated_at' => now(),
         ]);
+    }
+
+    /**
+     * Por qué NO se puede declarar una fuente desde esa fecha, o `null`.
+     *
+     * El caso que existe de verdad: relevar «desde el mismo día» en que empezó
+     * la que hay. Cerrar la anterior el día antes le pondría un `valid_to`
+     * ANTERIOR a su `valid_from`, y eso lo rechaza `ck_fos_dates` con un 45000
+     * feo. Y recortar la fecha tampoco vale: lo que ese caso significa es que la
+     * fuente anterior **no llegó a mandar ningún día**, y eso no se arregla
+     * moviendo fechas — se arregla diciéndolo.
+     *
+     * Es la misma lección que `Cobertura::noCerrablesEn()` aprendió en `3.10`:
+     * se contesta con palabras y no se toca nada.
+     */
+    public static function vetoParaDeclarar(string $base, string $quote, string $desde): ?string
+    {
+        $abierta = DB::table('fx_official_sources')
+            ->where('base_currency_code', mb_strtoupper($base))
+            ->where('quote_currency_code', mb_strtoupper($quote))
+            ->whereNull('valid_to')
+            ->first(['source_code', 'valid_from']);
+
+        // `Vigencia::puedeRelevar()` y no un `strtotime` a mano: comparar
+        // fechas como cadenas miente --'2026-2-1' > '2026-11-01' es CIERTO-- y
+        // esa aritmetica vive en un solo sitio desde `3.10`, con su puerta.
+        if ($abierta === null || Vigencia::puedeRelevar($desde, (string) $abierta->valid_from)) {
+            return null;
+        }
+
+        return sprintf(
+            '%s ya manda sobre %s a %s desde el %s, que no es anterior al %s. Relevarla exige una '
+            .'fecha posterior: si de verdad no llego a mandar ningun dia, eso no se arregla '
+            .'moviendo fechas.',
+            $abierta->source_code, mb_strtoupper($base), mb_strtoupper($quote),
+            $abierta->valid_from, $desde,
+        );
     }
 
     /**

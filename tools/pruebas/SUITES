@@ -53,3 +53,8 @@
 # limpiar `exchange_rates`, que entro en la lista de 3.12-- y usa fechas de
 # agosto de 2026 que ninguna otra suite emplea.
 9.1-cambio
+# 9.2 escribe en `fx_fetch_runs` --que no toca nadie mas y si se puede limpiar,
+# porque es operativa y no evidencia-- y toca las columnas de credencial de
+# `fx_sources`, dejandolas como estaban. No se pisa con 9.1: aquella escribe
+# tasas y periodos, esta ni los mira.
+9.2-traida

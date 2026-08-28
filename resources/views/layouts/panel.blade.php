@@ -43,6 +43,10 @@
           // 4.5: la pantalla a la que BR-LE-004 lleva mandando desde 4.1.
           // `legal_entity.manage` es solo de admin, asi que el resto no la ve.
           ['Entidades legales', 'entidades.index', 'entidades', 'legal_entity.manage'],
+          // 9.2: junto a Entidades legales porque las dos contestan «por que no
+          // puedo cobrarle a este» --una por sociedad, otra por moneda-- y las
+          // dos se tocan pocas veces al ano.
+          ['Tipos de cambio', 'cambio.index', 'tipos-de-cambio', 'fx.manage'],
           // 4.9: junto a la bitacora porque responde a la misma clase de
           // pregunta --que paso y cuando-- y porque el modo de fallo que importa
           // («al creador no le llego su enlace») lo descubre operaciones, no un

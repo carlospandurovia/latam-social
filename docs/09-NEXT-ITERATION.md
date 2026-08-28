@@ -1,5 +1,9 @@
 # 09 — Estado del proyecto y siguiente iteración
 
+> **Versión 3.3 — 2026-08-27.** Actualizado al cerrar `9.2`. Las tasas llegan
+> solas: cron a las 05:30, pantalla de Tipos de cambio, y la credencial
+> configurable sin entrar por SSH — cifrada, firmada y sin reenseñarse nunca.
+>
 > **Versión 3.2 — 2026-08-27.** Actualizado al cerrar `9.1`. **Empieza la fase
 > de finanzas.** `exchange_rates` llevaba desde la Fase 2 en el esquema con cero
 > filas y cero lecturas; ahora hay una fuente oficial por par con periodos, los
@@ -81,13 +85,13 @@
 
 | | |
 |---|---|
-| Tablas | 72 · **25 columnas puerta**, contadas y no heredadas (`T-57`) |
-| Migraciones | 59, verdes desde cero en MySQL 8 y con vuelta atrás completa |
-| Pruebas de PHPUnit | **726**, 2.322 aserciones |
-| Aserciones de restricción (SQL) | **1.628** en MariaDB, **1.618** en MySQL 8 · 31 suites |
+| Tablas | 73 · **25 columnas puerta**, contadas y no heredadas (`T-57`) |
+| Migraciones | 60, verdes desde cero en MySQL 8 y con vuelta atrás completa |
+| Pruebas de PHPUnit | **751**, 2.445 aserciones |
+| Aserciones de restricción (SQL) | **1.654** en MariaDB, **1.644** en MySQL 8 · 32 suites |
 | Puertas de calidad | **7**: formato, análisis estático, fronteras, pruebas, vigencias, nombres entre capas y **las suites** (8.11) |
 | Verificadores fuera de PHPUnit | 4: fixturas, periodos, nombres entre capas y **mensajes de la base** (nuevo en 8.1) |
-| Decisiones registradas | hasta `DEC-161` |
+| Decisiones registradas | hasta `DEC-165` |
 
 ### Lo que se puede hacer hoy por pantalla
 
@@ -193,6 +197,11 @@ porque no hay nada que elegir: el esquema garantiza como mucho una por país y
 fecha. Al ir a enseñarlo salió `T-58` — la pantalla llevaba desde 7.1 imprimiendo
 la sociedad que tocaría **hoy** bajo el rótulo de la guardada.
 
+Y desde `9.2`, **las tasas llegan solas**: un cron a las 05:30 las trae de
+Decolecta, una pantalla enseña qué fuente manda, qué hay y si el cron sigue vivo,
+y la credencial se configura sin entrar por SSH — cifrada, firmada, y sin
+reenseñarse nunca.
+
 Y desde `9.1`, **el sistema sabe convertir dinero** — y sabe cuándo no debe.
 Quién publica el tipo de cambio de cada par se declara con periodos, así que el
 histórico se sigue explicando con la fuente de entonces; compra y venta caben sin
@@ -252,41 +261,26 @@ Ninguna bloquea código hoy; todas bloquean una iteración futura concreta.
 | `Q-38` | ¿Cuántos desarrolladores? Con uno solo, las estimaciones ×1,7 | Todo el plan |
 | `Q-62` | Si la fuente **corrige** un tipo de cambio ya publicado, ¿qué se hace? Hoy `tg_fx_inmutable` no deja tocarlo, y hoy da igual porque la tabla está vacía | Antes de la primera corrección real |
 | `Q-63` | ¿Qué lado del tipo de cambio aplica a cada operación —**compra o venta**— y si depende de si es ingreso o egreso? Es contable, no técnica. Mientras no esté, el buscador de creadores sigue sin convertir tarifas | **Antes del primer pago o factura en otra moneda** |
+| `Q-64` | ¿De dónde salen los tipos de cambio que **SUNAT no publica** (`COP`, `MXN`, `CLP`, `EUR`)? Decolecta sólo trae `USD → PEN`. Hoy se teclean a mano con fuente `manual`, que funciona y no escala | Al pagar al primer creador de fuera de Perú |
 
 ---
 
 ## 4. Lo que propongo como siguiente iteración
 
-**`9.2` — que las tasas lleguen solas.**
+**`9.3` — el libro mayor del creador** (era `9.2` en el roadmap original).
 
-`9.1` dejó la máquina montada y vacía. Falta:
+Es donde empieza a haber dinero de verdad: `ledger_entries` existe desde la
+Fase 2 con sus reglas escritas —`BR-FIN-001` (el saldo es una suma, no una
+columna), `BR-FIN-002` (sólo-inserción, la corrección es un asiento de
+reversión)— y **nadie escribe todavía en ella**.
 
-- el adaptador de **Decolecta** (`GET https://api.decolecta.com/v1/tipo-cambio/sunat?date=…`,
-  cabecera `Authorization: Bearer …`, devuelve `buy_price` y `sell_price`);
-- el comando y su **cron diario**;
-- la **pantalla de tipos de cambio**: fuente oficial por par, histórico y carga
-  manual;
-- y **dónde vive la credencial**.
+Y ahí es donde hay que pagar `DEC-157`: la comprobación de que **la sociedad que
+paga es la de la campaña** (`BR-LE-009`, 🔴) estaba en el roadmap como `9.11`,
+la penúltima de catorce. Se adelantó a la iteración que estrene
+`payout_batches`, y el asiento del ledger es lo que ata una campaña a un pago.
 
-### La credencial: lo que voy a proponer, y por qué no es exactamente lo que pediste
-
-Dijiste que la configurarías en la pantalla de administración. Se puede, y lo voy
-a hacer — pero con una vuelta, porque tu propia regla dice *«no almacenar
-secretos en texto plano en BD cuando exista alternativa segura»*.
-
-Lo que propongo: la clave se lee de **`.env`** si está ahí, y si no, de una
-columna **cifrada** que escribe la pantalla. La pantalla **nunca la muestra** —
-sólo los últimos cuatro caracteres y de dónde se está leyendo—. Así no tienes que
-entrar por SSH para configurarla, y la clave no queda en claro en ninguna tabla.
-
-Lo digo antes de construirlo porque es tu decisión, no mía. **Y te avisaré cuando
-esté lista para que la cargues**, como pediste.
-
-**Una cosa que hay que saber antes de empezarla:** Decolecta publica el tipo de
-cambio **de SUNAT**, y SUNAT sólo publica **USD → PEN**. No hay ahí COP→PEN,
-MXN→PEN ni nada más. Para los demás pares hará falta otra fuente, o carga
-manual — y `fx_official_sources` es exactamente donde eso se dice, par por par,
-en vez de descubrirse el día que haya que pagar a un creador mexicano.
+Lo que **no** bloquea: `Q-40` y `Q-44` son las tasas de retención y el IGV, y eso
+es `9.5` y `9.9`. La estructura del ledger no las necesita.
 
 
 ## 5. Deuda de documentación reconocida
@@ -302,13 +296,17 @@ Se anota aquí en vez de en un comentario para que no pase lo de `T-12`.
 
 ## 6. Qué necesito de ti
 
-Tres cosas, por orden de coste para el proyecto:
+Cuatro cosas, por orden de coste para el proyecto:
 
 1. **Manda el texto de los términos del creador a tu abogado.** Es lo único que
    impide usar de verdad todo lo construido en las fases 3 y 4.
 2. **Pregúntale a tu contador `Q-40` y `Q-44`.** Las dos tienen respuesta corta y
    las dos bloquean el dinero.
-3. **La cuenta de SMTP (`Q-20`) sube de prioridad.** Ya no es sólo para los
+3. **Consigue la clave de Decolecta y cárgala** — y pon el cron de Laravel en el
+   servidor si no está. Sin esa línea `cambio:traer` no corre nunca, y la
+   pantalla lo dirá con esas palabras. Los pasos están en
+   `docs/fase-9/9.2-TRAIDA-AUTOMATICA.md` §9.
+4. **La cuenta de SMTP (`Q-20`) sube de prioridad.** Ya no es sólo para los
    avisos: desde `5.9`, **sin correo saliente un creador aprobado no puede
    estrenar su cuenta** — su contraseña viaja en un correo y en ningún otro
    sitio. Hasta entonces el enlace se escribe en `storage/logs` y el flujo se

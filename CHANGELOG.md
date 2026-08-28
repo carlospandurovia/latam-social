@@ -2,6 +2,47 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 
+## [9.2 · Que las tasas lleguen solas] — 2026-08-27
+
+`9.1` dejó la máquina montada y vacía. Esto le da cuerda: un cron, un cliente de
+Decolecta y una pantalla.
+
+### Añadido
+- **`cambio:traer`**, todos los días a las 05:30. Pide **tres** días, no uno: si
+  el cron no corrió viernes ni sábado, pedir sólo el domingo deja dos huecos que
+  nadie rellena a mano (`DEC-164`).
+- **Pantalla de Tipos de cambio**: qué fuente manda para cada par, las últimas
+  tasas, los últimos intentos del cron, carga manual, y la credencial.
+- **`fx_fetch_runs`**: cada intento con su resultado. Enseña que el cron murió
+  **antes** del día de la liquidación, que es cuando lo detectaría
+  `Cambio::DIAS_ATRAS`. Con aviso en pantalla **sólo si hay algo que mirar**.
+- **La credencial** se configura desde la pantalla, **pero**: el entorno manda si
+  está, en la base va cifrada, no se reenseña jamás, la bitácora guarda los
+  cuatro últimos y nunca el valor, y `tg_fxs_credencial_firmada` exige quién la
+  puso y cuándo (`DEC-162`). Permiso propio: `integration.manage`, no
+  `fx.manage`.
+- **Cada final tiene su nombre** — `sin_credencial`, `error_http`, `error_red`,
+  `respuesta_rara` — porque exigen arreglos distintos y en un `catch` genérico se
+  ven iguales. Un 404 no se pinta como avería (`DEC-163`).
+
+### Corregido
+- **`T-61`: la traída podía escribir a medias y jurar que no.** Un `sell_price`
+  malo dejaba la compra ya anotada mientras el resultado decía `respuesta_rara`,
+  y `ck_ffr_nuevas` obliga a que una corrida fallida diga cero — o sea una fila
+  en `exchange_rates` que el registro juraba que no existía, en una tabla que no
+  se puede corregir. Ahora se validan las dos antes de anotar ninguna.
+- **`env()` fuera de `config/`** (lo cazó PHPStan). Con `config:cache` habría
+  sido un cron que corre, no trae nada, y dice «no hay credencial» teniéndola
+  delante — lo mismo que le pasó al seeder del administrador.
+- **Aritmética de fechas a mano** en `declararOficial()` (lo cazó la puerta de
+  vigencias). Y de paso: relevar «desde el mismo día» no se arregla moviendo
+  fechas, se contesta con palabras (`Cambio::vetoParaDeclarar()`).
+
+### Sabido y dicho
+- **Decolecta sólo trae `USD → PEN`**, porque SUNAT sólo publica el dólar. El
+  catálogo no declara ningún otro par, la pantalla lo explica, y la carga manual
+  se guarda con fuente `manual` y no disfrazada de `sunat` (`DEC-165`, `Q-64`).
+
 ## [9.1 · Tipos de cambio] — 2026-08-27
 
 Empieza la fase de finanzas. `exchange_rates` llevaba en el esquema desde la

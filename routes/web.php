@@ -21,6 +21,7 @@ use App\Modules\Core\Http\Controllers\BitacoraController;
 use App\Modules\Core\Http\Controllers\CatalogosController;
 use App\Modules\Core\Http\Controllers\EntidadesLegalesController;
 use App\Modules\Core\Http\Controllers\PanelController;
+use App\Modules\Core\Http\Controllers\TiposDeCambioController;
 use App\Modules\Creator\Http\Controllers\ActivacionController;
 use App\Modules\Creator\Http\Controllers\CreadoresController;
 use App\Modules\Creator\Http\Controllers\MediosPagoController;
@@ -256,6 +257,34 @@ Route::middleware('auth')->group(function (): void {
     //
     // `legal_entity.manage` es de `admin` y de nadie mas: dar de alta una
     // sociedad es constituir una empresa en el sistema.
+    // 9.2 -- Tipos de cambio. `fx.manage` para la pantalla y la carga; la
+    // CREDENCIAL va aparte, con `integration.manage`: una clave de un servicio
+    // de terceros es un permiso de gasto, y quien tiene que poder teclear una
+    // tasa un lunes no tiene por que poder tocarla.
+    Route::get('/tipos-de-cambio', [TiposDeCambioController::class, 'index'])
+        ->middleware('permiso:fx.manage')
+        ->name('cambio.index');
+
+    Route::post('/tipos-de-cambio/traer', [TiposDeCambioController::class, 'traer'])
+        ->middleware('permiso:fx.manage')
+        ->name('cambio.traer');
+
+    Route::post('/tipos-de-cambio/oficial', [TiposDeCambioController::class, 'declararOficial'])
+        ->middleware('permiso:fx.manage')
+        ->name('cambio.oficial');
+
+    Route::post('/tipos-de-cambio/anotar', [TiposDeCambioController::class, 'anotarAMano'])
+        ->middleware('permiso:fx.manage')
+        ->name('cambio.anotar');
+
+    Route::post('/tipos-de-cambio/credencial', [TiposDeCambioController::class, 'guardarCredencial'])
+        ->middleware('permiso:integration.manage')
+        ->name('cambio.credencial');
+
+    Route::delete('/tipos-de-cambio/credencial', [TiposDeCambioController::class, 'olvidarCredencial'])
+        ->middleware('permiso:integration.manage')
+        ->name('cambio.credencial.olvidar');
+
     Route::get('/entidades', [EntidadesLegalesController::class, 'index'])
         ->middleware('permiso:legal_entity.manage')
         ->name('entidades.index');

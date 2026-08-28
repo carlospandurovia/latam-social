@@ -143,4 +143,24 @@ return [
     'tarifas' => [
         'autor_migracion' => env('LATAM_TARIFAS_AUTOR_MIGRACION'),
     ],
+
+    /*
+     * Tipos de cambio (iteración 9.2).
+     *
+     * La clave de Decolecta se lee AQUÍ y no con `env()` desde el servicio, por
+     * la misma razón que la contraseña del administrador: con
+     * `php artisan config:cache` —que es lo normal en producción— `env()`
+     * devuelve null en cualquier sitio que no sea `config/`, y el síntoma no
+     * sería un error sino un cron que no trae nada y no dice por qué. Lo detectó
+     * PHPStan, otra vez, y no una prueba.
+     *
+     * Sin valor por defecto a propósito. Vacío significa «no hay credencial en
+     * el entorno», y entonces se usa la guardada desde la pantalla, cifrada.
+     */
+    'cambio' => [
+        'decolecta' => [
+            'clave' => env('DECOLECTA_API_KEY'),
+            'url' => env('DECOLECTA_URL', 'https://api.decolecta.com'),
+        ],
+    ],
 ];

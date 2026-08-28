@@ -45,15 +45,27 @@ CREATE TABLE currencies (
 -- La clave ajena NO distingue mayusculas: el cotejamiento es
 -- `utf8mb4_unicode_ci` y 'SUNAT' entra igual que 'sunat'. Comprobado contra el
 -- motor, y afirmado en la suite para que no se suponga lo contrario.
+-- 9.2 -- Las columnas de credencial. `api_key_cipher` va CIFRADA con `Crypt`,
+-- la misma maquina que guarda las cuentas bancarias desde 3.8, y el entorno
+-- (`DECOLECTA_API_KEY`) manda sobre ella cuando existe. `api_key_last4` esta
+-- para que la pantalla pueda decir «termina en 8f2a» sin descifrar nada: la
+-- clave entera no se ensena nunca, ni al que la escribio un minuto antes.
 CREATE TABLE fx_sources (
-  id          BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-  code        VARCHAR(40)  NOT NULL,
-  name        VARCHAR(80)  NOT NULL,
-  description VARCHAR(255) NULL,
-  is_active   TINYINT(1)   NOT NULL DEFAULT 1,
-  created_at  DATETIME(3)  NULL,
-  updated_at  DATETIME(3)  NULL,
-  UNIQUE KEY uq_fxs_code (code)
+  id           BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  code         VARCHAR(40)  NOT NULL,
+  name         VARCHAR(80)  NOT NULL,
+  description  VARCHAR(255) NULL,
+  api_base_url VARCHAR(255) NULL,
+  api_key_cipher TEXT       NULL,
+  api_key_last4  VARCHAR(4) NULL,
+  credential_set_at DATETIME(3) NULL,
+  credential_set_by_user_id BIGINT UNSIGNED NULL,
+  is_active    TINYINT(1)   NOT NULL DEFAULT 1,
+  created_at   DATETIME(3)  NULL,
+  updated_at   DATETIME(3)  NULL,
+  UNIQUE KEY uq_fxs_code (code),
+  KEY ix_fxs_credencial (credential_set_by_user_id),
+  CONSTRAINT ck_fxs_last4 CHECK (api_key_last4 IS NULL OR CHAR_LENGTH(api_key_last4) = 4)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- `side` (9.1): SUNAT publica compra y venta el MISMO dia y no son
@@ -305,7 +317,39 @@ CREATE TABLE role_user (
   CONSTRAINT fk_ru_assigner FOREIGN KEY (assigned_by) REFERENCES users(id) ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- 9.2 -- Lo que el cron trajo, o no trajo.
+--
+-- `Cambio::DIAS_ATRAS` detecta que las tasas dejaron de llegar CUANDO ALGUIEN VA
+-- A CONVERTIR, o sea el dia de la liquidacion. Esto lo ensena antes. Un proceso
+-- automatico que falla en silencio es un proceso que nadie arregla, porque nadie
+-- se entera.
+--
+-- No guarda nada de la credencial, ni enmascarada, y `detail` es texto NUESTRO y
+-- no el cuerpo de la respuesta: un log que copia respuestas es un log que un dia
+-- copia una cabecera.
+CREATE TABLE fx_fetch_runs (
+  id             BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  source_code    VARCHAR(40)  NOT NULL,
+  requested_date DATE         NOT NULL,
+  ran_at         DATETIME(3)  NOT NULL,
+  outcome        VARCHAR(20)  NOT NULL,
+  rates_new      SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+  http_status    SMALLINT UNSIGNED NULL,
+  detail         VARCHAR(255) NULL,
+  created_at     DATETIME(3)  NULL,
+  updated_at     DATETIME(3)  NULL,
+  KEY ix_ffr_source (source_code, ran_at),
+  KEY ix_ffr_date (requested_date, outcome),
+  CONSTRAINT fk_ffr_source FOREIGN KEY (source_code) REFERENCES fx_sources(code) ON DELETE RESTRICT,
+  CONSTRAINT ck_ffr_outcome CHECK (outcome IN ('ok','sin_credencial','sin_fuente','error_http','respuesta_rara','error_red')),
+  CONSTRAINT ck_ffr_nuevas CHECK (outcome = 'ok' OR rates_new = 0)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- FKs de catalogo diferidas hasta aqui para no depender del orden de creacion.
+ALTER TABLE fx_sources
+  ADD CONSTRAINT fk_fxs_credencial FOREIGN KEY (credential_set_by_user_id)
+  REFERENCES users(id) ON DELETE RESTRICT;
+
 ALTER TABLE countries
   ADD CONSTRAINT fk_countries_currency FOREIGN KEY (default_currency_code)
     REFERENCES currencies(code) ON DELETE RESTRICT;
@@ -381,6 +425,24 @@ END//
 -- 3,742 y su fuente diria 3,751--. Se bloquea el UPDATE ENTERO, como
 -- `tg_cvw_inmutable`, porque no hay ninguna columna de esta tabla que tenga
 -- sentido cambiar despues de publicada.
+-- 9.2 -- Poner una credencial deja rastro completo o no lo deja.
+--
+-- Media firma --cifrado sin autor, o autor sin fecha-- es peor que ninguna,
+-- porque parece que la pregunta «quien la puso» tiene respuesta. Y esa pregunta
+-- es la primera el dia que aparezca un consumo raro contra el servicio.
+CREATE TRIGGER `tg_fxs_credencial_firmada`
+BEFORE UPDATE ON `fx_sources`
+FOR EACH ROW
+BEGIN
+    IF NEW.`api_key_cipher` IS NOT NULL
+       AND (NEW.`credential_set_at` IS NULL
+            OR NEW.`credential_set_by_user_id` IS NULL
+            OR NEW.`api_key_last4` IS NULL) THEN
+        SIGNAL SQLSTATE '45000'
+          SET MESSAGE_TEXT = 'Una credencial guardada exige quien la puso, cuando, y sus cuatro ultimos.';
+    END IF;
+END//
+
 CREATE TRIGGER `tg_fx_inmutable`
 BEFORE UPDATE ON `exchange_rates`
 FOR EACH ROW

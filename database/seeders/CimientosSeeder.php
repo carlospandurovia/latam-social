@@ -57,6 +57,23 @@ final class CimientosSeeder extends Seeder
             );
         }
 
+        // 9.2: quién publica el tipo de cambio de USD a PEN. Va en el
+        // catálogo y no en una pantalla porque sin esta fila `Cambio` contesta
+        // `SIN_FUENTE` y el sistema recién instalado no convierte nada — y
+        // porque la respuesta no está en duda: SUNAT es la que la ley peruana
+        // pide citar. Los demás pares NO se declaran aquí a propósito: SUNAT no
+        // los publica, y declarar una fuente que no publica es peor que no
+        // tener ninguna (ver `Q-64`).
+        //
+        // `updateOrInsert` sobre el par, no sobre el id: correr el seeder dos
+        // veces no puede abrir dos periodos, que es lo que `uq_fos_current`
+        // rechazaría con un 1062 en mitad de una instalación.
+        DB::table('fx_official_sources')->updateOrInsert(
+            ['base_currency_code' => 'USD', 'quote_currency_code' => 'PEN', 'valid_to' => null],
+            ['source_code' => 'sunat', 'valid_from' => '2026-01-01',
+                'updated_at' => $ahora, 'created_at' => $ahora],
+        );
+
         // is_active marca dónde se opera hoy, no dónde existe el país.
         $paises = [
             ['iso2' => 'PE', 'iso3' => 'PER', 'numeric_code' => '604', 'name' => 'Perú',      'phone_code' => '+51',  'default_currency_code' => 'PEN', 'timezone' => 'America/Lima',        'is_active' => true],
@@ -280,6 +297,12 @@ final class CimientosSeeder extends Seeder
             // desde ellas, no necesita crearlas.
             ['legal_entity.manage',    'Core',     'Dar de alta sociedades del grupo y su cobertura de facturacion'],
             ['integration.manage',     'Core',     'Configurar integraciones y credenciales'],
+            // 9.2: la pantalla de tipos de cambio. Declarar quien manda para un
+            // par y teclear una tasa que ningun proveedor publica --SUNAT solo
+            // da USD/PEN-- es trabajo de finanzas. La CREDENCIAL no: esa va con
+            // `integration.manage`, porque una clave de un tercero es un permiso
+            // de gasto y no la necesita quien anota una tasa un lunes.
+            ['fx.manage',              'Core',     'Declarar fuentes de tipo de cambio y anotar tasas'],
             ['audit.view',             'Core',     'Consultar la bitácora de auditoría'],
             ['catalog.view',           'Core',     'Consultar los catálogos de referencia'],
         ];
@@ -348,6 +371,9 @@ final class CimientosSeeder extends Seeder
                 'comms.view',
             ],
             'finance' => [
+                // 9.2: quien convierte dinero necesita poder arreglar la tabla
+                // de la que sale la tasa. No la credencial: eso es de `admin`.
+                'fx.manage',
                 'finance.view', 'finance.payout.create', 'finance.payout.approve',
                 'finance.invoice.issue', 'campaign.view', 'campaign.view_margin',
                 'campaign.approve',

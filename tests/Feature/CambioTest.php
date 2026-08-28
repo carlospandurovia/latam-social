@@ -32,14 +32,26 @@ final class CambioTest extends TestCase
         parent::setUp();
         $this->seed(CimientosSeeder::class);
 
-        foreach (['USD', 'PEN'] as $codigo) {
+        foreach (['USD', 'PEN', 'COP'] as $codigo) {
             $this->assertDatabaseHas('currencies', ['code' => $codigo]);
         }
+
+        // Desde `9.2` el catalogo ya trae declarado quien publica USD->PEN, asi
+        // que las pruebas de «no hay fuente» usan OTRO par. Se afirma aqui: si
+        // esta fila desapareciera, media suite probaria otra cosa creyendo que
+        // prueba lo mismo.
+        $this->assertDatabaseHas('fx_official_sources', [
+            'base_currency_code' => 'USD', 'quote_currency_code' => 'PEN',
+            'source_code' => 'sunat', 'valid_to' => null,
+        ]);
+        $this->assertDatabaseMissing('fx_official_sources', ['base_currency_code' => 'COP']);
     }
 
     public function test_sin_fuente_declarada_no_se_convierte_y_se_dice_por_que(): void
     {
-        $tasa = Cambio::tasa('USD', 'PEN', '2026-08-20', Cambio::VENTA);
+        // COP a proposito: SUNAT no lo publica y nadie ha declarado fuente,
+        // que es exactamente el caso de un creador colombiano.
+        $tasa = Cambio::tasa('COP', 'PEN', '2026-08-20', Cambio::VENTA);
 
         $this->assertSame(Cambio::SIN_FUENTE, $tasa->resultado);
         $this->assertNull($tasa->tasa);
@@ -49,8 +61,6 @@ final class CambioTest extends TestCase
     /** Hay fuente y no ha publicado nada: es un «no» distinto y se cuenta distinto. */
     public function test_con_fuente_pero_sin_tasa_lo_dice_de_otra_manera(): void
     {
-        Cambio::declararOficial('USD', 'PEN', 'sunat', '2026-01-01');
-
         $tasa = Cambio::tasa('USD', 'PEN', '2026-08-20', Cambio::VENTA);
 
         $this->assertSame(Cambio::SIN_TASA, $tasa->resultado);
@@ -75,7 +85,6 @@ final class CambioTest extends TestCase
      */
     public function test_un_domingo_usa_la_tasa_del_viernes_y_guarda_la_fecha_del_viernes(): void
     {
-        Cambio::declararOficial('USD', 'PEN', 'sunat', '2026-01-01');
         Cambio::anotar('USD', 'PEN', '2026-08-14', '3.74200000', 'sunat', Cambio::VENTA);
 
         $tasa = Cambio::tasa('USD', 'PEN', '2026-08-16', Cambio::VENTA);
@@ -88,7 +97,6 @@ final class CambioTest extends TestCase
     /** Y si hay tasa de ese mismo día, no va a buscar la anterior. */
     public function test_con_tasa_del_dia_se_usa_la_del_dia(): void
     {
-        Cambio::declararOficial('USD', 'PEN', 'sunat', '2026-01-01');
         Cambio::anotar('USD', 'PEN', '2026-08-14', '3.74200000', 'sunat', Cambio::VENTA);
         Cambio::anotar('USD', 'PEN', '2026-08-16', '3.75100000', 'sunat', Cambio::VENTA);
 
@@ -106,7 +114,6 @@ final class CambioTest extends TestCase
      */
     public function test_una_tasa_demasiado_vieja_no_se_usa_y_lo_dice(): void
     {
-        Cambio::declararOficial('USD', 'PEN', 'sunat', '2026-01-01');
         Cambio::anotar('USD', 'PEN', '2026-07-20', '3.74200000', 'sunat', Cambio::VENTA);
 
         $tasa = Cambio::tasa('USD', 'PEN', '2026-08-20', Cambio::VENTA);
@@ -121,7 +128,6 @@ final class CambioTest extends TestCase
     /** Compra y venta del mismo día son dos filas, y no se confunden. */
     public function test_compra_y_venta_conviven_el_mismo_dia(): void
     {
-        Cambio::declararOficial('USD', 'PEN', 'sunat', '2026-01-01');
         Cambio::anotar('USD', 'PEN', '2026-08-20', '3.73500000', 'sunat', Cambio::COMPRA);
         Cambio::anotar('USD', 'PEN', '2026-08-20', '3.74200000', 'sunat', Cambio::VENTA);
 
@@ -132,7 +138,6 @@ final class CambioTest extends TestCase
     /** `BR-FIN-004`: la conversión devuelve las siete cosas, no un número. */
     public function test_convertir_devuelve_todo_lo_que_hay_que_guardar(): void
     {
-        Cambio::declararOficial('USD', 'PEN', 'sunat', '2026-01-01');
         Cambio::anotar('USD', 'PEN', '2026-08-14', '3.74200000', 'sunat', Cambio::VENTA);
 
         $c = Cambio::convertir('1500.0000', 'USD', 'PEN', '2026-08-16', Cambio::VENTA);
@@ -159,7 +164,6 @@ final class CambioTest extends TestCase
     /** Relevar una fuente cierra la anterior el día ANTES, no el mismo día. */
     public function test_relevar_la_fuente_oficial_cierra_la_anterior_el_dia_antes(): void
     {
-        Cambio::declararOficial('USD', 'PEN', 'sunat', '2026-01-01');
         Cambio::declararOficial('USD', 'PEN', 'manual', '2026-06-01');
 
         $this->assertSame('sunat', Cambio::fuenteOficial('USD', 'PEN', '2026-05-31')->source_code);
@@ -179,7 +183,6 @@ final class CambioTest extends TestCase
      */
     public function test_una_conversion_pasada_usa_la_fuente_que_mandaba_entonces(): void
     {
-        Cambio::declararOficial('USD', 'PEN', 'sunat', '2026-01-01');
         Cambio::anotar('USD', 'PEN', '2026-03-10', '3.70000000', 'sunat', Cambio::VENTA);
         Cambio::declararOficial('USD', 'PEN', 'manual', '2026-06-01');
         Cambio::anotar('USD', 'PEN', '2026-03-10', '3.99000000', 'manual', Cambio::VENTA);
@@ -188,6 +191,26 @@ final class CambioTest extends TestCase
 
         $this->assertSame('3.70000000', $tasa->tasa, 'en marzo mandaba sunat');
         $this->assertSame('sunat', $tasa->fuente);
+    }
+
+    /**
+     * Relevar «desde el mismo día» no se hace moviendo fechas: se dice.
+     *
+     * Cerrar la anterior el día antes le pondría un `valid_to` anterior a su
+     * `valid_from` y saldría un `45000` feo de `ck_fos_dates`. Lo que ese caso
+     * significa es que la fuente anterior **no llegó a mandar ningún día**, y
+     * eso no lo arregla recortar una fecha. Es `Cobertura::noCerrablesEn()`
+     * otra vez.
+     */
+    public function test_relevar_desde_la_misma_fecha_se_contesta_con_palabras(): void
+    {
+        $veto = Cambio::vetoParaDeclarar('USD', 'PEN', '2026-01-01');
+
+        $this->assertNotNull($veto);
+        $this->assertStringContainsString('exige una fecha posterior', $veto);
+
+        $this->expectException(\RuntimeException::class);
+        Cambio::declararOficial('USD', 'PEN', 'manual', '2026-01-01');
     }
 
     /** `tg_fx_inmutable`: una tasa publicada no se reescribe ni por SQL. */
