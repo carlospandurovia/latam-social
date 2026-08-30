@@ -2,6 +2,45 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 
+## [9.14 · QA de la Fase 9] — 2026-08-30
+
+La pregunta de partida salió de `9.10a`: ¿cuántas reglas hay como las de
+`campaign_costs`, puestas desde la Fase 2 y que no han contestado nunca a nadie?
+
+### Medido
+- **167 de las 317 reglas del esquema** no aparecían en ninguna suite ni en
+  ninguna prueba. El 53%. No significa que estén mal: significa que nadie lo
+  sabe.
+- **Veinte de ellas estaban en el camino del dinero** — `ledger_entries`,
+  `payouts`, `payout_batches`, `payout_earnings`. Ahora se les pregunta, y **las
+  veinte contestaron correctamente**: las reglas de la Fase 2 estaban bien, sólo
+  que nadie lo había comprobado.
+- **La vuelta atrás completa de las 64 migraciones** (`migrate:reset`) funciona
+  y vuelven a aplicarse. Nunca se había ejecutado entera.
+- Los cuatro comandos programados están registrados.
+
+### Añadido
+- **`tools/verificar-cobertura-sql.py`** con trinquete `MUDAS-BASE`, en
+  `correr-todo.sh` y en el CI: una regla nueva sin aserción pone el CI en rojo.
+- **`tools/pruebas/9.14-dinero-mudo.sh`**: 31 aserciones sobre las reglas del
+  dinero que nadie había preguntado.
+
+### Sabido y dicho
+- Los tres defectos que aparecieron estaban **en la suite que iba a
+  comprobarlo**, no en el esquema: una premisa vacía que se leía como «no se
+  rechazó»; `ck_pe_amount`, que no podía contestar porque `tg_pe_sociedad` habla
+  antes; y **un falso verde hecho con la alternancia de `porque()`** — admitir
+  otro motivo la convierte en lo contrario de lo que es.
+- `ck_ledger_type` no puede ser nunca el único motivo: un tipo inventado
+  incumple también `ck_ledger_sign`, y cada motor nombra uno distinto.
+- `T-65`: quedan 147 reglas sin preguntar. `T-66`: los mensajes de la Fase 2 son
+  genéricos, y en Percona eso es lo que ve el usuario.
+
+### Lo que NO hace
+- **La auditoría de seguridad de finanzas**, que el roadmap pide en esta misma
+  iteración: qué ve cada rol, qué sale en un correo, qué queda en un log.
+- Revisar la aritmética en punto flotante de `Costos` y `Rentabilidad`.
+
 ## [9.10 · La rentabilidad] — 2026-08-30
 
 Ingreso − costo de creadores − gasto operativo. Las tres cifras existían desde

@@ -74,6 +74,15 @@ echo ""; echo "===== mensajes de la base: caben en 128 ====="
 python3 tools/verificar-mensajes.py "$SIN" --cliente "$CLIENTE" || tot_fail=$((tot_fail+1))
 python3 tools/verificar-mensajes.py "$CON" --cliente "$CLIENTE" || tot_fail=$((tot_fail+1))
 
+# 9.14: que regla de la base no ha contestado NUNCA a nadie.
+#
+# Los otros verificadores comprueban que la regla EXISTA y que sea la misma en
+# los dos motores. Ninguno comprobaba lo unico que importa el dia que falle: que
+# alguien se lo haya preguntado. `campaign_costs` llevaba dos semanas con cinco
+# restricciones verdes en todos los verificadores y CERO filas.
+echo ""; echo "===== reglas que nadie ha preguntado ====="
+python3 tools/verificar-cobertura-sql.py || tot_fail=$((tot_fail+1))
+
 echo ""; echo "===== nombres entre capas ====="
 python3 tools/verificar-pantallas.py || tot_fail=$((tot_fail+1))
 

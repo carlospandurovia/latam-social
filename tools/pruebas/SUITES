@@ -79,3 +79,9 @@
 # cosas que esta suite prueba-- asi que usa descripciones propias y afirma sobre
 # las suyas. No se pisa con nadie: ninguna otra suite toca esta tabla.
 9.10a-costos
+# 9.14 (QA de fase) pregunta las reglas del dinero que nadie habia preguntado
+# nunca. Casi todas son rechazos, asi que no dejan filas; las tres que si dejan
+# --un devengo, un lote y un pago-- se crean solo si no hay ninguno reusable, y
+# no se pueden limpiar (3.12). Va al final: reusa lo que dejan las anteriores
+# cuando existe.
+9.14-dinero-mudo

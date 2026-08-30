@@ -1,5 +1,10 @@
 # 09 — Estado del proyecto y siguiente iteración
 
+> **Versión 4.1 — 2026-08-30.** Actualizado al cerrar `9.14`, el QA de la fase.
+> **De las 317 reglas del esquema, 167 no habían contestado nunca a nadie.** Las
+> veinte del camino del dinero ya lo hacen, y las veinte estaban bien. Quedan
+> 147, con trinquete puesto para que no suban.
+>
 > **Versión 4.0 — 2026-08-30.** Actualizado al cerrar `9.10`. **Se puede ver qué
 > deja cada campaña**: ingreso, costo de creadores y gasto operativo, cada moneda
 > por su lado. Y el margen viejo —el que restaba sólo los creadores— está
@@ -123,10 +128,10 @@
 | Tablas | 74 · **27 columnas puerta**, contadas y no heredadas (`T-57`) |
 | Migraciones | 64, verdes desde cero en MySQL 8 y con vuelta atrás completa |
 | Pruebas de PHPUnit | **830**, 2.670 aserciones |
-| Aserciones de restricción (SQL) | **1.806** en MariaDB, **1.796** en MySQL 8 · 36 suites |
+| Aserciones de restricción (SQL) | **1.868** en MariaDB, **1.858** en MySQL 8 · 37 suites |
 | Puertas de calidad | **7**: formato, análisis estático, fronteras, pruebas, vigencias, nombres entre capas y **las suites** (8.11) |
-| Verificadores fuera de PHPUnit | 4: fixturas, periodos, nombres entre capas y **mensajes de la base** (nuevo en 8.1) |
-| Decisiones registradas | hasta `DEC-185` |
+| Verificadores fuera de PHPUnit | 5: fixturas, periodos, nombres entre capas, mensajes de la base y **reglas que nadie ha preguntado** (nuevo en 9.14) |
+| Decisiones registradas | hasta `DEC-187` |
 
 ### Lo que se puede hacer hoy por pantalla
 
@@ -339,19 +344,21 @@ Ninguna bloquea código hoy; todas bloquean una iteración futura concreta.
 
 ## 4. Lo que propongo como siguiente iteración
 
-**`9.14` — el QA de la Fase 9, o el trinquete.** Con `9.10` cerrada, lo que queda
-de `F9` sin bloquear es trabajo de calidad, no de producto:
+**La otra mitad de `9.14`: la auditoría de seguridad de finanzas.** El roadmap la
+pide junto al QA de fase y se quedó fuera. Es una pregunta distinta de la que
+contesta una suite de restricciones: **qué ve cada rol, qué sale en un correo,
+qué queda en un log**. Hoy hay tres afirmaciones de ese tipo repartidas por el
+código —el motivo interno de una retención no cruza (`DEC-172`), un correo de
+pago no lleva número de cuenta (`DEC-179`), el margen es de dirección
+(`DEC-181`)— y ninguna se comprueba en un solo sitio.
 
-- **El QA de fase** (`9.14`) hace en Finanzas lo que `8.11` hizo en Contenido:
-  medir lo que la fase da por hecho. Cinco iteraciones de dinero seguidas
-  —`9.1` a `9.10`— y ninguna ha sido revisada por alguien que no fuera yo.
-  Es donde han aparecido siempre los defectos más caros de este proyecto.
-- **El trinquete de las 296 aserciones ciegas** es la alternativa barata:
-  `DEC-161` le dio a `porque()` la alternancia que hacía falta y `9.10a` bajó la
-  primera. Bajarlo cien es una tarde y sube el valor de todas las suites viejas.
+Alternativas, las dos medibles y sin bloqueo:
 
-Yo haría el QA de fase primero, por el mismo motivo por el que `8.11` valió la
-pena: lo que encuentra no se encuentra construyendo.
+- **`T-65`**: las 147 reglas que siguen sin que nadie les pregunte nada. La
+  concentración está en `invoices` (12), `creator_tax_profiles` (9) y
+  `creator_payment_methods` (7).
+- **`T-66`**: los mensajes genéricos de la Fase 2. En Percona, «Restriccion
+  ck_ledger_sign incumplida» es literalmente lo que ve el usuario.
 
 Lo demás de `F9` **necesita a tu contador**:
 

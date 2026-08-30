@@ -211,7 +211,7 @@ Iterativa y exhaustiva, tal como pide la especificación. **Nada de frontend aqu
 | ~~9.11~~ | ✅ **Pagada en `9.6`.** Adelantada por `DEC-157` a la iteración que estrene `payout_batches`.** Era la validación de `billing_legal_entity ≠ settlement_legal_entity`, y una regla 🔴 en la posición 11 de 14 llega después de que diez iteraciones la den por buena. Va **a la base** y es cross-table, así que es un disparador. `DEC-020` ya no es «en el MVP»: es la regla (`DEC-156`) |
 | 9.12 | **Series y numeración correlativa por entidad legal**, con asignación bajo bloqueo y tests de concurrencia (`DEC-021`, `BR-LE-007`) |
 | 9.13 | **Matriz de propósitos obligatorios por país** + bloqueo de activación sin cobertura + `integration_connection_id` en documentos (`DEC-028`, `DEC-033`) |
-| 9.14 | QA de fase + **auditoría de seguridad específica de finanzas** |
+| 9.14 | ✅ **Cerrada (2026-08-30) — la mitad de QA.** Nace `verificar-cobertura-sql.py` y mide lo que ningún verificador miraba: **de las 317 reglas del esquema, 167 no habían contestado nunca a nadie** (`DEC-186`). Veinte estaban en el camino del dinero —`ck_ledger_sign`, `ck_pbatch_approval_order`, las dos de retención…— y ahora se les pregunta: **las veinte contestaron bien**. Los tres defectos que aparecieron estaban en la suite que iba a comprobarlo, no en el esquema — incluido un falso verde hecho con la alternancia de `porque()`. Trinquete a 147. **Falta la auditoría de seguridad de finanzas**, que es la otra mitad |
 
 **Dependencias:** F7, F8, `DEC-005` resuelto.
 
