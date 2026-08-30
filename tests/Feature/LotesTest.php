@@ -10,12 +10,15 @@ use App\Modules\Content\Services\Entregables;
 use App\Modules\Content\Services\Revisiones;
 use App\Modules\Finance\Services\Ledger;
 use App\Modules\Finance\Services\Lotes;
+use App\Modules\Finance\Services\Pagos;
 use App\Shared\Auth\Permisos;
+use App\Shared\Eventos\CorreoPedido;
 use Database\Seeders\CimientosSeeder;
 use Database\Seeders\PlantillasDeCorreoSeeder;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
 use RuntimeException;
@@ -365,6 +368,128 @@ final class LotesTest extends TestCase
             (string) $respuesta->getContent());
     }
 
+    // ------------------------------------------ la conciliación (9.7)
+
+    /** Un pago ejecutado sale en la bandeja: `sent` no es «llegó». */
+    public function test_un_pago_ejecutado_espera_conciliacion(): void
+    {
+        $this->ejecutado();
+
+        $this->assertCount(1, Pagos::porConciliar());
+
+        $this->actingAs($this->usuarioCon('finance'))->get('/pagos/conciliar')
+            ->assertOk()
+            ->assertSee('Enviado no es llegado', false);
+    }
+
+    /** Confirmar exige referencia y fecha valor, y lo impone la base. */
+    public function test_confirmar_sin_referencia_no_se_puede_ni_por_sql(): void
+    {
+        $pagoId = $this->ejecutado();
+
+        $this->expectException(QueryException::class);
+
+        // fixture-invalido-a-proposito: la prueba afirma que la base lo rechaza.
+        DB::table('payouts')->where('id', $pagoId)->update([
+            'status' => Pagos::CONFIRMADO, 'confirmed_at' => now(),
+        ]);
+    }
+
+    public function test_confirmar_un_pago_avisa_al_creador(): void
+    {
+        Event::fake([CorreoPedido::class]);
+        $pagoId = $this->ejecutado();
+
+        Pagos::confirmar($pagoId, 'REF-99887', now()->toDateString(), null,
+            (int) $this->usuarioCon('finance')->id);
+
+        $this->assertSame(Pagos::CONFIRMADO,
+            DB::table('payouts')->where('id', $pagoId)->value('status'));
+
+        Event::assertDispatched(CorreoPedido::class,
+            fn (CorreoPedido $c): bool => $c->codigo === 'finance.payout_confirmed');
+    }
+
+    /**
+     * **La que importa de `9.7`.** Un pago devuelto **no deshace el devengo**.
+     *
+     * El devengo se queda `paid` porque se pagó: lo que falló fue la
+     * transferencia, no el trabajo. La corrección es un asiento de
+     * `payment_reversal` que apunta al de pago (`BR-FIN-002`) y que queda
+     * pagable — el creador ya cumplió y su dinero no espera a que alguien se
+     * acuerde.
+     */
+    public function test_un_pago_devuelto_vuelve_a_deberse(): void
+    {
+        Event::fake([CorreoPedido::class]);
+        $pagoId = $this->ejecutado();
+        $creadorId = (int) DB::table('payouts')->where('id', $pagoId)->value('creator_id');
+
+        $this->assertTrue(Ledger::saldo($creadorId)->isEmpty(), 'pagado: no se le debe nada');
+
+        $uuid = Pagos::devolver($pagoId, 'La cuenta estaba cerrada.',
+            (int) $this->usuarioCon('finance')->id);
+
+        $reversion = DB::table('ledger_entries')->where('uuid', $uuid)->first();
+
+        $this->assertSame(Ledger::REVERSION_DE_PAGO, $reversion->entry_type);
+        $this->assertSame('500.0000', $reversion->amount, 'positivo: devuelve el saldo');
+        $this->assertSame(Ledger::PAGABLE, $reversion->status, 'vuelve a la cola');
+        $this->assertNotNull($reversion->reverses_entry_id, 'apunta al pago que corrige');
+
+        // Y el devengo original NO se toca: se pago.
+        $devengo = DB::table('ledger_entries')->where('entry_type', Ledger::DEVENGO)->first();
+        $this->assertSame(Ledger::PAGADO, $devengo->status);
+
+        $this->assertSame('500.0000', (string) Ledger::saldo($creadorId)->first()->total);
+
+        Event::assertDispatched(CorreoPedido::class,
+            fn (CorreoPedido $c): bool => $c->codigo === 'finance.payout_returned');
+    }
+
+    /** Devolver exige motivo, y lo impone la base. */
+    public function test_devolver_sin_motivo_no_se_puede_ni_por_sql(): void
+    {
+        $pagoId = $this->ejecutado();
+
+        $this->expectException(QueryException::class);
+
+        // fixture-invalido-a-proposito: la prueba afirma que la base lo rechaza.
+        DB::table('payouts')->where('id', $pagoId)->update([
+            'status' => Pagos::DEVUELTO, 'returned_at' => now(),
+        ]);
+    }
+
+    /** `tg_payout_estado`: confirmado y devuelto son finales. */
+    public function test_un_pago_confirmado_no_cambia_de_opinion(): void
+    {
+        $pagoId = $this->ejecutado();
+        Pagos::confirmar($pagoId, 'REF-99887', now()->toDateString(), null,
+            (int) $this->usuarioCon('finance')->id);
+
+        $this->expectException(QueryException::class);
+
+        DB::table('payouts')->where('id', $pagoId)->update([
+            'status' => Pagos::DEVUELTO, 'returned_at' => now(),
+            'return_reason' => 'Tarde.', 'returned_by_user_id' => (int) $this->usuarioCon('finance')->id,
+        ]);
+    }
+
+    /** Y un pago pendiente no se confirma: primero hay que mandarlo. */
+    public function test_no_se_confirma_un_pago_que_no_se_ha_enviado(): void
+    {
+        $this->pagable(500.0);
+        $uuid = Lotes::armar($this->entidadId, $this->moneda, (int) $this->usuarioCon('finance')->id);
+        $loteId = (int) DB::table('payout_batches')->where('uuid', $uuid)->value('id');
+        $pagoId = (int) DB::table('payouts')->where('payout_batch_id', $loteId)->value('id');
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('Solo se confirma un pago enviado');
+
+        Pagos::confirmar($pagoId, 'REF-1', now()->toDateString(), null,
+            (int) $this->usuarioCon('finance')->id);
+    }
+
     // ------------------------------------------------------------- apoyo
 
     /**
@@ -424,6 +549,19 @@ final class LotesTest extends TestCase
         $this->assertTrue(Ledger::revisarPagable($asientoId), 'la premisa: cumple las cinco');
 
         return [$asientoId, $id];
+    }
+
+    /** Un lote armado, firmado y ejecutado. Devuelve el id del pago. */
+    private function ejecutado(): int
+    {
+        $this->pagable(500.0);
+        $armador = $this->usuarioCon('finance');
+        $uuid = Lotes::armar($this->entidadId, $this->moneda, (int) $armador->id);
+        $lote = DB::table('payout_batches')->where('uuid', $uuid)->first();
+        Lotes::aprobar($lote, (int) $this->usuarioCon('finance')->id);
+        Lotes::ejecutar(DB::table('payout_batches')->where('uuid', $uuid)->first(), (int) $armador->id);
+
+        return (int) DB::table('payouts')->where('payout_batch_id', $lote->id)->value('id');
     }
 
     /** Un `payout` a mano, para poder probar el disparador sin pasar por el servicio. */

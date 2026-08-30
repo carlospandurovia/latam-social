@@ -277,6 +277,35 @@ final class PlantillasDeCorreoSeeder extends Seeder
                 ."Todavia esta pendiente de verificacion interna: no se le pagara a esa cuenta\n"
                 .'hasta que otra persona de nuestro equipo la verifique.'.$pie,
             ],
+            // 9.7: el pago confirmado y el devuelto. Al creador se le
+            // escribe cuando el dinero SALIO DE VERDAD --confirmado contra el
+            // extracto-- y cuando vuelve. Avisar al enviar seria avisar de una
+            // intencion, y el segundo correo desmentiria al primero.
+            //
+            // Sin numero de cuenta ni referencia bancaria, por lo mismo que el
+            // resto: un correo se lee en pantallas ajenas y se reenvia.
+            [
+                'finance.payout_confirmed',
+                'Le pagamos {{ importe }} {{ moneda }}',
+                "Hola {{ nombre }}:\n\n"
+                ."Ya le transferimos {{ importe }} {{ moneda }} y el banco nos lo confirmo.\n"
+                ."Segun su entidad, el abono puede tardar unas horas en verse.\n\n"
+                ."El detalle esta en Mis ingresos: {{ enlace }}\n\n"
+                ."Si en dos dias habiles no lo ve, responda a este correo.\n\n"
+                .'LATAM Social',
+            ],
+            [
+                'finance.payout_returned',
+                'Su pago volvio: revise su cuenta',
+                "Hola {{ nombre }}:\n\n"
+                ."El banco nos devolvio la transferencia de {{ importe }} {{ moneda }}.\n"
+                ."Motivo: {{ motivo }}\n\n"
+                ."No ha perdido nada: el importe le sigue debiendose y entra en el proximo\n"
+                ."pago. Lo que necesitamos es que revise sus datos bancarios en su portal,\n"
+                ."porque si estan mal volvera a pasar.\n\n"
+                ."Sus ingresos: {{ enlace }}\n\n"
+                .'LATAM Social',
+            ],
         ];
     }
 }

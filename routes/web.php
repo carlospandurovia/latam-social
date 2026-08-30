@@ -29,6 +29,7 @@ use App\Modules\Creator\Http\Controllers\PerfilComercialController;
 use App\Modules\Creator\Http\Controllers\PerfilFiscalController;
 use App\Modules\Creator\Http\Controllers\RedesSocialesController;
 use App\Modules\Creator\Http\Controllers\SolicitudesController;
+use App\Modules\Finance\Http\Controllers\CostosController;
 use App\Modules\Finance\Http\Controllers\LotesController;
 use App\Modules\Finance\Http\Controllers\MisIngresosController;
 use App\Modules\Identity\Http\Controllers\AccesoController;
@@ -655,6 +656,45 @@ Route::middleware('auth')->group(function (): void {
         ->middleware('permiso:finance.payout.create')
         ->whereUuid('uuid')->whereNumber('pago')
         ->name('lotes.sacar');
+
+    // 9.7: la bandeja de conciliacion. `sent` significa «lo mandamos», no
+    // «llego»: entre las dos cosas esta el banco. Se abre para vaciarla, como
+    // la cola de revision de `8.3`.
+    Route::get('/pagos/conciliar', [LotesController::class, 'conciliar'])
+        ->middleware('permiso:finance.view')
+        ->name('pagos.conciliar');
+
+    Route::post('/pagos/{pago}/confirmar', [LotesController::class, 'confirmar'])
+        ->middleware('permiso:finance.payout.create')
+        ->whereNumber('pago')
+        ->name('pagos.confirmar');
+
+    Route::post('/pagos/{pago}/devolver', [LotesController::class, 'devolver'])
+        ->middleware('permiso:finance.payout.create')
+        ->whereNumber('pago')
+        ->name('pagos.devolver');
+
+    // 9.10a -- El gasto de una campana. La pantalla cuelga de la campana pero el
+    // controlador vive en Finance: `campaign_costs` es una tabla de finanzas y
+    // `deptrac` no deja que Campaign conozca a Finance.
+    //
+    // `finance.cost.manage` y NO `campaign.view_margin`: cargar lo que se gasta
+    // no es ver lo que se gana (DEC-181). Quien lleva la campana tiene el
+    // primero y ya no tiene el segundo.
+    Route::get('/campanas/{uuid}/costos', [CostosController::class, 'index'])
+        ->middleware('permiso:finance.cost.manage')
+        ->whereUuid('uuid')
+        ->name('costos.index');
+
+    Route::post('/campanas/{uuid}/costos', [CostosController::class, 'store'])
+        ->middleware('permiso:finance.cost.manage')
+        ->whereUuid('uuid')
+        ->name('costos.store');
+
+    Route::post('/campanas/{uuid}/costos/{costo}/anular', [CostosController::class, 'anular'])
+        ->middleware('permiso:finance.cost.manage')
+        ->whereUuid('uuid')->whereNumber('costo')
+        ->name('costos.anular');
 
     // 9.8: lo que ha ganado. Solo lectura y sin un solo boton: el creador no
     // mueve dinero, lo mira. `creator.portal` dice que puede ver UN portal;

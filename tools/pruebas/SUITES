@@ -68,3 +68,14 @@
 # devengo de la semilla, poniendolo pagable. Va DETRAS de 9.3, que es quien crea
 # los asientos que esta liquida.
 9.6-lotes
+# 9.7 escribe en `payout_batches` y `payouts`. Ninguna de las dos se puede
+# limpiar --`tg_payout_no_delete` prohibe borrar un pago que ya salio, que es
+# justo lo que aqui se prueba-- asi que crea SU lote con codigo propio y sus
+# cuatro pagos, y los deja donde quedaron. Va DETRAS de 9.6, que es quien monta
+# el lote del que estos pagos son la continuacion.
+9.7-conciliacion
+# 9.10a escribe en `campaign_costs`, que hasta esta iteracion no tenia ni una
+# fila. No se puede limpiar --`tg_cco_no_delete` es de la Fase 2 y es una de las
+# cosas que esta suite prueba-- asi que usa descripciones propias y afirma sobre
+# las suyas. No se pisa con nadie: ninguna otra suite toca esta tabla.
+9.10a-costos

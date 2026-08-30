@@ -6,14 +6,23 @@
   {{-- 7.7: el acceso al panel de seguimiento. Va arriba y no en un menú porque
        según el roadmap es la pantalla más usada del sistema, y hoy la única
        forma de llegar a ella era teclear la URL. --}}
-  @if ($campana->confirmed_at !== null)
-    <div class="mb-5 flex justify-end">
+  <div class="mb-5 flex flex-wrap justify-end gap-2">
+    {{-- 9.10a: los gastos NO esperan a que la campaña se confirme. El producto
+         se compra y se envía antes, y una campaña cancelada puede tener gastos
+         de verdad — no poder anotarlos dejaría la pérdida sin registrar. --}}
+    @can('finance.cost.manage')
+      <a href="{{ route('costos.index', $campana->uuid) }}"
+         class="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+        Gastos de la campaña
+      </a>
+    @endcan
+    @if ($campana->confirmed_at !== null)
       <a href="{{ route('campanas.seguimiento', $campana->uuid) }}"
          class="rounded-lg border border-marca-300 bg-white px-4 py-2 text-sm font-medium text-marca-700 hover:bg-marca-50">
         Ver cómo va
       </a>
-    </div>
-  @endif
+    @endif
+  </div>
 
   <div class="grid gap-5 lg:grid-cols-3">
     <div class="lg:col-span-2 space-y-5">

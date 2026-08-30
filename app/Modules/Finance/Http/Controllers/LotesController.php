@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Modules\Finance\Http\Controllers;
 
 use App\Modules\Finance\Services\Lotes;
+use App\Modules\Finance\Services\Pagos;
+use App\Shared\Files\Almacen;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -151,6 +153,66 @@ final class LotesController
             'Content-Type' => 'text/csv; charset=UTF-8',
             'Content-Disposition' => 'attachment; filename="'.$lote->code.'.csv"',
         ]);
+    }
+
+    /**
+     * La bandeja de conciliación (9.7).
+     *
+     * Ordenada por lo que lleva más esperando y no por importe: un pago que
+     * lleva tres semanas sin conciliar es la señal, valga lo que valga.
+     */
+    public function conciliar(): View
+    {
+        return view('lotes.conciliar', [
+            'pagos' => Pagos::porConciliar(),
+            'hoy' => now()->toDateString(),
+        ]);
+    }
+
+    public function confirmar(Request $peticion, int $pago): RedirectResponse
+    {
+        $datos = $peticion->validate([
+            'bank_reference' => ['required', 'string', 'min:3', 'max:80'],
+            'value_date' => ['required', 'date_format:Y-m-d', 'before_or_equal:today'],
+            'comprobante' => ['nullable', 'file', 'max:5120', 'mimes:'.implode(',', Almacen::extensiones())],
+        ]);
+
+        $archivoId = $peticion->hasFile('comprobante')
+            ? Almacen::guardar($peticion->file('comprobante'), 'payout_proof')
+            : null;
+
+        try {
+            Pagos::confirmar(
+                $pago,
+                (string) $datos['bank_reference'],
+                (string) $datos['value_date'],
+                $archivoId,
+                (int) Auth::id(),
+            );
+        } catch (RuntimeException $e) {
+            return redirect()->route('pagos.conciliar')->with('aviso', $e->getMessage());
+        }
+
+        return redirect()->route('pagos.conciliar')
+            ->with('exito', 'Pago confirmado. Al creador le llega el aviso.');
+    }
+
+    public function devolver(Request $peticion, int $pago): RedirectResponse
+    {
+        $motivo = $peticion->validate([
+            'motivo' => ['required', 'string', 'min:10', 'max:255'],
+        ])['motivo'];
+
+        try {
+            Pagos::devolver($pago, (string) $motivo, (int) Auth::id());
+        } catch (RuntimeException $e) {
+            return redirect()->route('pagos.conciliar')->with('aviso', $e->getMessage());
+        }
+
+        return redirect()->route('pagos.conciliar')->with(
+            'exito',
+            'Devolucion registrada. El importe se le vuelve a deber y entra en el proximo lote.',
+        );
     }
 
     private function lote(string $uuid): object

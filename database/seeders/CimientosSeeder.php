@@ -264,6 +264,7 @@ final class CimientosSeeder extends Seeder
             // campanas, que son quienes hablan con el cliente y tienen el dato.
             ['client.tax.manage',      'Client',   'Registrar y editar la identidad fiscal del cliente'],
             ['finance.view',           'Finance',  'Ver el ledger y los saldos'],
+            ['finance.cost.manage',    'Finance',  'Anotar y anular gastos de campana (9.10a)'],
             ['finance.payout.create',  'Finance',  'Crear lotes de pago'],
             ['finance.payout.approve', 'Finance',  'Aprobar lotes de pago (BR-FIN-005: distinto del creador)'],
             ['finance.invoice.issue',  'Finance',  'Emitir comprobantes'],
@@ -339,7 +340,14 @@ final class CimientosSeeder extends Seeder
         // hay atajo en el código: ver `App\Shared\Auth\Permisos`.
         $matriz = [
             'campaign_manager' => [
-                'campaign.view', 'campaign.manage', 'campaign.view_margin', 'campaign.invite',
+                // DEC-181: `campaign.view_margin` YA NO esta aqui. Quien lleva
+                // una campana carga sus gastos y ve cuanto lleva gastado; el
+                // margen --lo que se gana-- es una cifra de direccion, y el
+                // camino por el que un numero interno acaba en un correo a un
+                // cliente empieza siempre por alguien que podia verlo sin
+                // necesitarlo.
+                'campaign.view', 'campaign.manage', 'campaign.invite',
+                'finance.cost.manage',
                 'content.deliverable.view',
                 'creator.view', 'creator.manage', 'creator.approve',
                 // DEC-060: el mismo rol verifica y activa. El equipo de
@@ -375,7 +383,8 @@ final class CimientosSeeder extends Seeder
                 // de la que sale la tasa. No la credencial: eso es de `admin`.
                 'fx.manage',
                 'finance.view', 'finance.payout.create', 'finance.payout.approve',
-                'finance.invoice.issue', 'campaign.view', 'campaign.view_margin',
+                'finance.invoice.issue', 'finance.cost.manage',
+                'campaign.view', 'campaign.view_margin',
                 'campaign.approve',
                 // Para pagar hace falta ver la cuenta bancaria. Es el único rol
                 // no administrador con acceso a datos fiscales del creador.

@@ -408,15 +408,44 @@ final class SeguimientoTest extends TestCase
         $respuesta->assertSee('5,000.00');
     }
 
+    /**
+     * `finance` y ya **no** `campaign_manager` (`DEC-181`, 9.10a).
+     *
+     * Quien lleva la campaña carga sus gastos y ve cuánto lleva gastado; el
+     * margen —lo que se gana— es una cifra de dirección. Esta prueba llevaba
+     * desde 7.7 usando `campaign_manager` porque entonces lo tenía.
+     */
     public function test_con_permiso_el_margen_si_sale(): void
     {
         Queue::fake();
         $this->aceptado(1200.0);
 
-        $this->actingAs($this->usuarioCon('campaign_manager'))
+        $this->actingAs($this->usuarioCon('finance'))
             ->get(route('campanas.seguimiento', $this->uuid))
             ->assertOk()
-            ->assertSee('13,800.00');
+            ->assertSee('13,800.00')
+            // 9.10a: y dice de qué está hecho. Este margen no resta el producto
+            // ni los envíos, así que sale más alto de lo que es.
+            ->assertSee('No resta los gastos', false);
+    }
+
+    /**
+     * **`DEC-181`.** Quien lleva la campaña ya no ve el margen.
+     *
+     * Es el mismo caso de arriba con el rol que lo tenía hasta 9.10a: la prueba
+     * existe para que quitar el permiso no se deshaga por descuido.
+     */
+    public function test_quien_lleva_la_campana_ya_no_ve_el_margen(): void
+    {
+        Queue::fake();
+        $this->aceptado(1200.0);
+
+        $respuesta = $this->actingAs($this->usuarioCon('campaign_manager'))
+            ->get(route('campanas.seguimiento', $this->uuid))
+            ->assertOk();
+
+        $this->assertNull($respuesta->viewData('margen'), 'el dato ni siquiera se calcula');
+        $respuesta->assertDontSee('13,800.00');
     }
 
     public function test_la_pantalla_exige_poder_ver_campanas(): void

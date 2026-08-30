@@ -35,7 +35,10 @@ CREATE TABLE campaign_costs (
     (voided_at IS NOT NULL AND voided_by_user_id IS NOT NULL AND voided_reason IS NOT NULL)
   ),
   CONSTRAINT ck_cco_type CHECK (cost_type IN ('product','shipping','production','media','tool','other')),
-  CONSTRAINT ck_cco_amount CHECK (amount >= 0)
+  CONSTRAINT ck_cco_amount CHECK (amount >= 0),
+  -- 9.10a: `NOT NULL` admite la cadena vacia, y una cifra sin descripcion no se
+  -- puede auditar dentro de seis meses.
+  CONSTRAINT ck_cco_descripcion CHECK (TRIM(description) <> '')
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ============================ Lote de pago (BR-FIN-005: doble aprobacion)
@@ -96,11 +99,18 @@ CREATE TABLE payouts (
   currency_code       CHAR(3)       NOT NULL,
   status              VARCHAR(15)   NOT NULL DEFAULT 'pending',
   bank_reference      VARCHAR(80)   NULL,
+  -- 9.7: el comprobante del extracto. Opcional a proposito: el abono puede
+  -- verse en una pantalla del banco antes que en un PDF, y bloquear la
+  -- confirmacion por un archivo dejaria pagos «enviados» que todos saben que
+  -- llegaron.
+  proof_file_id       BIGINT UNSIGNED NULL,
   -- DATE: la fecha valor es un dia, no un instante (2.3 §8).
   value_date          DATE          NULL,
   sent_at             DATETIME(3)   NULL,
   confirmed_at        DATETIME(3)   NULL,
+  confirmed_by_user_id BIGINT UNSIGNED NULL,
   returned_at         DATETIME(3)   NULL,
+  returned_by_user_id BIGINT UNSIGNED NULL,
   return_reason       VARCHAR(255)  NULL,
   created_at          DATETIME(3)   NULL,
   updated_at          DATETIME(3)   NULL,
@@ -110,6 +120,12 @@ CREATE TABLE payouts (
   KEY ix_payout_method (payment_method_id),
   KEY ix_payout_currency (currency_code),
   KEY ix_payout_value_date (value_date),
+  KEY ix_payout_proof (proof_file_id),
+  KEY ix_payout_confirmer (confirmed_by_user_id),
+  KEY ix_payout_returner (returned_by_user_id),
+  CONSTRAINT fk_payout_proof FOREIGN KEY (proof_file_id) REFERENCES files(id) ON DELETE RESTRICT,
+  CONSTRAINT fk_payout_confirmer FOREIGN KEY (confirmed_by_user_id) REFERENCES users(id) ON DELETE RESTRICT,
+  CONSTRAINT fk_payout_returner FOREIGN KEY (returned_by_user_id) REFERENCES users(id) ON DELETE RESTRICT,
   CONSTRAINT fk_payout_batch FOREIGN KEY (payout_batch_id) REFERENCES payout_batches(id) ON DELETE RESTRICT,
   CONSTRAINT fk_payout_creator FOREIGN KEY (creator_id) REFERENCES creators(id) ON DELETE RESTRICT,
   CONSTRAINT fk_payout_method FOREIGN KEY (payment_method_id) REFERENCES creator_payment_methods(id) ON DELETE RESTRICT,
@@ -117,7 +133,13 @@ CREATE TABLE payouts (
   CONSTRAINT ck_payout_status CHECK (status IN ('pending','sent','confirmed','returned','cancelled')),
   CONSTRAINT ck_payout_amount CHECK (amount > 0),
   CONSTRAINT ck_payout_sent CHECK (status NOT IN ('sent','confirmed') OR sent_at IS NOT NULL),
-  CONSTRAINT ck_payout_returned CHECK (status <> 'returned' OR returned_at IS NOT NULL)
+  CONSTRAINT ck_payout_returned CHECK (status <> 'returned' OR returned_at IS NOT NULL),
+  -- 9.7: sin referencia y fecha valor, «confirmado» es la palabra de quien lo
+  -- marco, y conciliar un extracto dentro de seis meses se vuelve imposible.
+  CONSTRAINT ck_payout_conciliado CHECK (status <> 'confirmed' OR (bank_reference IS NOT NULL AND value_date IS NOT NULL AND confirmed_at IS NOT NULL AND confirmed_by_user_id IS NOT NULL)),
+  -- Un pago que vuelve y no dice por que se reintenta a ciegas contra la misma
+  -- cuenta equivocada.
+  CONSTRAINT ck_payout_devuelto CHECK (status <> 'returned' OR (return_reason IS NOT NULL AND returned_by_user_id IS NOT NULL))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ============================ EL LEDGER. Solo insercion, nunca UPDATE ni DELETE.
@@ -423,6 +445,26 @@ DELIMITER //
 -- sobre algo que ya tiene que estar bien, y una regla que solo mira al final
 -- deja existir el estado malo mientras tanto --que es como alguien lo ve, lo
 -- exporta, o lo cree--.
+-- 9.7 -- El grafo de estados de un pago.
+--
+-- `sent` significa «lo mandamos», no «llego»: entre las dos cosas esta el banco.
+-- `confirmed` y `returned` son FINALES --lo que pasa despues es un pago nuevo,
+-- no este cambiando de opinion--. Mismo criterio que `tg_ledger_estado`.
+CREATE TRIGGER `tg_payout_estado`
+BEFORE UPDATE ON `payouts`
+FOR EACH ROW
+BEGIN
+    IF NOT (NEW.`status` <=> OLD.`status`) THEN
+        IF NOT (
+               (OLD.`status` = 'pending' AND NEW.`status` IN ('sent','cancelled'))
+            OR (OLD.`status` = 'sent' AND NEW.`status` IN ('confirmed','returned'))
+        ) THEN
+            SIGNAL SQLSTATE '45000'
+              SET MESSAGE_TEXT = 'Ese cambio de estado no existe en un pago: confirmado y devuelto son finales.';
+        END IF;
+    END IF;
+END//
+
 CREATE TRIGGER `tg_pe_sociedad`
 BEFORE INSERT ON `payout_earnings`
 FOR EACH ROW
@@ -581,6 +623,46 @@ FOR EACH ROW
 BEGIN
   SIGNAL SQLSTATE '45000'
     SET MESSAGE_TEXT = 'Un costo de campana no se borra: se anula (voided_at), para poder reconstruir el margen historico.';
+END//
+
+-- ---------------------------------------------------------------------------
+-- 9.10a: el `DELETE` estaba cerrado desde la Fase 2 y el `UPDATE` no.
+--
+-- El comentario de la tabla dice desde entonces que un costo mal tecleado «se
+-- anula, no se borra», PORQUE el margen de ayer tiene que poder reconstruirse.
+-- Cambiar el importe de 4.000 a 400 lo dejaba irrecuperable exactamente igual
+-- que borrarlo, y sin rastro de que alguien lo hizo.
+-- ---------------------------------------------------------------------------
+CREATE TRIGGER tg_cco_inmutable BEFORE UPDATE ON campaign_costs
+FOR EACH ROW
+BEGIN
+  IF NOT (NEW.campaign_id <=> OLD.campaign_id)
+     OR NOT (NEW.cost_type <=> OLD.cost_type)
+     OR NOT (NEW.amount <=> OLD.amount)
+     OR NOT (NEW.currency_code <=> OLD.currency_code)
+     OR NOT (NEW.incurred_on <=> OLD.incurred_on)
+     OR NOT (NEW.description <=> OLD.description)
+     OR NOT (NEW.file_id <=> OLD.file_id) THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'Un costo no se reescribe: se anula y se vuelve a anotar.';
+  END IF;
+
+  IF OLD.voided_at IS NOT NULL AND NOT (NEW.voided_at <=> OLD.voided_at) THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'Un costo ya anulado no se desanula: vuelva a anotarlo.';
+  END IF;
+END//
+
+-- Un gasto se incurre en el pasado. Un dia de margen porque la maquina y el
+-- usuario pueden estar en husos distintos. Va en disparador y no en CHECK
+-- porque un CHECK no puede llamar a CURDATE().
+CREATE TRIGGER tg_cco_fecha BEFORE INSERT ON campaign_costs
+FOR EACH ROW
+BEGIN
+  IF NEW.incurred_on > DATE_ADD(CURDATE(), INTERVAL 1 DAY) THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'Un gasto no se incurre en el futuro: revise la fecha.';
+  END IF;
 END//
 
 -- ---------------------------------------------------------------------------

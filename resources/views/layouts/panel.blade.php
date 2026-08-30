@@ -50,6 +50,9 @@
           // 9.6: delante de Tipos de cambio porque es trabajo de todos los meses
           // y aquello se toca dos veces al ano.
           ['Lotes de pago', 'lotes.index', 'lotes', 'finance.view'],
+          // 9.7: detras de Lotes porque es el paso siguiente del mismo trabajo,
+          // y con entrada propia porque se abre para vaciarla.
+          ['Conciliación', 'pagos.conciliar', 'pagos', 'finance.view'],
           // 4.9: junto a la bitacora porque responde a la misma clase de
           // pregunta --que paso y cuando-- y porque el modo de fallo que importa
           // («al creador no le llego su enlace») lo descubre operaciones, no un

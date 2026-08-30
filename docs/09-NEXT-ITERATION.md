@@ -1,5 +1,17 @@
 # 09 — Estado del proyecto y siguiente iteración
 
+> **Versión 3.9 — 2026-08-30.** Actualizado al cerrar `9.10a`. **El gasto de una
+> campaña ya se puede anotar** — y con una corrección: la 3.8 proponía «`9.10` —
+> el saldo del creador, cuadrado», y `9.10` es la rentabilidad. Le puse un número
+> que no le tocaba (`T-63` en su forma documental). Al ir a construir la
+> rentabilidad apareció que `campaign_costs` llevaba desde la Fase 2 **vacía**,
+> así que primero el dato y después la cuenta.
+>
+> **Versión 3.8 — 2026-08-27.** Actualizado al cerrar `9.7`. **El pago se cierra
+> contra el extracto.** `sent` significa «lo mandamos»; ahora hay grafo de estados,
+> referencia y fecha valor obligatorias para confirmar, motivo para devolver, y un
+> asiento de reversión que devuelve el dinero a la cola sin deshacer el devengo.
+>
 > **Versión 3.7 — 2026-08-27.** Actualizado al cerrar `9.6`. **Sale el dinero**,
 > con dos firmas y con la garantía de que paga la sociedad de la campaña. Con eso
 > queda **pagada la deuda de `DEC-157`**.
@@ -104,12 +116,12 @@
 | | |
 |---|---|
 | Tablas | 74 · **27 columnas puerta**, contadas y no heredadas (`T-57`) |
-| Migraciones | 62, verdes desde cero en MySQL 8 y con vuelta atrás completa |
-| Pruebas de PHPUnit | **795**, 2.578 aserciones |
-| Aserciones de restricción (SQL) | **1.716** en MariaDB, **1.706** en MySQL 8 · 34 suites |
+| Migraciones | 64, verdes desde cero en MySQL 8 y con vuelta atrás completa |
+| Pruebas de PHPUnit | **820**, 2.641 aserciones |
+| Aserciones de restricción (SQL) | **1.806** en MariaDB, **1.796** en MySQL 8 · 36 suites |
 | Puertas de calidad | **7**: formato, análisis estático, fronteras, pruebas, vigencias, nombres entre capas y **las suites** (8.11) |
 | Verificadores fuera de PHPUnit | 4: fixturas, periodos, nombres entre capas y **mensajes de la base** (nuevo en 8.1) |
-| Decisiones registradas | hasta `DEC-177` |
+| Decisiones registradas | hasta `DEC-182` |
 
 ### Lo que se puede hacer hoy por pantalla
 
@@ -220,6 +232,17 @@ firma alguien distinto de quien lo armó, y al ejecutarlo cada pago deja su
 asiento. La base garantiza que **paga la sociedad de la campaña** —la deuda que
 `DEC-157` dejó apuntada, ahora saldada— y que un devengo no se paga dos veces.
 
+Y desde `9.10a`, **se puede anotar lo que una campaña nos cuesta**: producto,
+envíos, producción, pauta, con su comprobante. Un gasto se anula y no se
+reescribe —desde esta iteración también lo impide la base—, cada moneda va por su
+lado, y **quien lleva la campaña carga gastos y ya no ve el margen**.
+
+Y desde `9.7`, **el pago se cierra contra el extracto**: una bandeja con lo que
+salió y nadie ha mirado, confirmar exigiendo referencia y fecha valor —sin ellas
+«confirmado» es la palabra de quien lo marcó— y devolver exigiendo el motivo. Un
+pago devuelto **no deshace el devengo**: se escribe una reversión que devuelve el
+dinero a la cola, y el creador se entera al final, no al enviar.
+
 Y desde `9.8`, **el creador ve su dinero**: saldo por moneda, qué falta para
 cobrar cada cosa —con las palabras de las cinco condiciones— y la fecha prevista
 en cuanto es pagable. Sin un solo botón, y sin el motivo interno de una
@@ -305,11 +328,18 @@ Ninguna bloquea código hoy; todas bloquean una iteración futura concreta.
 
 ## 4. Lo que propongo como siguiente iteración
 
-**`9.7` — registrar el pago de verdad.** El lote deja los pagos en `sent`;
-falta confirmarlos contra el extracto del banco, guardar el comprobante y avisar
-al creador. Es pequeño y no lo bloquea nadie.
+**`9.10` — la rentabilidad, ahora que tiene los dos lados.** Ingreso menos costo
+de creadores menos gasto operativo, por campaña y por sociedad, con
+`campaign.view_margin` delante. Con una pregunta dentro que hay que decidir: qué
+hacer cuando la campaña se cobra en soles y el envío se pagó en dólares. Hoy la
+respuesta honesta es **enseñar las dos monedas separadas y no dar un porcentaje**
+— un margen en porcentaje exige convertir, y convertir exige `Q-63`.
 
-Después, lo que queda de `F9` **necesita a tu contador**:
+Alternativa igual de barata: **el trinquete de las 296 aserciones ciegas**.
+`DEC-161` le dio a `porque()` la alternancia que hacía falta y `9.10a` bajó la
+primera; bajarlo cien es una tarde y sube el valor de todas las suites viejas.
+
+Lo demás de `F9` **necesita a tu contador**:
 
 | | Qué falta | Quién |
 |---|---|---|
@@ -317,9 +347,10 @@ Después, lo que queda de `F9` **necesita a tu contador**:
 | `9.9` | Facturación al cliente | tu contador (`Q-44`) y el proveedor de e-facturación |
 | `9.12` | Series y numeración correlativa | `Q-44` |
 
-Y dos cosas que puedo hacer en cualquier momento sin bloquear nada: **el archivo
-real del banco** —dime cuál y pásame su especificación— y **bajar el trinquete de
-las 297 aserciones ciegas**, que sigue en 297.
+Y una cosa más que puedo hacer en cualquier momento: **el archivo real del
+banco** —dime cuál y pásame su especificación—. Sin ella, lo que hay es el CSV
+legible de `DEC-177`, y también la importación del extracto de `9.7` se queda
+esperando al mismo dato.
 
 
 ## 5. Deuda de documentación reconocida

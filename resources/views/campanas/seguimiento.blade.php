@@ -143,6 +143,16 @@
                 </dd>
               </div>
             </dl>
+            {{-- 9.10a: decir de qué está hecho el número. Este margen es el
+                 ingreso menos lo comprometido con creadores y NADA MÁS: no
+                 resta producto, envíos ni producción, que desde 9.10a ya se
+                 pueden anotar. Sale más alto de lo que es, y quien decida un
+                 precio con él tiene que saberlo. El margen completo es `9.10`. --}}
+            <p class="mt-2 text-xs text-amber-700">
+              Ingreso menos lo comprometido con creadores. <strong>No resta los gastos
+              operativos</strong> —producto, envíos, producción—, así que sale más alto
+              de lo que es.
+            </p>
           </div>
         @endif
       </div>

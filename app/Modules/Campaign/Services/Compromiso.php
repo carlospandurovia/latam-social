@@ -31,7 +31,8 @@ use Illuminate\Support\Facades\DB;
  *
  * `margen()` existe y **nunca se enseña a un cliente ni a un creador**. Es
  * información interna: lo que se cobra menos lo que se paga. La pantalla que lo
- * usa exige `campaign.margin` y no `campaign.view`, y eso lo impone la ruta.
+ * usa exige `campaign.view_margin` y no `campaign.view`, y desde `9.10a` ese
+ * permiso **ya no lo tiene quien lleva la campaña** (`DEC-181`).
  */
 final class Compromiso
 {
@@ -139,10 +140,16 @@ final class Compromiso
     /**
      * El margen interno de la campaña. **Nunca se enseña fuera.**
      *
-     * Es `revenue_amount` menos lo comprometido con creadores. No incluye los
-     * costos operativos de `campaign_costs` —producción, envíos— porque esa
-     * tabla no se llena todavía; cuando se llene, este número cambia y el
-     * documento de 9.10 dirá cómo.
+     * Es `revenue_amount` menos lo comprometido con creadores. **No incluye los
+     * costos operativos** de `campaign_costs` —producción, envíos—, que desde
+     * `9.10a` sí se pueden anotar: este número sale más alto de lo que es, y la
+     * pantalla lo dice con esas palabras hasta que `9.10` construya el margen
+     * completo.
+     *
+     * No se arreglan aquí a propósito. `campaign_costs` es de Finance y
+     * `deptrac` no deja que Campaign la conozca; y sumar costos en otra moneda
+     * exige un tipo de cambio que nadie ha elegido (`Q-63`, `DEC-180`). El
+     * margen completo vive en Finance, no aquí.
      *
      * @return array{ingreso: float, comprometido: float, margen: float, porcentaje: float|null}
      */

@@ -2,6 +2,85 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 
+## [9.10a · El gasto de una campaña] — 2026-08-30
+
+La mitad que le faltaba a la rentabilidad. `campaign_costs` llevaba desde la Fase
+2 en el esquema con **cero filas**: con ella vacía, cualquier margen sale más
+alto de lo que es.
+
+### Añadido
+- **Pantalla de gastos** colgando de la ficha de campaña: producto, envíos,
+  producción, pauta, herramientas, con fecha, moneda y comprobante opcional. Un
+  gasto anulado se queda en la lista, tachado y con su motivo.
+- **`finance.cost.manage`**: anotar y anular gastos. Lo tienen `campaign_manager`
+  y `finance`.
+- **`tg_cco_inmutable`**: un costo no se reescribe, se anula y se vuelve a
+  anotar. Y un anulado no se desanula.
+- **`tg_cco_fecha`**: un gasto no se incurre en el futuro, con un día de margen
+  por los husos horarios.
+- **`ck_cco_descripcion`**: `NOT NULL` admite la cadena vacía, y una cifra sin
+  descripción no se puede auditar.
+
+### Cambiado
+- **`campaign_manager` ya no ve el margen** (`DEC-181`). Carga gastos y ve cuánto
+  lleva gastado; lo que se gana es una cifra de dirección. La revocación va en la
+  migración y no en el seeder, porque el seeder concede y no revoca nunca
+  (`T-64`).
+- La tarjeta de margen de seguimiento **dice qué no incluye**: no resta los
+  gastos operativos, así que sale más alto de lo que es. Hasta `9.10`.
+
+### Decidido
+- Las monedas **se agrupan, no se suman** (`DEC-180`): sumarlas exige elegir
+  compra, venta o media, y eso da tres márgenes para los mismos hechos (`Q-63`).
+- El costo del creador entra **al devengarse** y sale del libro mayor
+  (`DEC-182`), no de `campaign_creators` — un devengo anulado ya no se debe.
+
+### Sabido y dicho
+- `T-63`: en `campaign_costs` el `DELETE` estaba cerrado desde la Fase 2 y el
+  `UPDATE` no. Reescribir un importe dejaba el margen de ayer irrecuperable igual
+  que borrar la fila, y sin rastro. Nadie lo había notado porque **ninguna de sus
+  cinco restricciones había contestado nunca a nadie**: la tabla estaba vacía.
+- La aserción de borrado de `2.13` estaba **verde con la tabla vacía**. Un
+  `DELETE` que no toca ninguna fila no dispara nada.
+
+## [9.7 · La conciliación] — 2026-08-27
+
+`sent` significa «lo mandamos», no «llegó». Entre las dos cosas está el banco.
+
+### Añadido
+- **`tg_payout_estado`**: el grafo de estados de un pago. Los estados existían
+  desde la Fase 2; lo que no existía era qué puede seguir a qué — mismo agujero
+  que `ledger_entries` tenía antes de `9.3`. **Confirmado y devuelto son
+  finales.**
+- **`ck_payout_conciliado`**: confirmar exige **referencia bancaria, fecha valor,
+  cuándo y quién**. Sin eso, «confirmado» es la palabra de quien lo marcó.
+- **`ck_payout_devuelto`**: devolver exige **motivo y firma**. Un pago que vuelve
+  sin decir por qué se reintenta a ciegas contra la misma cuenta equivocada.
+- **`proof_file_id`**: el comprobante del extracto, opcional a propósito —el
+  abono se ve en la pantalla del banco antes que en un PDF— pero, si lo hay, es
+  un archivo que existe (`fk_payout_proof`).
+- **Bandeja `/pagos/conciliar`**, ordenada por lo que lleva más esperando y no
+  por importe: lo que se descubre recorriendo se descubre tarde.
+- **Dos correos al creador**: pago confirmado y pago devuelto. Sin número de
+  cuenta ni referencia bancaria.
+
+### Decidido
+- Un pago devuelto **no deshace el devengo** (`DEC-178`). El devengo se queda en
+  `paid` porque se pagó: lo que falló fue la transferencia, no el trabajo. La
+  corrección es un `payment_reversal` que nace `accrued` —`ck_ledger_estado_inicial`
+  no admite nacer pagable— y pasa a `payable` en la misma operación: el creador
+  ya cumplió, y su dinero no espera a que alguien se acuerde.
+- Se avisa **al confirmar y al devolver, no al enviar** (`DEC-179`). Avisar al
+  enviar es avisar de una intención: si el banco lo rechaza, el creador ya cree
+  que cobró.
+
+### Lo que NO hace
+- **Reintentar el pago devuelto.** El devengo vuelve a la cola y entra en el
+  siguiente lote: la cuenta que lo rechazó suele ser lo que hay que corregir
+  primero.
+- **Leer el extracto solo.** Importarlo necesita el formato de la entidad — el
+  mismo bloqueo de `DEC-177`.
+
 ## [9.6 · Los lotes de pago] — 2026-08-27
 
 Aquí sale el dinero. Y aquí se paga la deuda que `DEC-157` dejó apuntada.

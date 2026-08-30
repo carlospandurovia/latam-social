@@ -42,17 +42,30 @@ SNAP="'CTS SAC','20603203896','Lima','Marca Demo','20123456789','Av. Demo 100','
 echo ""
 echo "--- Costos de campana (margen reconstruible) ---"
 probar "costo: producto enviado al creador" \
- "INSERT INTO campaign_costs (campaign_id,cost_type,description,amount,currency_code,incurred_on,created_by_user_id,created_at) VALUES ($CA,'product','Kit de producto',250.0000,'PEN','2026-09-02',$U1,NOW(3));" OK
+ "INSERT INTO campaign_costs (campaign_id,cost_type,description,amount,currency_code,incurred_on,created_by_user_id,created_at) VALUES ($CA,'product','Kit de producto',250.0000,'PEN',DATE_SUB(CURDATE(), INTERVAL 20 DAY),$U1,NOW(3));" OK
 probar "costo: importe negativo" \
- "INSERT INTO campaign_costs (campaign_id,cost_type,description,amount,currency_code,incurred_on,created_at) VALUES ($CA,'shipping','Envio',-10.0000,'PEN','2026-09-02',NOW(3));" RECHAZO
+ "INSERT INTO campaign_costs (campaign_id,cost_type,description,amount,currency_code,incurred_on,created_at) VALUES ($CA,'shipping','Envio',-10.0000,'PEN',DATE_SUB(CURDATE(), INTERVAL 20 DAY),NOW(3));" RECHAZO
 probar "costo: tipo inventado" \
- "INSERT INTO campaign_costs (campaign_id,cost_type,description,amount,currency_code,incurred_on,created_at) VALUES ($CA,'varios','Algo',10.0000,'PEN','2026-09-02',NOW(3));" RECHAZO
+ "INSERT INTO campaign_costs (campaign_id,cost_type,description,amount,currency_code,incurred_on,created_at) VALUES ($CA,'varios','Algo',10.0000,'PEN',DATE_SUB(CURDATE(), INTERVAL 20 DAY),NOW(3));" RECHAZO
 probar "costo: anulacion completa (fecha + quien + motivo)" \
- "INSERT INTO campaign_costs (campaign_id,cost_type,description,amount,currency_code,incurred_on,voided_at,voided_by_user_id,voided_reason,created_at) VALUES ($CA,'media','Pauta duplicada',100.0000,'PEN','2026-09-03',NOW(3),$U1,'Cargado dos veces',NOW(3));" OK
+ "INSERT INTO campaign_costs (campaign_id,cost_type,description,amount,currency_code,incurred_on,voided_at,voided_by_user_id,voided_reason,created_at) VALUES ($CA,'media','Pauta duplicada',100.0000,'PEN',DATE_SUB(CURDATE(), INTERVAL 19 DAY),NOW(3),$U1,'Cargado dos veces',NOW(3));" OK
 probar "costo: anulado sin decir quien ni por que" \
- "INSERT INTO campaign_costs (campaign_id,cost_type,description,amount,currency_code,incurred_on,voided_at,created_at) VALUES ($CA,'media','Pauta',100.0000,'PEN','2026-09-03',NOW(3),NOW(3));" RECHAZO
-probar "costo: borrado fisico (prohibido, se anula)" \
- "DELETE FROM campaign_costs WHERE id=(SELECT id FROM (SELECT MIN(id) id FROM campaign_costs) x);" RECHAZO
+ "INSERT INTO campaign_costs (campaign_id,cost_type,description,amount,currency_code,incurred_on,voided_at,created_at) VALUES ($CA,'media','Pauta',100.0000,'PEN',DATE_SUB(CURDATE(), INTERVAL 19 DAY),NOW(3),NOW(3));" RECHAZO
+# 9.10a: esta asercion estaba verde con la tabla VACIA --un DELETE que no toca
+# ninguna fila no dispara nada y no produce ERROR--, asi que se afirma primero
+# que hay algo que borrar. Es la familia de `T-28`: contar que no hay problemas
+# cuando lo que no hay es busqueda.
+valor "hay algun costo que borrar" \
+ "SELECT CASE WHEN COUNT(*) > 0 THEN 'si' ELSE 'no' END FROM campaign_costs;" "si"
+porque "costo: borrado fisico (prohibido, se anula)" \
+ "DELETE FROM campaign_costs WHERE id=(SELECT id FROM (SELECT MIN(id) id FROM campaign_costs) x);" \
+ "no se borra"
+# Y las fechas de arriba son PASADAS a proposito: desde 9.10a `tg_cco_fecha`
+# rechaza un gasto del futuro, y estas llevaban desde la Fase 2 con fechas de
+# septiembre que en agosto estaban por venir. Nadie miraba `incurred_on`.
+porque "costo: incurrido dentro de un mes" \
+ "INSERT INTO campaign_costs (campaign_id,cost_type,description,amount,currency_code,incurred_on,created_at) VALUES ($CA,'other','Gasto del futuro',10.0000,'PEN',DATE_ADD(CURDATE(), INTERVAL 30 DAY),NOW(3));" \
+ "no se incurre en el futuro"
 
 echo ""
 echo "--- Lotes de pago: segregacion de funciones (BR-FIN-005) ---"
