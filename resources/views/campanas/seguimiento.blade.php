@@ -120,38 +120,22 @@
           </p>
         @endif
 
-        {{-- EL MARGEN.
+        {{-- EL MARGEN YA NO ESTÁ AQUÍ (9.10).
 
-             `$margen` es `null` cuando quien mira no puede verlo, y entonces el
-             dato ni siquiera ha llegado hasta aquí: no se calcula y se esconde,
-             no se calcula (`BR-SEC-001`, 🔴). --}}
-        @if ($margen !== null)
+             Esta tarjeta enseñaba ingreso menos comprometido con creadores y
+             nada más: no restaba producto, envíos ni producción. Salía más alto
+             de lo que era, y desde 9.10a esos gastos ya se anotan.
+
+             Lo que llega ahora es un booleano, no un importe: ningún número
+             interno cruza hasta la vista (`BR-SEC-001`, 🔴). --}}
+        @if ($verMargen)
           <div class="mt-4 pt-3 border-t border-slate-100">
-            <p class="text-xs text-slate-400 mb-2">Sólo para quien puede ver el margen</p>
-            <dl class="space-y-2 text-sm">
-              <div class="flex justify-between">
-                <dt class="text-slate-500">Ingreso</dt>
-                <dd class="tabular-nums">{{ number_format($margen['ingreso'], 2) }}</dd>
-              </div>
-              <div class="flex justify-between">
-                <dt class="text-slate-600 font-medium">Margen</dt>
-                <dd class="tabular-nums font-medium">
-                  {{ number_format($margen['margen'], 2) }}
-                  @if ($margen['porcentaje'] !== null)
-                    <span class="text-xs text-slate-400">({{ number_format($margen['porcentaje'], 1) }}%)</span>
-                  @endif
-                </dd>
-              </div>
-            </dl>
-            {{-- 9.10a: decir de qué está hecho el número. Este margen es el
-                 ingreso menos lo comprometido con creadores y NADA MÁS: no
-                 resta producto, envíos ni producción, que desde 9.10a ya se
-                 pueden anotar. Sale más alto de lo que es, y quien decida un
-                 precio con él tiene que saberlo. El margen completo es `9.10`. --}}
-            <p class="mt-2 text-xs text-amber-700">
-              Ingreso menos lo comprometido con creadores. <strong>No resta los gastos
-              operativos</strong> —producto, envíos, producción—, así que sale más alto
-              de lo que es.
+            <a href="{{ route('rentabilidad.show', $campana->uuid) }}"
+               class="text-sm font-medium text-marca-700 hover:underline">
+              Ver la rentabilidad de esta campaña →
+            </a>
+            <p class="mt-1 text-xs text-slate-400">
+              Ingreso, costo de creadores y gasto operativo, cada moneda por su lado.
             </p>
           </div>
         @endif

@@ -53,6 +53,11 @@
           // 9.7: detras de Lotes porque es el paso siguiente del mismo trabajo,
           // y con entrada propia porque se abre para vaciarla.
           ['Conciliación', 'pagos.conciliar', 'pagos', 'finance.view'],
+          // 9.10: con permiso PROPIO y distinto de los tres de arriba. Quien
+          // concilia pagos no tiene por que ver cuanto gana la empresa por
+          // campana, y una entrada de menu que aparece o no es la forma mas
+          // barata de que eso se note (BR-SEC-001).
+          ['Rentabilidad', 'rentabilidad.index', 'rentabilidad', 'campaign.view_margin'],
           // 4.9: junto a la bitacora porque responde a la misma clase de
           // pregunta --que paso y cuando-- y porque el modo de fallo que importa
           // («al creador no le llego su enlace») lo descubre operaciones, no un

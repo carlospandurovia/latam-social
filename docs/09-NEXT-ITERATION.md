@@ -1,5 +1,10 @@
 # 09 — Estado del proyecto y siguiente iteración
 
+> **Versión 4.0 — 2026-08-30.** Actualizado al cerrar `9.10`. **Se puede ver qué
+> deja cada campaña**: ingreso, costo de creadores y gasto operativo, cada moneda
+> por su lado. Y el margen viejo —el que restaba sólo los creadores— está
+> borrado, no anotado: `Compromiso::margen()` ya no existe.
+>
 > **Versión 3.9 — 2026-08-30.** Actualizado al cerrar `9.10a`. **El gasto de una
 > campaña ya se puede anotar** — y con una corrección: la 3.8 proponía «`9.10` —
 > el saldo del creador, cuadrado», y `9.10` es la rentabilidad. Le puse un número
@@ -117,11 +122,11 @@
 |---|---|
 | Tablas | 74 · **27 columnas puerta**, contadas y no heredadas (`T-57`) |
 | Migraciones | 64, verdes desde cero en MySQL 8 y con vuelta atrás completa |
-| Pruebas de PHPUnit | **820**, 2.641 aserciones |
+| Pruebas de PHPUnit | **830**, 2.670 aserciones |
 | Aserciones de restricción (SQL) | **1.806** en MariaDB, **1.796** en MySQL 8 · 36 suites |
 | Puertas de calidad | **7**: formato, análisis estático, fronteras, pruebas, vigencias, nombres entre capas y **las suites** (8.11) |
 | Verificadores fuera de PHPUnit | 4: fixturas, periodos, nombres entre capas y **mensajes de la base** (nuevo en 8.1) |
-| Decisiones registradas | hasta `DEC-182` |
+| Decisiones registradas | hasta `DEC-185` |
 
 ### Lo que se puede hacer hoy por pantalla
 
@@ -232,6 +237,12 @@ firma alguien distinto de quien lo armó, y al ejecutarlo cada pago deja su
 asiento. La base garantiza que **paga la sociedad de la campaña** —la deuda que
 `DEC-157` dejó apuntada, ahora saldada— y que un devengo no se paga dos veces.
 
+Y desde `9.10`, **se puede ver qué deja cada campaña**: ingreso menos costo de
+creadores menos gasto operativo, ordenadas de peor a mejor porque la pregunta por
+la que se abre es cuáles pierden dinero. Cada moneda por su lado, y el porcentaje
+sólo cuando hay una sola — cuando no, la pantalla dice por qué. Los canjes salen
+marcados y fuera de los totales.
+
 Y desde `9.10a`, **se puede anotar lo que una campaña nos cuesta**: producto,
 envíos, producción, pauta, con su comprobante. Un gasto se anula y no se
 reescribe —desde esta iteración también lo impide la base—, cada moneda va por su
@@ -328,16 +339,19 @@ Ninguna bloquea código hoy; todas bloquean una iteración futura concreta.
 
 ## 4. Lo que propongo como siguiente iteración
 
-**`9.10` — la rentabilidad, ahora que tiene los dos lados.** Ingreso menos costo
-de creadores menos gasto operativo, por campaña y por sociedad, con
-`campaign.view_margin` delante. Con una pregunta dentro que hay que decidir: qué
-hacer cuando la campaña se cobra en soles y el envío se pagó en dólares. Hoy la
-respuesta honesta es **enseñar las dos monedas separadas y no dar un porcentaje**
-— un margen en porcentaje exige convertir, y convertir exige `Q-63`.
+**`9.14` — el QA de la Fase 9, o el trinquete.** Con `9.10` cerrada, lo que queda
+de `F9` sin bloquear es trabajo de calidad, no de producto:
 
-Alternativa igual de barata: **el trinquete de las 296 aserciones ciegas**.
-`DEC-161` le dio a `porque()` la alternancia que hacía falta y `9.10a` bajó la
-primera; bajarlo cien es una tarde y sube el valor de todas las suites viejas.
+- **El QA de fase** (`9.14`) hace en Finanzas lo que `8.11` hizo en Contenido:
+  medir lo que la fase da por hecho. Cinco iteraciones de dinero seguidas
+  —`9.1` a `9.10`— y ninguna ha sido revisada por alguien que no fuera yo.
+  Es donde han aparecido siempre los defectos más caros de este proyecto.
+- **El trinquete de las 296 aserciones ciegas** es la alternativa barata:
+  `DEC-161` le dio a `porque()` la alternancia que hacía falta y `9.10a` bajó la
+  primera. Bajarlo cien es una tarde y sube el valor de todas las suites viejas.
+
+Yo haría el QA de fase primero, por el mismo motivo por el que `8.11` valió la
+pena: lo que encuentra no se encuentra construyendo.
 
 Lo demás de `F9` **necesita a tu contador**:
 

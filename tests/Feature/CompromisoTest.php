@@ -269,30 +269,15 @@ final class CompromisoTest extends TestCase
     }
 
     // ------------------------------------------------------- el margen
-
-    public function test_el_margen_es_lo_que_se_cobra_menos_lo_que_se_paga(): void
-    {
-        $this->participacion(600.0);
-
-        $m = Compromiso::margen($this->campana());
-
-        $this->assertSame(15000.0, $m['ingreso']);
-        $this->assertSame(600.0, $m['comprometido']);
-        $this->assertSame(14400.0, $m['margen']);
-        $this->assertSame(96.0, $m['porcentaje']);
-    }
-
-    /** Una campaña gratuita tiene ingreso cero: el porcentaje no se inventa. */
-    public function test_en_una_campana_gratuita_el_porcentaje_es_nulo_y_no_una_division_por_cero(): void
-    {
-        DB::table('campaigns')->where('id', $this->campanaId)
-            ->update(['revenue_amount' => 0, 'is_gratis' => 1]);
-
-        $m = Compromiso::margen($this->campana());
-
-        $this->assertNull($m['porcentaje']);
-        $this->assertSame(0.0, $m['margen']);
-    }
+    //
+    // Las dos pruebas de `Compromiso::margen()` se fueron con el metodo en
+    // `9.10`. Aquel margen restaba SOLO lo comprometido con creadores y no el
+    // producto ni los envios, asi que salia mas alto de lo que era; el completo
+    // vive en `Finance\Services\Rentabilidad` y lo prueba `RentabilidadTest`.
+    //
+    // El caso que aquellas cazaban --el porcentaje de una campana gratuita, que
+    // seria una division por cero-- esta cubierto alli, en
+    // `test_un_canje_no_tiene_porcentaje_y_lo_dice`.
 
     // ------------------------------------------------------------ pantalla
 

@@ -2,6 +2,40 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 
+## [9.10 · La rentabilidad] — 2026-08-30
+
+Ingreso − costo de creadores − gasto operativo. Las tres cifras existían desde
+iteraciones distintas y nunca se habían puesto juntas. **Sin migración**: un
+margen guardado en una columna es un margen que se queda viejo.
+
+### Añadido
+- **`/rentabilidad`**: las campañas agrupadas por su moneda y **ordenadas de peor
+  a mejor** dentro de cada grupo — la pregunta por la que se abre es cuáles
+  pierden dinero.
+- **`/rentabilidad/{uuid}`**: la resta por moneda y el detalle del gasto, línea a
+  línea, incluidos los anulados. Un margen que no cuadra se discute mirando de
+  qué está hecho.
+- Entrada de menú **Rentabilidad**, con permiso propio: quien concilia pagos no
+  tiene por qué ver cuánto gana la empresa por campaña.
+
+### Eliminado
+- **`Compromiso::margen()`** (`DEC-183`). Restaba sólo lo comprometido con
+  creadores y se llamaba margen; desde `9.10a` habría ido empeorando con cada
+  gasto cargado. No se arregló donde estaba —`campaign_costs` es de Finance y
+  Campaign no puede conocerla— y se borra en vez de dejarse: un método que
+  calcula un número incompleto y se llama `margen()` es una trampa.
+- El importe del margen ya **no llega a la vista de seguimiento**: llega un
+  booleano y un enlace.
+
+### Decidido
+- **Porcentaje sólo con una moneda** (`DEC-185`), y cuando no se puede, la
+  pantalla dice por qué con palabras en vez de dejar un hueco.
+- **Los canjes salen marcados y fuera de todo total** (`DEC-184`), igual que las
+  campañas con gastos en otra moneda; la cabecera dice cuántas quedaron fuera y
+  por qué.
+- **Por sociedad, todavía no.** El ingreso de hoy es el declarado, no el
+  facturado: sumarlo por sociedad se parece a un estado de resultados sin serlo.
+
 ## [9.10a · El gasto de una campaña] — 2026-08-30
 
 La mitad que le faltaba a la rentabilidad. `campaign_costs` llevaba desde la Fase

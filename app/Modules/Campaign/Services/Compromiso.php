@@ -29,10 +29,11 @@ use Illuminate\Support\Facades\DB;
  *
  * ### El margen no sale de aquí
  *
- * `margen()` existe y **nunca se enseña a un cliente ni a un creador**. Es
- * información interna: lo que se cobra menos lo que se paga. La pantalla que lo
- * usa exige `campaign.view_margin` y no `campaign.view`, y desde `9.10a` ese
- * permiso **ya no lo tiene quien lleva la campaña** (`DEC-181`).
+ * El margen **no sale de aquí desde `9.10`**: `margen()` restaba sólo lo
+ * comprometido con creadores y llamaba margen al resto. Vive en
+ * `Finance\Services\Rentabilidad`, que también resta el gasto operativo de
+ * `9.10a` — y exige `campaign.view_margin`, que desde `9.10a` ya no tiene quien
+ * lleva la campaña (`DEC-181`).
  */
 final class Compromiso
 {
@@ -137,35 +138,20 @@ final class Compromiso
             .'no un formulario.';
     }
 
-    /**
-     * El margen interno de la campaña. **Nunca se enseña fuera.**
-     *
-     * Es `revenue_amount` menos lo comprometido con creadores. **No incluye los
-     * costos operativos** de `campaign_costs` —producción, envíos—, que desde
-     * `9.10a` sí se pueden anotar: este número sale más alto de lo que es, y la
-     * pantalla lo dice con esas palabras hasta que `9.10` construya el margen
-     * completo.
-     *
-     * No se arreglan aquí a propósito. `campaign_costs` es de Finance y
-     * `deptrac` no deja que Campaign la conozca; y sumar costos en otra moneda
-     * exige un tipo de cambio que nadie ha elegido (`Q-63`, `DEC-180`). El
-     * margen completo vive en Finance, no aquí.
-     *
-     * @return array{ingreso: float, comprometido: float, margen: float, porcentaje: float|null}
-     */
-    public static function margen(object $campana): array
-    {
-        $ingreso = (float) $campana->revenue_amount;
-        $comprometido = self::comprometido((int) $campana->id);
-
-        return [
-            'ingreso' => $ingreso,
-            'comprometido' => $comprometido,
-            'margen' => $ingreso - $comprometido,
-            // Guardado contra el cero: una campana gratuita (7.2) tiene ingreso
-            // cero, y dividir por el daria una division por cero justo en el
-            // caso que 7.2 declaro legitimo.
-            'porcentaje' => $ingreso > 0 ? ($ingreso - $comprometido) / $ingreso * 100 : null,
-        ];
-    }
+    // ------------------------------------------------------------------
+    // `margen()` VIVIA AQUI, y se borro en 9.10.
+    //
+    // Devolvia `revenue_amount` menos lo comprometido con creadores y lo llamaba
+    // margen. No restaba el producto, ni los envios, ni la produccion --y desde
+    // `9.10a` esos gastos ya se anotan--, asi que salia mas alto de lo que era y
+    // habria ido empeorando con cada gasto cargado.
+    //
+    // No se arreglo aqui, se movio: `campaign_costs` es de Finance y `deptrac`
+    // no deja que Campaign la conozca. El margen completo es
+    // `App\Modules\Finance\Services\Rentabilidad`, que tiene las dos mitades.
+    //
+    // Se borra en vez de dejarse por si acaso: un metodo que calcula un numero
+    // incompleto y se llama `margen()` es una trampa para quien lo encuentre
+    // dentro de seis meses (DEC-183).
+    // ------------------------------------------------------------------
 }

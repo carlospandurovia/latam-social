@@ -35,8 +35,10 @@ use Tests\TestCase;
  * plaza esperando; contarla como cubierta es cómo se llega al día de arranque
  * con la mitad del equipo.
  *
- * **El margen no llega a la vista si no se puede ver.** No se calcula y luego se
- * esconde: no se calcula (`BR-SEC-001`, 🔴).
+ * **Desde `9.10` el margen ni se calcula aquí.** Esta pantalla enseñaba un
+ * número que restaba sólo lo comprometido con creadores; el completo vive en
+ * Finance. Lo que llega es un booleano y un enlace, así que ningún importe
+ * interno cruza hasta la vista (`BR-SEC-001`, 🔴).
  */
 final class SeguimientoTest extends TestCase
 {
@@ -390,8 +392,14 @@ final class SeguimientoTest extends TestCase
             ->assertSee('3,800.00');
     }
 
-    /** **`BR-SEC-001`.** El margen no llega a quien no puede verlo. */
-    public function test_sin_permiso_de_margen_el_margen_no_llega_a_la_vista(): void
+    /**
+     * **`BR-SEC-001`.** Ningún importe interno llega a quien no puede verlo.
+     *
+     * Desde `9.10` esta pantalla ya no calcula margen: lo que llega es un
+     * booleano y el enlace a la rentabilidad, que vive en Finance con las dos
+     * mitades de la resta.
+     */
+    public function test_sin_permiso_de_margen_no_hay_ni_enlace_ni_importe(): void
     {
         Queue::fake();
         $this->aceptado(1200.0);
@@ -401,39 +409,34 @@ final class SeguimientoTest extends TestCase
             ->get(route('campanas.seguimiento', $this->uuid))
             ->assertOk();
 
-        $this->assertNull($respuesta->viewData('margen'), 'el dato ni siquiera se calcula');
+        $this->assertFalse($respuesta->viewData('verMargen'));
         // 15.000 de ingreso y 13.800 de margen: ninguno de los dos aparece.
         $respuesta->assertDontSee('15,000.00')->assertDontSee('13,800.00');
+        $respuesta->assertDontSee('Ver la rentabilidad', false);
         // Pero el presupuesto SI: sin el no se decide a quien invitar.
         $respuesta->assertSee('5,000.00');
     }
 
-    /**
-     * `finance` y ya **no** `campaign_manager` (`DEC-181`, 9.10a).
-     *
-     * Quien lleva la campaña carga sus gastos y ve cuánto lleva gastado; el
-     * margen —lo que se gana— es una cifra de dirección. Esta prueba llevaba
-     * desde 7.7 usando `campaign_manager` porque entonces lo tenía.
-     */
-    public function test_con_permiso_el_margen_si_sale(): void
+    /** `finance` y ya **no** `campaign_manager` (`DEC-181`, 9.10a). */
+    public function test_con_permiso_sale_el_enlace_a_la_rentabilidad(): void
     {
         Queue::fake();
         $this->aceptado(1200.0);
 
-        $this->actingAs($this->usuarioCon('finance'))
+        $respuesta = $this->actingAs($this->usuarioCon('finance'))
             ->get(route('campanas.seguimiento', $this->uuid))
-            ->assertOk()
-            ->assertSee('13,800.00')
-            // 9.10a: y dice de qué está hecho. Este margen no resta el producto
-            // ni los envíos, así que sale más alto de lo que es.
-            ->assertSee('No resta los gastos', false);
+            ->assertOk();
+
+        $this->assertTrue($respuesta->viewData('verMargen'));
+        $respuesta->assertSee('Ver la rentabilidad', false);
+        // Y el importe NO viaja hasta aqui: se calcula en la otra pantalla.
+        $respuesta->assertDontSee('13,800.00');
     }
 
     /**
      * **`DEC-181`.** Quien lleva la campaña ya no ve el margen.
      *
-     * Es el mismo caso de arriba con el rol que lo tenía hasta 9.10a: la prueba
-     * existe para que quitar el permiso no se deshaga por descuido.
+     * La prueba existe para que quitar el permiso no se deshaga por descuido.
      */
     public function test_quien_lleva_la_campana_ya_no_ve_el_margen(): void
     {
@@ -444,8 +447,8 @@ final class SeguimientoTest extends TestCase
             ->get(route('campanas.seguimiento', $this->uuid))
             ->assertOk();
 
-        $this->assertNull($respuesta->viewData('margen'), 'el dato ni siquiera se calcula');
-        $respuesta->assertDontSee('13,800.00');
+        $this->assertFalse($respuesta->viewData('verMargen'));
+        $respuesta->assertDontSee('Ver la rentabilidad', false);
     }
 
     public function test_la_pantalla_exige_poder_ver_campanas(): void

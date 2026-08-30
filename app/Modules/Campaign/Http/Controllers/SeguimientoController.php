@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Modules\Campaign\Http\Controllers;
 
-use App\Modules\Campaign\Services\Compromiso;
 use App\Modules\Campaign\Services\Seguimiento;
 use App\Shared\Auth\Permisos;
 use Illuminate\Support\Facades\Auth;
@@ -24,13 +23,17 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
  * roadmap es la pantalla más usada del sistema. Mezclarlas daría una página que
  * hace las dos cosas a medias y en la que hay que buscar.
  *
- * ### El margen se calcula sólo si se puede ver
+ * ### El margen ya no vive aquí (9.10)
  *
- * No se calcula y luego se esconde en la plantilla: **no se calcula**. Un dato
- * que llega a la vista es un dato que un `@if` mal puesto puede enseñar, y
- * `BR-SEC-001` es 🔴. Lo demás —presupuesto, comprometido, disponible— sí lo ve
- * quien puede ver la campaña: sin esos tres números no se decide a quién invitar
- * (decisión de negocio, 2026-08-26).
+ * Esta pantalla enseñaba un «margen» que era el ingreso menos lo comprometido
+ * con creadores **y nada más**: no restaba el producto, ni los envíos, ni la
+ * producción. Salía más alto de lo que era, y desde `9.10a` esos gastos ya se
+ * pueden anotar, así que el número habría empeorado con cada uno.
+ *
+ * El margen completo vive en Finance —donde están las dos mitades— y aquí queda
+ * **el enlace**, para quien pueda verlo. Lo demás —presupuesto, comprometido,
+ * disponible— sí lo ve quien puede ver la campaña: sin esos tres números no se
+ * decide a quién invitar (decisión de negocio, 2026-08-26).
  */
 final class SeguimientoController
 {
@@ -46,8 +49,6 @@ final class SeguimientoController
             throw new NotFoundHttpException('No existe esa campana.');
         }
 
-        $puedeVerMargen = Permisos::tiene((int) Auth::id(), 'campaign.view_margin');
-
         return view('campanas.seguimiento', [
             'campana' => $campana,
             'embudo' => Seguimiento::embudo((int) $campana->id),
@@ -58,10 +59,11 @@ final class SeguimientoController
             'alertas' => Seguimiento::alertas($campana),
             'participantes' => Seguimiento::participantes((int) $campana->id),
             'dias' => Seguimiento::diasHastaArranque($campana),
-            // `null` y no `false`: la plantilla pregunta por «hay margen que
-            // enseñar», no por «tiene permiso». Así el dato ni siquiera existe
-            // cuando no toca.
-            'margen' => $puedeVerMargen ? Compromiso::margen($campana) : null,
+            // 9.10: un booleano y NO el numero. La pantalla ofrece el enlace a
+            // la rentabilidad; el margen se calcula alli, con las dos mitades.
+            // Aqui ya no llega ningun importe interno que un `@if` mal puesto
+            // pueda ensenar (`BR-SEC-001`, rojo).
+            'verMargen' => Permisos::tiene((int) Auth::id(), 'campaign.view_margin'),
             // 8.1: si esta persona puede ver los entregables, el panel le ofrece
             // el enlace a esa pantalla. **El conteo NO se calcula aquí**:
             // `deptrac.yaml` dice `Campaign: [..., Creator, Client]` y Content

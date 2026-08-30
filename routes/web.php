@@ -32,6 +32,7 @@ use App\Modules\Creator\Http\Controllers\SolicitudesController;
 use App\Modules\Finance\Http\Controllers\CostosController;
 use App\Modules\Finance\Http\Controllers\LotesController;
 use App\Modules\Finance\Http\Controllers\MisIngresosController;
+use App\Modules\Finance\Http\Controllers\RentabilidadController;
 use App\Modules\Identity\Http\Controllers\AccesoController;
 use App\Modules\Identity\Http\Controllers\PasswordController;
 use App\Modules\Identity\Http\Controllers\RecuperacionController;
@@ -673,6 +674,21 @@ Route::middleware('auth')->group(function (): void {
         ->middleware('permiso:finance.payout.create')
         ->whereNumber('pago')
         ->name('pagos.devolver');
+
+    // 9.10 -- La rentabilidad. Dos pantallas y un solo permiso: la lista
+    // contesta «cuales pierden dinero» y la ficha contesta «por que esta».
+    //
+    // La pantalla ENTERA es de `campaign.view_margin`, no una tarjeta dentro de
+    // otra pagina: una plantilla se edita y un `@can` se borra sin querer, y
+    // esto es `BR-SEC-001` (rojo).
+    Route::get('/rentabilidad', [RentabilidadController::class, 'index'])
+        ->middleware('permiso:campaign.view_margin')
+        ->name('rentabilidad.index');
+
+    Route::get('/rentabilidad/{uuid}', [RentabilidadController::class, 'show'])
+        ->middleware('permiso:campaign.view_margin')
+        ->whereUuid('uuid')
+        ->name('rentabilidad.show');
 
     // 9.10a -- El gasto de una campana. La pantalla cuelga de la campana pero el
     // controlador vive en Finance: `campaign_costs` es una tabla de finanzas y
