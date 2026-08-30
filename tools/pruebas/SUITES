@@ -62,3 +62,9 @@
 # --entro en la lista de 3.12 desde el principio--, asi que afirma su premisa en
 # vez de forzarla. Usa las dos primeras participaciones de la semilla.
 9.3-libro-mayor
+# 9.6 escribe en `payout_batches`, `payouts` y `payout_earnings`. Ninguna se
+# puede limpiar --las tres entraron en la lista de 3.12 o nacieron con su
+# `no_delete`-- asi que afirma sus premisas en vez de forzarlas, y usa el primer
+# devengo de la semilla, poniendolo pagable. Va DETRAS de 9.3, que es quien crea
+# los asientos que esta liquida.
+9.6-lotes

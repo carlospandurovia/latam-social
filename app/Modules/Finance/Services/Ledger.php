@@ -291,6 +291,17 @@ final class Ledger
     }
 
     /**
+     * Da un devengo por pagado. Lo llama `9.6` al ejecutar el lote.
+     *
+     * Es terminal: `tg_ledger_estado` no deja volver de aquí. Deshacer un pago
+     * es un asiento de `payment_reversal`, no un cambio de estado.
+     */
+    public static function marcarPagado(int $asientoId, string $motivo, ?int $autorId = null): bool
+    {
+        return self::mover($asientoId, self::PAGADO, $motivo, $autorId);
+    }
+
+    /**
      * El saldo de un creador, por moneda. **Calculado, nunca almacenado.**
      *
      * @param list<string> $estados

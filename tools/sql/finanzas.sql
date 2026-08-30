@@ -369,6 +369,39 @@ CREATE TABLE payments (
 -- cualquiera con la contrasena de BD se salta -- y pasa a ser fisica.
 -- ===========================================================================
 
+-- 9.6 -- Que devengos paga cada pago.
+--
+-- `ledger_entries.payout_id` ata UN asiento de pago a su payout (`BR-FIN-013`).
+-- Lo que no existia era el detalle: QUE DEVENGOS liquida ese pago. Sin eso,
+-- «.de que campanas es este dinero?» no tiene respuesta --y sin respuesta no hay
+-- nada que comparar con la sociedad del lote, que es lo que `DEC-157` mando
+-- cerrar aqui--.
+--
+-- `voided_at` y no borrar: sacar un pago de un lote aprobado anula su
+-- liquidacion, no la borra. Es evidencia de que estuvo dentro y de que alguien
+-- lo saco. La columna puerta hace que un devengo solo pueda estar en UNA
+-- liquidacion viva, y que al anularla vuelva a la cola.
+CREATE TABLE payout_earnings (
+  id               BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  payout_id        BIGINT UNSIGNED NOT NULL,
+  ledger_entry_id  BIGINT UNSIGNED NOT NULL,
+  amount           DECIMAL(18,4) NOT NULL,
+  voided_at        DATETIME(3)   NULL,
+  voided_by_user_id BIGINT UNSIGNED NULL,
+  voided_reason    VARCHAR(255)  NULL,
+  created_at       DATETIME(3)   NULL,
+  updated_at       DATETIME(3)   NULL,
+  viva_gate TINYINT UNSIGNED GENERATED ALWAYS AS (CASE WHEN voided_at IS NULL THEN 1 ELSE NULL END) STORED,
+  UNIQUE KEY uq_pe_viva (viva_gate, ledger_entry_id),
+  KEY ix_pe_payout (payout_id),
+  KEY ix_pe_voider (voided_by_user_id),
+  CONSTRAINT fk_pe_payout FOREIGN KEY (payout_id) REFERENCES payouts(id) ON DELETE RESTRICT,
+  CONSTRAINT fk_pe_asiento FOREIGN KEY (ledger_entry_id) REFERENCES ledger_entries(id) ON DELETE RESTRICT,
+  CONSTRAINT fk_pe_voider FOREIGN KEY (voided_by_user_id) REFERENCES users(id) ON DELETE RESTRICT,
+  CONSTRAINT ck_pe_amount CHECK (amount > 0),
+  CONSTRAINT ck_pe_void CHECK (voided_at IS NULL OR voided_reason IS NOT NULL)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 DELIMITER //
 
 -- El libro mayor es solo-insercion. Lo unico que evoluciona es el estado.
@@ -383,6 +416,69 @@ DELIMITER //
 -- `paid` y `void` son TERMINALES. Un pago que se deshace no se deshace cambiando
 -- este estado: se corrige con un asiento de `payment_reversal` (`BR-FIN-002`),
 -- que deja rastro de las dos cosas.
+-- 9.6 -- `BR-LE-009` / `DEC-157`: la sociedad que paga es la de la campana.
+--
+-- Cross-table de tres saltos, asi que ningun CHECK puede verla. Se comprueba al
+-- ENGANCHAR el devengo al pago y no al aprobar el lote: aprobar es una firma
+-- sobre algo que ya tiene que estar bien, y una regla que solo mira al final
+-- deja existir el estado malo mientras tanto --que es como alguien lo ve, lo
+-- exporta, o lo cree--.
+CREATE TRIGGER `tg_pe_sociedad`
+BEFORE INSERT ON `payout_earnings`
+FOR EACH ROW
+BEGIN
+    DECLARE v_lote BIGINT UNSIGNED;
+    DECLARE v_campana BIGINT UNSIGNED;
+    DECLARE v_estado VARCHAR(15);
+
+    SELECT pb.`legal_entity_id` INTO v_lote
+      FROM `payouts` p JOIN `payout_batches` pb ON pb.`id` = p.`payout_batch_id`
+     WHERE p.`id` = NEW.`payout_id`;
+
+    SELECT c.`billing_legal_entity_id`, le.`status`
+      INTO v_campana, v_estado
+      FROM `ledger_entries` le
+      JOIN `campaign_creators` cc ON cc.`id` = le.`campaign_creator_id`
+      JOIN `campaigns` c ON c.`id` = cc.`campaign_id`
+     WHERE le.`id` = NEW.`ledger_entry_id`;
+
+    IF v_estado IS NULL OR v_estado <> 'payable' THEN
+        SIGNAL SQLSTATE '45000'
+          SET MESSAGE_TEXT = 'Solo se liquida un devengo pagable, y con la campana que lo origina.';
+    END IF;
+
+    IF NOT (v_lote <=> v_campana) THEN
+        SIGNAL SQLSTATE '45000'
+          SET MESSAGE_TEXT = 'La sociedad que paga tiene que ser la de la campana (BR-LE-009).';
+    END IF;
+END//
+
+CREATE TRIGGER `tg_pe_inmutable`
+BEFORE UPDATE ON `payout_earnings`
+FOR EACH ROW
+BEGIN
+    IF NOT (NEW.`payout_id` <=> OLD.`payout_id`)
+       OR NOT (NEW.`ledger_entry_id` <=> OLD.`ledger_entry_id`)
+       OR NOT (NEW.`amount` <=> OLD.`amount`) THEN
+        SIGNAL SQLSTATE '45000'
+          SET MESSAGE_TEXT = 'Una liquidacion no se reescribe: se anula.';
+    END IF;
+
+    IF NEW.`voided_at` IS NOT NULL
+       AND (NEW.`voided_by_user_id` IS NULL OR NEW.`voided_reason` IS NULL) THEN
+        SIGNAL SQLSTATE '45000'
+          SET MESSAGE_TEXT = 'Sacar un pago de un lote exige quien lo saco y por que.';
+    END IF;
+END//
+
+CREATE TRIGGER `tg_pe_no_delete`
+BEFORE DELETE ON `payout_earnings`
+FOR EACH ROW
+BEGIN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'payout_earnings no admite borrado: dice que devengos pago cada pago.';
+END//
+
 CREATE TRIGGER `tg_ledger_estado`
 BEFORE UPDATE ON `ledger_entries`
 FOR EACH ROW

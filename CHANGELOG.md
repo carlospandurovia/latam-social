@@ -2,6 +2,31 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 
+## [9.6 · Los lotes de pago] — 2026-08-27
+
+Aquí sale el dinero. Y aquí se paga la deuda que `DEC-157` dejó apuntada.
+
+### Añadido
+- **`payout_earnings`**: qué devengos paga cada pago. Sin ese detalle, «¿de qué
+  campañas es este dinero?» no tenía respuesta — y sin respuesta no había nada
+  que comparar con la sociedad del lote (`DEC-174`).
+- **`tg_pe_sociedad`**: **la sociedad que paga tiene que ser la de la campaña**
+  (`BR-LE-009`). Es la comprobación que el roadmap tenía en `9.11`, la undécima
+  de catorce. Se hace al enganchar el devengo al pago, no al aprobar el lote.
+- **Lotes de pago** con dos firmas **siempre, sin umbral** (`DEC-175`). El
+  importe no se teclea: sale de sumar lo que liquida.
+- **Sacar un pago del lote** sin volver a firmar (`DEC-176`): el importe baja,
+  nunca sube. La liquidación se anula, no se borra — vigesimoséptima columna
+  puerta, `uq_pe_viva`.
+- Pantalla de **Lotes de pago** y un **CSV legible**, que **no es el archivo del
+  banco** y lo dice (`DEC-177`).
+
+### Sabido y dicho
+- La semilla tenía **una sola sociedad**, así que la aserción que importa —un
+  lote pagando el trabajo de otra— no se podía ni escribir. Ahora hay una
+  segunda, sin cobertura de ningún país: el estado real de CTS Colombia mientras
+  `Q-15` siga abierto.
+
 ## [9.8 · Mis ingresos] — 2026-08-27
 
 La primera vez que un creador ve su dinero en el sistema. Sin migración: el libro

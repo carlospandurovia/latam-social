@@ -29,6 +29,7 @@ use App\Modules\Creator\Http\Controllers\PerfilComercialController;
 use App\Modules\Creator\Http\Controllers\PerfilFiscalController;
 use App\Modules\Creator\Http\Controllers\RedesSocialesController;
 use App\Modules\Creator\Http\Controllers\SolicitudesController;
+use App\Modules\Finance\Http\Controllers\LotesController;
 use App\Modules\Finance\Http\Controllers\MisIngresosController;
 use App\Modules\Identity\Http\Controllers\AccesoController;
 use App\Modules\Identity\Http\Controllers\PasswordController;
@@ -617,6 +618,43 @@ Route::middleware('auth')->group(function (): void {
         ->middleware(['permiso:creator.portal', 'throttle:20,1'])
         ->whereUuid('uuid')
         ->name('entregas.publicar');
+
+    // 9.6 -- Lotes de pago. Dos permisos distintos, y esa es la iteracion
+    // entera: `finance.payout.create` arma y ejecuta; `finance.payout.approve`
+    // firma. Que sean dos no basta --la misma persona podria tener los dos-- asi
+    // que quien firmo lo comprueba `ck_pbatch_segregation` en la base.
+    Route::get('/lotes', [LotesController::class, 'index'])
+        ->middleware('permiso:finance.view')
+        ->name('lotes.index');
+
+    Route::post('/lotes', [LotesController::class, 'store'])
+        ->middleware('permiso:finance.payout.create')
+        ->name('lotes.store');
+
+    Route::get('/lotes/{uuid}', [LotesController::class, 'show'])
+        ->middleware('permiso:finance.view')
+        ->whereUuid('uuid')
+        ->name('lotes.show');
+
+    Route::get('/lotes/{uuid}/csv', [LotesController::class, 'csv'])
+        ->middleware('permiso:finance.view')
+        ->whereUuid('uuid')
+        ->name('lotes.csv');
+
+    Route::post('/lotes/{uuid}/aprobar', [LotesController::class, 'aprobar'])
+        ->middleware('permiso:finance.payout.approve')
+        ->whereUuid('uuid')
+        ->name('lotes.aprobar');
+
+    Route::post('/lotes/{uuid}/ejecutar', [LotesController::class, 'ejecutar'])
+        ->middleware('permiso:finance.payout.create')
+        ->whereUuid('uuid')
+        ->name('lotes.ejecutar');
+
+    Route::post('/lotes/{uuid}/pagos/{pago}/sacar', [LotesController::class, 'sacar'])
+        ->middleware('permiso:finance.payout.create')
+        ->whereUuid('uuid')->whereNumber('pago')
+        ->name('lotes.sacar');
 
     // 9.8: lo que ha ganado. Solo lectura y sin un solo boton: el creador no
     // mueve dinero, lo mira. `creator.portal` dice que puede ver UN portal;

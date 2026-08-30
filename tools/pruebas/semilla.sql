@@ -50,6 +50,19 @@ INSERT INTO legal_entities (uuid,platform_brand_id,code,legal_name,country_id,ta
    'Por completar','Lima','PEN','America/Lima','active',NOW(3)
  FROM platform_brands pb, countries c WHERE pb.code='LATAM' AND c.iso2='PE';
 
+-- 9.6: una SEGUNDA sociedad, sin cobertura de ningun pais.
+--
+-- Hace falta para poder probar el cruce que `BR-LE-009` prohibe --un lote de una
+-- sociedad pagando el trabajo de una campana de otra-- y sin ella esa asercion
+-- no se puede escribir. Sin cobertura a proposito: es exactamente el estado de
+-- CTS Colombia mientras `Q-15` siga abierto, y anadirsela chocaria con
+-- `uq_lec_country`.
+INSERT INTO legal_entities (uuid,platform_brand_id,code,legal_name,country_id,tax_id_type,tax_id_number,
+   address_line1,city,default_currency_code,timezone,status,created_at)
+ SELECT UUID(),pb.id,'CTS-CO','CTS Colombia S.A.S.',c.id,'NIT','9001234567',
+   'Por completar','Bogota','COP','America/Bogota','active',NOW(3)
+ FROM platform_brands pb, countries c WHERE pb.code='LATAM' AND c.iso2='CO';
+
 INSERT INTO document_series (legal_entity_id,document_type,series,next_number,environment,is_active,created_at)
  SELECT id,'invoice','F001',1,'production',1,NOW(3) FROM legal_entities WHERE code='CTS-PE';
 

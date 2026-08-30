@@ -47,6 +47,9 @@
           // puedo cobrarle a este» --una por sociedad, otra por moneda-- y las
           // dos se tocan pocas veces al ano.
           ['Tipos de cambio', 'cambio.index', 'tipos-de-cambio', 'fx.manage'],
+          // 9.6: delante de Tipos de cambio porque es trabajo de todos los meses
+          // y aquello se toca dos veces al ano.
+          ['Lotes de pago', 'lotes.index', 'lotes', 'finance.view'],
           // 4.9: junto a la bitacora porque responde a la misma clase de
           // pregunta --que paso y cuando-- y porque el modo de fallo que importa
           // («al creador no le llego su enlace») lo descubre operaciones, no un

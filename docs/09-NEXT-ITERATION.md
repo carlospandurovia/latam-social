@@ -1,5 +1,9 @@
 # 09 — Estado del proyecto y siguiente iteración
 
+> **Versión 3.7 — 2026-08-27.** Actualizado al cerrar `9.6`. **Sale el dinero**,
+> con dos firmas y con la garantía de que paga la sociedad de la campaña. Con eso
+> queda **pagada la deuda de `DEC-157`**.
+>
 > **Versión 3.6 — 2026-08-27.** Actualizado al cerrar `9.8`. **El creador ve su
 > dinero.** Saldo por moneda, qué falta para cobrar cada cosa, y la fecha
 > prevista cuando ya es pagable.
@@ -99,13 +103,13 @@
 
 | | |
 |---|---|
-| Tablas | 73 · **26 columnas puerta**, contadas y no heredadas (`T-57`) |
-| Migraciones | 61, verdes desde cero en MySQL 8 y con vuelta atrás completa |
-| Pruebas de PHPUnit | **779**, 2.520 aserciones |
-| Aserciones de restricción (SQL) | **1.684** en MariaDB, **1.674** en MySQL 8 · 33 suites |
+| Tablas | 74 · **27 columnas puerta**, contadas y no heredadas (`T-57`) |
+| Migraciones | 62, verdes desde cero en MySQL 8 y con vuelta atrás completa |
+| Pruebas de PHPUnit | **795**, 2.578 aserciones |
+| Aserciones de restricción (SQL) | **1.716** en MariaDB, **1.706** en MySQL 8 · 34 suites |
 | Puertas de calidad | **7**: formato, análisis estático, fronteras, pruebas, vigencias, nombres entre capas y **las suites** (8.11) |
 | Verificadores fuera de PHPUnit | 4: fixturas, periodos, nombres entre capas y **mensajes de la base** (nuevo en 8.1) |
-| Decisiones registradas | hasta `DEC-173` |
+| Decisiones registradas | hasta `DEC-177` |
 
 ### Lo que se puede hacer hoy por pantalla
 
@@ -211,6 +215,11 @@ porque no hay nada que elegir: el esquema garantiza como mucho una por país y
 fecha. Al ir a enseñarlo salió `T-58` — la pantalla llevaba desde 7.1 imprimiendo
 la sociedad que tocaría **hoy** bajo el rótulo de la guardada.
 
+Y desde `9.6`, **el dinero sale**: se arma un lote por sociedad y moneda, lo
+firma alguien distinto de quien lo armó, y al ejecutarlo cada pago deja su
+asiento. La base garantiza que **paga la sociedad de la campaña** —la deuda que
+`DEC-157` dejó apuntada, ahora saldada— y que un devengo no se paga dos veces.
+
 Y desde `9.8`, **el creador ve su dinero**: saldo por moneda, qué falta para
 cobrar cada cosa —con las palabras de las cinco condiciones— y la fecha prevista
 en cuanto es pagable. Sin un solo botón, y sin el motivo interno de una
@@ -296,22 +305,21 @@ Ninguna bloquea código hoy; todas bloquean una iteración futura concreta.
 
 ## 4. Lo que propongo como siguiente iteración
 
-Lo que queda de `F9` **empieza a necesitar a tu contador**:
+**`9.7` — registrar el pago de verdad.** El lote deja los pagos en `sent`;
+falta confirmarlos contra el extracto del banco, guardar el comprobante y avisar
+al creador. Es pequeño y no lo bloquea nadie.
+
+Después, lo que queda de `F9` **necesita a tu contador**:
 
 | | Qué falta | Quién |
 |---|---|---|
-| `9.5` | Requisitos documentales por país y régimen | tu contador (`Q-40` + la matriz de documentos) |
-| `9.6` | Lotes de pago con doble aprobación y exportación bancaria | nadie — y aquí se paga `DEC-157` |
-| `9.7` | Registro del pago, comprobante, aviso al creador | nadie |
+| `9.5` | Requisitos documentales y **retenciones** — hoy un lote paga el bruto | tu contador (`Q-40`) |
+| `9.9` | Facturación al cliente | tu contador (`Q-44`) y el proveedor de e-facturación |
+| `9.12` | Series y numeración correlativa | `Q-44` |
 
-**Propongo `9.6`**, que es el siguiente sin bloqueo y el que cierra la deuda de
-`DEC-157`: la comprobación de que **la sociedad que paga es la de la campaña**
-(`BR-LE-009`, 🔴) se adelantó a la iteración que estrene `payout_batches`, y esa
-es ésta. El lote ya tiene su `legal_entity_id` y el asiento ya sabe de qué
-campaña viene; lo que falta es la restricción entre los dos.
-
-Alternativa sin código nuevo: **bajar el trinquete de las 297 aserciones
-ciegas**, que sigue en 297 desde que `DEC-161` dio a `porque()` la alternancia.
+Y dos cosas que puedo hacer en cualquier momento sin bloquear nada: **el archivo
+real del banco** —dime cuál y pásame su especificación— y **bajar el trinquete de
+las 297 aserciones ciegas**, que sigue en 297.
 
 
 ## 5. Deuda de documentación reconocida
