@@ -1,0 +1,45 @@
+# Las rutas que NO exigen ningun permiso, y por que.
+#
+# Una linea por ruta, con su motivo detras del `#`. `verificar-muro.py`
+# comprueba que esta lista, `routes/web.php` y la constante `ABIERTAS` de
+# `MuroTest` digan las tres lo mismo: una ruta nueva sin `permiso:` que no
+# aparezca aqui pone el CI en rojo.
+#
+# Existe porque hoy nada distinguia «es publica a proposito» de «se le olvido el
+# middleware a alguien», y el fallo que de verdad paso en este proyecto --`5.9`,
+# la portada enseñando los totales internos a cualquier autenticado-- es
+# exactamente ese. Escribir el motivo obliga a pensarlo una vez; leerlo permite
+# discutirlo despues.
+
+# --- Antes de entrar: no hay sesion todavia -------------------------------
+acceso                  # el formulario de acceso
+entrar                  # y su envio, con throttle:5,1
+recuperar               # pedir enlace de recuperacion
+recuperar.enviar        # su envio, con throttle:5,1 y la misma respuesta exista o no el correo
+recuperar.usar          # abrir el enlace, con throttle:20,1
+recuperar.formulario    # elegir la contrasena nueva
+recuperar.fijar         # guardarla, con throttle:10,1
+
+# --- Dentro, pero sin permiso: son de CUALQUIER autenticado ---------------
+salir                   # cerrar sesion
+panel                   # la portada; lo que enseña depende del permiso, no la ruta (5.9)
+contrasena              # cambiar la propia contrasena
+contrasena.cambiar      # y guardarla
+
+# --- Enlaces FIRMADOS: la defensa es la firma, no el rol ------------------
+#
+# Quien entra por aqui no tiene cuenta --un creador invitado, un cliente que
+# aprueba una pieza-- asi que no hay permiso que exigirle. Lo que hay es un
+# enlace de un solo uso con caducidad, y su throttle.
+invitacion.ver          # 7.6, throttle:20,1
+invitacion.oferta       # la oferta, sin presupuesto ni margen (BR-SEC-001)
+invitacion.aceptar      # throttle:10,1
+invitacion.rechazar     # throttle:10,1
+invitacion.preguntar    # 7.6b, throttle:5,1
+invitacion.gracias      # pantalla final
+invitacion.caducada     # y la del enlace vencido
+aprobacion.ver          # 8.5, throttle:20,1
+aprobacion.pieza        # la pieza, sin un solo importe
+aprobacion.responder    # throttle:10,1
+aprobacion.gracias      # pantalla final
+aprobacion.caducada     # y la del enlace vencido

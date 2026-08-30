@@ -182,6 +182,14 @@ jobs:
       - name: Las suites no se ponen verdes con el motor apagado
         run: python3 tools/verificar-suites.py
 
+      # 9.14: los otros verificadores comprueban que la regla EXISTA y que sea
+      # la misma en los dos motores. Ninguno comprobaba que alguien se la haya
+      # preguntado alguna vez. `campaign_costs` llevaba dos semanas con cinco
+      # restricciones verdes en todos ellos y cero filas: al preguntarlas por
+      # primera vez aparecieron dos huecos.
+      - name: Que regla de la base no ha contestado nunca a nadie
+        run: python3 tools/verificar-cobertura-sql.py
+
       - name: La aritmetica de vigencias vive en un solo sitio
         run: php tools/verificar-vigencias.php
 

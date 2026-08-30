@@ -2,6 +2,39 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 
+## [9.14b · La auditoría de seguridad] — 2026-08-30
+
+`9.14` midió lo que la base impide. Esto mide **quién llega a qué**.
+
+### Añadido
+- **`MuroTest`**: las **145 rutas con nombre** pedidas como creador, como usuario
+  de cliente y como **autenticado sin rol**, exigiendo que ninguna se abra. 371
+  aserciones — **el muro aguanta**. Una pantalla nueva entra sola en la prueba.
+- **`tools/pruebas/RUTAS-ABIERTAS`**: las 23 rutas que no exigen permiso, con el
+  motivo escrito al lado de cada una.
+- **`tools/verificar-muro.py`**, en la batería y en el CI: la lista, las rutas y
+  la prueba tienen que decir lo mismo. Una ruta nueva sin permiso que no esté
+  escrita pone el CI en rojo.
+
+### Cambiado
+- **`filesystems.php`: `'serve' => false`** en el disco privado. Cierra
+  `storage.local` y `storage.local.upload`, dos rutas que registra el framework
+  sobre `storage/app/private` — donde viven los documentos de identidad, las
+  evidencias y los comprobantes.
+
+### Sabido y dicho
+- Esas dos puertas **no eran una fuga**: el disco es privado y las dos exigen URL
+  firmada. Pero la aplicación no genera ninguna, así que no servían para nada — y
+  **ninguna lectura del código las habría encontrado**, porque no están en ningún
+  archivo de rutas. Hizo falta preguntarle al enrutador.
+- **`T-67`: los archivos se guardan y no se pueden ver.** No existe ni una ruta
+  que devuelva un archivo. La conciliación acepta el comprobante y la pantalla de
+  gastos dice «con comprobante», y no hay forma de abrirlo. Una evidencia que
+  nadie puede mirar no es una evidencia.
+- El muro admite un 404 —`SubstituteBindings` corre antes del middleware— y para
+  que eso no sea su escondite exige que **más de 80 rutas contesten 403 de
+  verdad**.
+
 ## [9.14 · QA de la Fase 9] — 2026-08-30
 
 La pregunta de partida salió de `9.10a`: ¿cuántas reglas hay como las de

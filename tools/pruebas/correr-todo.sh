@@ -83,6 +83,10 @@ python3 tools/verificar-mensajes.py "$CON" --cliente "$CLIENTE" || tot_fail=$((t
 echo ""; echo "===== reglas que nadie ha preguntado ====="
 python3 tools/verificar-cobertura-sql.py || tot_fail=$((tot_fail+1))
 
+# 9.14: que ruta no exige permiso, y si esta escrito que es a proposito.
+echo ""; echo "===== el muro: rutas sin permiso ====="
+python3 tools/verificar-muro.py || tot_fail=$((tot_fail+1))
+
 echo ""; echo "===== nombres entre capas ====="
 python3 tools/verificar-pantallas.py || tot_fail=$((tot_fail+1))
 

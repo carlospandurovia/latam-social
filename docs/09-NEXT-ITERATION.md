@@ -1,5 +1,10 @@
 # 09 — Estado del proyecto y siguiente iteración
 
+> **Versión 4.2 — 2026-08-30.** Actualizado al cerrar `9.14b`, la auditoría de
+> seguridad. **Las 145 rutas, pedidas por tres roles de fuera: el muro aguanta.**
+> Las 23 que no exigen permiso quedan escritas con su motivo. Y salió `T-67`: los
+> archivos se guardan y **no se pueden ver desde ninguna pantalla**.
+>
 > **Versión 4.1 — 2026-08-30.** Actualizado al cerrar `9.14`, el QA de la fase.
 > **De las 317 reglas del esquema, 167 no habían contestado nunca a nadie.** Las
 > veinte del camino del dinero ya lo hacen, y las veinte estaban bien. Quedan
@@ -127,11 +132,11 @@
 |---|---|
 | Tablas | 74 · **27 columnas puerta**, contadas y no heredadas (`T-57`) |
 | Migraciones | 64, verdes desde cero en MySQL 8 y con vuelta atrás completa |
-| Pruebas de PHPUnit | **830**, 2.670 aserciones |
+| Pruebas de PHPUnit | **835**, 3.041 aserciones |
 | Aserciones de restricción (SQL) | **1.868** en MariaDB, **1.858** en MySQL 8 · 37 suites |
 | Puertas de calidad | **7**: formato, análisis estático, fronteras, pruebas, vigencias, nombres entre capas y **las suites** (8.11) |
-| Verificadores fuera de PHPUnit | 5: fixturas, periodos, nombres entre capas, mensajes de la base y **reglas que nadie ha preguntado** (nuevo en 9.14) |
-| Decisiones registradas | hasta `DEC-187` |
+| Verificadores fuera de PHPUnit | 6: fixturas, periodos, nombres entre capas, mensajes de la base, reglas que nadie ha preguntado y **el muro de rutas** (nuevos en 9.14 y 9.14b) |
+| Decisiones registradas | hasta `DEC-189` |
 
 ### Lo que se puede hacer hoy por pantalla
 
@@ -344,13 +349,17 @@ Ninguna bloquea código hoy; todas bloquean una iteración futura concreta.
 
 ## 4. Lo que propongo como siguiente iteración
 
-**La otra mitad de `9.14`: la auditoría de seguridad de finanzas.** El roadmap la
-pide junto al QA de fase y se quedó fuera. Es una pregunta distinta de la que
-contesta una suite de restricciones: **qué ve cada rol, qué sale en un correo,
-qué queda en un log**. Hoy hay tres afirmaciones de ese tipo repartidas por el
-código —el motivo interno de una retención no cruza (`DEC-172`), un correo de
-pago no lleva número de cuenta (`DEC-179`), el margen es de dirección
-(`DEC-181`)— y ninguna se comprueba en un solo sitio.
+**`T-67` — que los archivos se puedan ver.** Es lo que dejó la auditoría, y es
+la más urgente de las que quedan: `Almacen` guarda documentos de identidad,
+evidencias de publicación, comprobantes de pago y de gasto, y **no hay ni una
+ruta que devuelva un archivo**. La pantalla de conciliación acepta el comprobante
+y la de gastos dice «con comprobante», y no se puede abrir desde ningún sitio.
+Una evidencia que nadie puede mirar no es una evidencia — y la primera vez que
+haga falta será justo cuando alguien discuta un pago.
+
+Antes de construirlo hay una pregunta tuya: **quién puede ver qué archivo**. El
+creador el suyo y finanzas los comprobantes de pago parece claro; el documento de
+identidad de un creador, no tanto.
 
 Alternativas, las dos medibles y sin bloqueo:
 
@@ -359,20 +368,6 @@ Alternativas, las dos medibles y sin bloqueo:
   `creator_payment_methods` (7).
 - **`T-66`**: los mensajes genéricos de la Fase 2. En Percona, «Restriccion
   ck_ledger_sign incumplida» es literalmente lo que ve el usuario.
-
-Lo demás de `F9` **necesita a tu contador**:
-
-| | Qué falta | Quién |
-|---|---|---|
-| `9.5` | Requisitos documentales y **retenciones** — hoy un lote paga el bruto | tu contador (`Q-40`) |
-| `9.9` | Facturación al cliente | tu contador (`Q-44`) y el proveedor de e-facturación |
-| `9.12` | Series y numeración correlativa | `Q-44` |
-
-Y una cosa más que puedo hacer en cualquier momento: **el archivo real del
-banco** —dime cuál y pásame su especificación—. Sin ella, lo que hay es el CSV
-legible de `DEC-177`, y también la importación del extracto de `9.7` se queda
-esperando al mismo dato.
-
 
 ## 5. Deuda de documentación reconocida
 
