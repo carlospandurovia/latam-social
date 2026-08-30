@@ -5,7 +5,10 @@ declare(strict_types=1);
 namespace App\Modules\Finance\Providers;
 
 use App\Modules\Finance\Console\RevisarDevengosCommand;
+use App\Modules\Finance\Listeners\DevengarParticipacion;
+use App\Shared\Eventos\EventoOcurrido;
 use Illuminate\Console\Scheduling\Schedule;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
 
 /**
@@ -22,6 +25,11 @@ final class FinanceServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        // 9.4: al aceptar, el dinero queda anotado. Fuera del `if` de consola a
+        // proposito --la aceptacion ocurre por HTTP, no por comando--, que es
+        // donde `ContentServiceProvider` registra el suyo desde `8.1`.
+        Event::listen(EventoOcurrido::class, DevengarParticipacion::class);
+
         if (!$this->app->runningInConsole()) {
             return;
         }

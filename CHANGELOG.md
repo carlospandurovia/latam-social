@@ -2,6 +2,25 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 
+## [9.4 · El devengo por evento] — 2026-08-27
+
+`9.3` dejó `Ledger::devengar()` y nadie lo llamaba. Ahora aceptar una invitación
+anota el asiento solo, y el ciclo se cierra.
+
+### Añadido
+- **`DevengarParticipacion`**, escuchando `campaign_creator.accepted`. Se devenga
+  **al aceptar** porque es entonces cuando existe la deuda; que aún no se pueda
+  pagar vive en el estado (`DEC-170`).
+- **La red de seguridad**: `ledger:revisar` anota las aceptaciones que se
+  quedaron sin devengo, antes de revisar, y **avisa en amarillo**. Que esa lista
+  no salga en cero es la noticia, no el arreglo (`DEC-171`).
+
+### Sabido y dicho
+- **Dos finales no son fallos**: que ya hubiera devengo —`uq_ledger_devengo`
+  haciendo su trabajo— y que la colaboración sea un canje. Escribirlos como
+  errores haría que el log gritara cada vez que alguien acepta un canje, y a la
+  tercera nadie lo lee.
+
 ## [9.3 · El libro mayor del creador] — 2026-08-27
 
 `ledger_entries` llevaba en el esquema desde la Fase 2 con doce `CHECK` y sus dos

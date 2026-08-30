@@ -79,9 +79,7 @@ final class LedgerTest extends TestCase
     {
         $id = $this->aceptado(500.0);
 
-        $uuid = Ledger::devengar($id);
-
-        $asiento = DB::table('ledger_entries')->where('uuid', $uuid)->first();
+        $asiento = DB::table('ledger_entries')->where('campaign_creator_id', $id)->first();
 
         $this->assertSame(Ledger::DEVENGO, $asiento->entry_type);
         $this->assertSame(Ledger::DEVENGADO, $asiento->status);
@@ -103,8 +101,9 @@ final class LedgerTest extends TestCase
      */
     public function test_no_se_devenga_dos_veces_la_misma_participacion(): void
     {
+        // El listener de `9.4` ya anoto uno al aceptar; el segundo lo rechaza
+        // la base, no un `if` de PHP.
         $id = $this->aceptado(500.0);
-        Ledger::devengar($id);
 
         $this->expectException(QueryException::class);
         Ledger::devengar($id);
@@ -114,15 +113,14 @@ final class LedgerTest extends TestCase
     public function test_anular_el_devengo_libera_el_sitio(): void
     {
         $id = $this->aceptado(500.0);
-        $uuid = Ledger::devengar($id);
-        $asientoId = (int) DB::table('ledger_entries')->where('uuid', $uuid)->value('id');
+        $primero = DB::table('ledger_entries')->where('campaign_creator_id', $id)->first(['id', 'uuid']);
 
-        Ledger::anular($asientoId, 'Se devengo sobre la participacion equivocada.',
+        Ledger::anular((int) $primero->id, 'Se devengo sobre la participacion equivocada.',
             (int) $this->usuarioCon('finance')->id);
 
         $segundo = Ledger::devengar($id);
 
-        $this->assertNotSame($uuid, $segundo);
+        $this->assertNotSame((string) $primero->uuid, $segundo);
         $this->assertSame(2, DB::table('ledger_entries')->where('campaign_creator_id', $id)->count());
     }
 
@@ -160,6 +158,79 @@ final class LedgerTest extends TestCase
         $this->expectExceptionMessage('gratuita');
 
         Ledger::devengar($id);
+    }
+
+    // ----------------------------------------- el devengo por evento (9.4)
+
+    /**
+     * **La de `9.4`.** Aceptar deja el dinero anotado, sin que nadie llame a nada.
+     *
+     * Se devenga al ACEPTAR y no al terminar porque es al aceptar cuando existe
+     * la deuda: `7.5` congela el importe y `BR-CREATOR-008` impide cambiarlo
+     * después. Que todavía no se pueda pagar es otra cosa, y vive en el estado.
+     */
+    public function test_aceptar_anota_el_devengo_solo(): void
+    {
+        $id = $this->aceptado(500.0);
+
+        $this->assertDatabaseHas('ledger_entries', [
+            'campaign_creator_id' => $id,
+            'entry_type' => Ledger::DEVENGO,
+            'status' => Ledger::DEVENGADO,
+            'amount' => '500.0000',
+        ]);
+    }
+
+    /** Un canje no devenga, y **no es un fallo**: el listener sigue su camino. */
+    public function test_aceptar_un_canje_no_anota_nada_y_no_revienta(): void
+    {
+        DB::table('campaigns')->where('id', $this->campanaId)
+            ->update(['is_gratis' => 1, 'revenue_amount' => 0, 'creator_budget_amount' => 0]);
+
+        $id = $this->aceptado(0.0);
+
+        $this->assertDatabaseMissing('ledger_entries', ['campaign_creator_id' => $id]);
+        $this->assertNotNull(DB::table('campaign_creators')->where('id', $id)->value('accepted_at'),
+            'la aceptacion sigue siendo cierta');
+    }
+
+    /**
+     * La red de seguridad: una aceptación sin asiento se recupera, **y se avisa**.
+     *
+     * Desde `9.4` esto debería estar siempre vacío. Que no lo esté es la noticia,
+     * no el arreglo: el comando lo anota y lo dice en amarillo.
+     */
+    public function test_el_barrido_rescata_una_aceptacion_sin_devengo(): void
+    {
+        $id = $this->aceptado(500.0);
+
+        // Se borra el asiento a mano --por SQL crudo, porque `tg_ledger_no_delete`
+        // no deja-- para simular el listener que fallo.
+        DB::statement('DROP TRIGGER IF EXISTS `tg_ledger_no_delete`');
+        DB::table('ledger_entries')->where('campaign_creator_id', $id)->delete();
+        DB::unprepared('CREATE TRIGGER `tg_ledger_no_delete` BEFORE DELETE ON `ledger_entries` '
+            ."FOR EACH ROW BEGIN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = "
+            ."'ledger_entries no admite borrado fisico (BR-FIN-001).'; END");
+
+        $this->assertCount(1, Ledger::sinDevengo());
+
+        $this->artisan('ledger:revisar')
+            ->expectsOutputToContain('sin devengo')
+            ->assertSuccessful();
+
+        $this->assertCount(0, Ledger::sinDevengo());
+        $this->assertDatabaseHas('ledger_entries', ['campaign_creator_id' => $id]);
+    }
+
+    /** Y un canje NO sale en esa lista: intentarlo cada día sería intentar lo imposible. */
+    public function test_un_canje_no_aparece_como_aceptacion_sin_devengo(): void
+    {
+        DB::table('campaigns')->where('id', $this->campanaId)
+            ->update(['is_gratis' => 1, 'revenue_amount' => 0, 'creator_budget_amount' => 0]);
+
+        $this->aceptado(0.0);
+
+        $this->assertCount(0, Ledger::sinDevengo());
     }
 
     // ------------------------------------------------ las cinco condiciones
@@ -407,9 +478,12 @@ final class LedgerTest extends TestCase
             $this->medioDePago($creadorId, '00212345678901234567', ['status' => 'verified']);
         }
 
-        $uuid = Ledger::devengar($id);
+        // El asiento YA existe: lo anoto el listener de `9.4` al aceptar.
+        $asientoId = (int) DB::table('ledger_entries')
+            ->where('campaign_creator_id', $id)->where('entry_type', Ledger::DEVENGO)
+            ->value('id');
 
-        return [$id, (int) DB::table('ledger_entries')->where('uuid', $uuid)->value('id')];
+        return [$id, $asientoId];
     }
 
     /**

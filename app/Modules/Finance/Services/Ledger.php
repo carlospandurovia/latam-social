@@ -295,6 +295,36 @@ final class Ledger
     }
 
     /**
+     * Participaciones **aceptadas y sin devengo**.
+     *
+     * Desde `9.4` esto debería estar siempre vacío: el listener anota el asiento
+     * al aceptar. Existe porque un listener puede fallar —y si falla, el creador
+     * queda aceptado y su dinero invisible—, y porque las participaciones
+     * aceptadas **antes** de `9.4` no pasaron por él. Es la misma red que `8.1`
+     * dejó para los entregables.
+     *
+     * Las gratuitas quedan fuera: un canje no devenga, y sacarlas aquí evita que
+     * el barrido intente lo imposible todos los días.
+     *
+     * @return Collection<int, \stdClass>
+     */
+    public static function sinDevengo(int $limite = 500): Collection
+    {
+        return DB::table('campaign_creators as cc')
+            ->leftJoin('ledger_entries as le', function ($j): void {
+                $j->on('le.campaign_creator_id', '=', 'cc.id')
+                    ->where('le.entry_type', '=', self::DEVENGO)
+                    ->where('le.status', '<>', self::ANULADO);
+            })
+            ->whereNotNull('cc.accepted_at')
+            ->where('cc.agreed_amount', '>', 0)
+            ->whereNull('le.id')
+            ->orderBy('cc.accepted_at')
+            ->limit($limite)
+            ->get(['cc.id', 'cc.creator_id', 'cc.agreed_amount', 'cc.currency_code', 'cc.accepted_at']);
+    }
+
+    /**
      * Los devengos que están esperando algo, con lo que les falta.
      *
      * @return Collection<int, \stdClass>

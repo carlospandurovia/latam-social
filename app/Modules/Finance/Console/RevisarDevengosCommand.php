@@ -7,6 +7,7 @@ namespace App\Modules\Finance\Console;
 use App\Modules\Finance\Services\Ledger;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
+use Throwable;
 
 /**
  * Mueve a `payable` los devengos que ya cumplen las cinco (9.3).
@@ -23,6 +24,11 @@ use Illuminate\Support\Facades\DB;
  * comprueba no depende de que ningún evento se haya emitido.
  *
  * Es idempotente: pasar dos veces sobre un asiento ya `payable` no hace nada.
+ *
+ * Y hace una cosa más desde `9.4`: **anota las aceptaciones que se quedaron sin
+ * devengo**. El listener las anota al aceptar, así que eso debería salir siempre
+ * en cero — y si no sale en cero, eso es exactamente la noticia. Es la misma red
+ * que `8.1` dejó para los entregables.
  */
 final class RevisarDevengosCommand extends Command
 {
@@ -33,6 +39,29 @@ final class RevisarDevengosCommand extends Command
     public function handle(): int
     {
         $limite = max(1, min(5000, (int) $this->option('limite')));
+
+        // Primero la red de seguridad: aceptaciones sin asiento. Desde `9.4` el
+        // listener las anota al aceptar, asi que esto deberia salir siempre en
+        // cero --y si no sale en cero, eso ES la noticia--. Va antes de revisar
+        // para que un devengo recuperado hoy pueda pasar a pagable hoy mismo.
+        $rescatados = 0;
+
+        foreach (Ledger::sinDevengo($limite) as $participacion) {
+            try {
+                Ledger::devengar((int) $participacion->id);
+                $rescatados++;
+            } catch (Throwable $e) {
+                $this->warn("No se pudo devengar la participacion {$participacion->id}: {$e->getMessage()}");
+            }
+        }
+
+        if ($rescatados > 0) {
+            $this->warn(sprintf(
+                'Habia %d aceptaciones sin devengo. Se anotaron ahora, pero el listener deberia '
+                .'haberlo hecho al aceptar: mire el log.',
+                $rescatados,
+            ));
+        }
 
         $devengos = DB::table('ledger_entries')
             ->where('entry_type', Ledger::DEVENGO)
@@ -53,8 +82,8 @@ final class RevisarDevengosCommand extends Command
         // comando que no imprime nada cuando no hace nada es indistinguible de
         // un comando que no corrio.
         $this->info(sprintf(
-            'Devengos mirados: %d. Pasados a pagable: %d.',
-            $devengos->count(), $movidos,
+            'Devengos mirados: %d. Pasados a pagable: %d. Rescatados: %d.',
+            $devengos->count(), $movidos, $rescatados,
         ));
 
         return self::SUCCESS;

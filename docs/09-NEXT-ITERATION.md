@@ -1,5 +1,10 @@
 # 09 — Estado del proyecto y siguiente iteración
 
+> **Versión 3.5 — 2026-08-27.** Actualizado al cerrar `9.4`. **Aceptar una
+> campaña deja el dinero anotado solo.** El ciclo del creador está entero: acepta,
+> se devenga, entrega, se aprueba, se publica, se verifica, y el barrido lo pasa
+> a pagable.
+>
 > **Versión 3.4 — 2026-08-27.** Actualizado al cerrar `9.3`. **El libro mayor
 > deja de ser una tabla vacía**: hay devengos, un grafo de estados que impide que
 > un pagado vuelva, y un barrido diario que pasa a pagable lo que cumple las
@@ -92,11 +97,11 @@
 |---|---|
 | Tablas | 73 · **26 columnas puerta**, contadas y no heredadas (`T-57`) |
 | Migraciones | 61, verdes desde cero en MySQL 8 y con vuelta atrás completa |
-| Pruebas de PHPUnit | **769**, 2.495 aserciones |
+| Pruebas de PHPUnit | **773**, 2.504 aserciones |
 | Aserciones de restricción (SQL) | **1.684** en MariaDB, **1.674** en MySQL 8 · 33 suites |
 | Puertas de calidad | **7**: formato, análisis estático, fronteras, pruebas, vigencias, nombres entre capas y **las suites** (8.11) |
 | Verificadores fuera de PHPUnit | 4: fixturas, periodos, nombres entre capas y **mensajes de la base** (nuevo en 8.1) |
-| Decisiones registradas | hasta `DEC-169` |
+| Decisiones registradas | hasta `DEC-171` |
 
 ### Lo que se puede hacer hoy por pantalla
 
@@ -202,6 +207,10 @@ porque no hay nada que elegir: el esquema garantiza como mucho una por país y
 fecha. Al ir a enseñarlo salió `T-58` — la pantalla llevaba desde 7.1 imprimiendo
 la sociedad que tocaría **hoy** bajo el rótulo de la guardada.
 
+Y desde `9.4`, **aceptar una campaña deja el dinero anotado solo**: nadie pulsa
+nada, y si el listener alguna vez falla el barrido lo rescata y avisa de que
+hubo que rescatarlo.
+
 Y desde `9.3`, **el libro mayor del creador está vivo**: se devenga lo pactado
 —una sola vez por participación, y lo garantiza la base—, un barrido diario pasa
 a pagable lo que cumple las cinco condiciones, un post caído retiene el asiento
@@ -278,18 +287,21 @@ Ninguna bloquea código hoy; todas bloquean una iteración futura concreta.
 
 ## 4. Lo que propongo como siguiente iteración
 
-**`9.4` — el devengo automático por eventos de campaña.**
+**`9.5` — requisitos documentales por país y régimen.**
 
-`9.3` dejó `Ledger::devengar()` y **nadie lo llama todavía**: el asiento hay que
-crearlo a mano. `9.4` lo engancha a los eventos que ya existen —la aceptación de
-la invitación, que es cuando el importe queda pactado— igual que `8.1` engancha
-la generación de entregables.
+Es el primero de la fase que **necesita a tu contador**: `Q-40` (las tasas de
+retención) y la matriz de qué documento exige cada país —recibo por honorarios en
+Perú, factura o cuenta de cobro en Colombia, invoice en Estados Unidos—.
 
-Es pequeño y cierra el ciclo: aceptar una campaña deja el dinero anotado, y el
-barrido de las 06:30 lo mueve solo cuando el trabajo está hecho.
+Mientras eso no esté, lo que sí se puede hacer sin bloquear nada:
 
-Después viene `9.5` (requisitos documentales por país) y ahí sí hace falta
-`Q-40`.
+- **`9.8` — «Mis ingresos» en el portal del creador.** El libro mayor ya tiene lo
+  que hace falta: saldo por moneda, qué se le debe, qué está pagado y qué está
+  retenido y por qué. Es la primera vez que el creador ve su dinero.
+- **Bajar el trinquete de las 297 aserciones ciegas.** `DEC-161` dio a `porque()`
+  la alternancia que faltaba, y desde entonces no se ha convertido ninguna.
+
+Dime cuál prefieres, o sigo por `9.8`, que es lo que más se ve.
 
 
 ## 5. Deuda de documentación reconocida
