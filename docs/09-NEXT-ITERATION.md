@@ -1,5 +1,9 @@
 # 09 — Estado del proyecto y siguiente iteración
 
+> **Versión 3.6 — 2026-08-27.** Actualizado al cerrar `9.8`. **El creador ve su
+> dinero.** Saldo por moneda, qué falta para cobrar cada cosa, y la fecha
+> prevista cuando ya es pagable.
+>
 > **Versión 3.5 — 2026-08-27.** Actualizado al cerrar `9.4`. **Aceptar una
 > campaña deja el dinero anotado solo.** El ciclo del creador está entero: acepta,
 > se devenga, entrega, se aprueba, se publica, se verifica, y el barrido lo pasa
@@ -97,11 +101,11 @@
 |---|---|
 | Tablas | 73 · **26 columnas puerta**, contadas y no heredadas (`T-57`) |
 | Migraciones | 61, verdes desde cero en MySQL 8 y con vuelta atrás completa |
-| Pruebas de PHPUnit | **773**, 2.504 aserciones |
+| Pruebas de PHPUnit | **779**, 2.520 aserciones |
 | Aserciones de restricción (SQL) | **1.684** en MariaDB, **1.674** en MySQL 8 · 33 suites |
 | Puertas de calidad | **7**: formato, análisis estático, fronteras, pruebas, vigencias, nombres entre capas y **las suites** (8.11) |
 | Verificadores fuera de PHPUnit | 4: fixturas, periodos, nombres entre capas y **mensajes de la base** (nuevo en 8.1) |
-| Decisiones registradas | hasta `DEC-171` |
+| Decisiones registradas | hasta `DEC-173` |
 
 ### Lo que se puede hacer hoy por pantalla
 
@@ -207,6 +211,11 @@ porque no hay nada que elegir: el esquema garantiza como mucho una por país y
 fecha. Al ir a enseñarlo salió `T-58` — la pantalla llevaba desde 7.1 imprimiendo
 la sociedad que tocaría **hoy** bajo el rótulo de la guardada.
 
+Y desde `9.8`, **el creador ve su dinero**: saldo por moneda, qué falta para
+cobrar cada cosa —con las palabras de las cinco condiciones— y la fecha prevista
+en cuanto es pagable. Sin un solo botón, y sin el motivo interno de una
+retención.
+
 Y desde `9.4`, **aceptar una campaña deja el dinero anotado solo**: nadie pulsa
 nada, y si el listener alguna vez falla el barrido lo rescata y avisa de que
 hubo que rescatarlo.
@@ -287,21 +296,22 @@ Ninguna bloquea código hoy; todas bloquean una iteración futura concreta.
 
 ## 4. Lo que propongo como siguiente iteración
 
-**`9.5` — requisitos documentales por país y régimen.**
+Lo que queda de `F9` **empieza a necesitar a tu contador**:
 
-Es el primero de la fase que **necesita a tu contador**: `Q-40` (las tasas de
-retención) y la matriz de qué documento exige cada país —recibo por honorarios en
-Perú, factura o cuenta de cobro en Colombia, invoice en Estados Unidos—.
+| | Qué falta | Quién |
+|---|---|---|
+| `9.5` | Requisitos documentales por país y régimen | tu contador (`Q-40` + la matriz de documentos) |
+| `9.6` | Lotes de pago con doble aprobación y exportación bancaria | nadie — y aquí se paga `DEC-157` |
+| `9.7` | Registro del pago, comprobante, aviso al creador | nadie |
 
-Mientras eso no esté, lo que sí se puede hacer sin bloquear nada:
+**Propongo `9.6`**, que es el siguiente sin bloqueo y el que cierra la deuda de
+`DEC-157`: la comprobación de que **la sociedad que paga es la de la campaña**
+(`BR-LE-009`, 🔴) se adelantó a la iteración que estrene `payout_batches`, y esa
+es ésta. El lote ya tiene su `legal_entity_id` y el asiento ya sabe de qué
+campaña viene; lo que falta es la restricción entre los dos.
 
-- **`9.8` — «Mis ingresos» en el portal del creador.** El libro mayor ya tiene lo
-  que hace falta: saldo por moneda, qué se le debe, qué está pagado y qué está
-  retenido y por qué. Es la primera vez que el creador ve su dinero.
-- **Bajar el trinquete de las 297 aserciones ciegas.** `DEC-161` dio a `porque()`
-  la alternancia que faltaba, y desde entonces no se ha convertido ninguna.
-
-Dime cuál prefieres, o sigo por `9.8`, que es lo que más se ve.
+Alternativa sin código nuevo: **bajar el trinquete de las 297 aserciones
+ciegas**, que sigue en 297 desde que `DEC-161` dio a `porque()` la alternancia.
 
 
 ## 5. Deuda de documentación reconocida

@@ -68,6 +68,22 @@ final class Ledger
     ];
 
     /**
+     * Cómo se llaman los estados **en el portal del creador**.
+     *
+     * `on_hold` es «en revisión» y no «retenido»: la palabra del back-office
+     * describe lo que hace el sistema; la del portal tiene que describir lo que
+     * le pasa a él, que es que alguien lo está mirando.
+     *
+     * @var array<string, string>
+     */
+    public const ESTADOS_CREADOR = [
+        self::DEVENGADO => 'En curso',
+        self::PAGABLE => 'Listo para pagar',
+        self::PAGADO => 'Pagado',
+        self::RETENIDO => 'En revisión — te escribimos',
+    ];
+
+    /**
      * Lo que cuenta como «se le debe».
      *
      * `on_hold` NO está: un asiento retenido es dinero cuyo pago está parado a
@@ -292,6 +308,104 @@ final class Ledger
                 DB::raw('SUM(amount) as total'),
                 DB::raw('COUNT(*) as asientos'),
             ]);
+    }
+
+    /**
+     * Lo que el CREADOR ve de su propio dinero (9.8).
+     *
+     * ### Esta función es la frontera, y por eso enumera columnas
+     *
+     * Es el mismo sitio que `Aprobaciones::pieza()` en `8.5`: donde se decide
+     * qué cruza hacia una pantalla externa. Devolver la fila entera y confiar en
+     * que la plantilla no imprima de más es confiar en la plantilla de mañana.
+     *
+     * **`status_reason` NO cruza** (decisión 2026-08-27). El motivo de una
+     * retención lo escribe el equipo para el expediente, no para el creador:
+     * puede nombrar personas o sospechas todavía sin confirmar, y un texto
+     * escrito deprisa —«parece que lo borró a propósito»— leído sin contexto es
+     * una acusación de la que no se vuelve. El creador ve **«en revisión»** y,
+     * desde `8.8`, recibe un correo donde se le explica de verdad.
+     *
+     * Tampoco cruzan el margen ni nada de la campaña más allá de su nombre y su
+     * marca (`BR-FIN-007`).
+     *
+     * @return array{saldo: Collection<int, \stdClass>, asientos: list<object>}
+     */
+    public static function misIngresos(int $creadorId): array
+    {
+        $filas = DB::table('ledger_entries as le')
+            ->leftJoin('campaign_creators as cc', 'cc.id', '=', 'le.campaign_creator_id')
+            ->leftJoin('campaigns as c', 'c.id', '=', 'cc.campaign_id')
+            ->leftJoin('client_brands as b', 'b.id', '=', 'c.client_brand_id')
+            ->where('le.creator_id', $creadorId)
+            // Un asiento anulado no existió: enseñarlo sería explicarle al
+            // creador un movimiento que no le afecta y que no sabe leer.
+            ->where('le.status', '<>', self::ANULADO)
+            ->orderByDesc('le.occurred_at')
+            ->get([
+                'le.id', 'le.entry_type', 'le.amount', 'le.currency_code', 'le.status',
+                'le.occurred_at', 'le.campaign_creator_id',
+                'c.name as campana', 'b.name as marca',
+                'cc.payment_term_days_snapshot',
+            ]);
+
+        return [
+            'saldo' => self::saldo($creadorId),
+            'asientos' => $filas->map(fn (object $f): object => (object) [
+                'importe' => (string) $f->amount,
+                'moneda' => (string) $f->currency_code,
+                'estado' => (string) $f->status,
+                'dice' => self::ESTADOS_CREADOR[$f->status] ?? (string) $f->status,
+                'cuando' => (string) $f->occurred_at,
+                'campana' => $f->campana === null ? null : (string) $f->campana,
+                'marca' => $f->marca === null ? null : (string) $f->marca,
+                'falta' => $f->status === self::DEVENGADO && $f->campaign_creator_id !== null
+                    ? self::loQueFalta((int) $f->campaign_creator_id)
+                    : [],
+                'se_paga' => $f->status === self::PAGABLE && $f->campaign_creator_id !== null
+                    ? self::fechaEstimadaDePago((int) $f->campaign_creator_id)
+                    : null,
+            ])->all(),
+        ];
+    }
+
+    /**
+     * Cuándo se le pagaría, contando desde la verificación (`BR-FIN-012`).
+     *
+     * Sólo se calcula para lo que **ya es pagable** (decisión 2026-08-27). Una
+     * fecha antes de eso es una promesa que depende de trabajo que el creador
+     * todavía no ha hecho, y si se corre, la culpa parece nuestra. Mientras
+     * tanto se le enseña **qué falta**, que es accionable; el plazo en días lo
+     * ve desde que acepta, en su participación.
+     *
+     * La cuenta arranca en la última verificación de sus publicaciones, y si no
+     * hay ninguna —un formato que no exige post— en la fecha en que se dio la
+     * participación por completada.
+     */
+    public static function fechaEstimadaDePago(int $participacionId): ?string
+    {
+        $p = DB::table('campaign_creators')->where('id', $participacionId)
+            ->first(['completed_at', 'payment_term_days_snapshot']);
+
+        if ($p === null) {
+            return null;
+        }
+
+        $verificacion = DB::table('publications as pub')
+            ->join('deliverables as d', 'd.id', '=', 'pub.deliverable_id')
+            ->where('d.campaign_creator_id', $participacionId)
+            ->whereNotNull('pub.verified_at')
+            ->max('pub.verified_at');
+
+        $desde = $verificacion ?? $p->completed_at;
+
+        if ($desde === null) {
+            return null;
+        }
+
+        $dias = (int) ($p->payment_term_days_snapshot ?? 30);
+
+        return date('Y-m-d', strtotime((string) $desde." +{$dias} day"));
     }
 
     /**

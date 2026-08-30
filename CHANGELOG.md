@@ -2,6 +2,27 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 
+## [9.8 · Mis ingresos] — 2026-08-27
+
+La primera vez que un creador ve su dinero en el sistema. Sin migración: el libro
+mayor de `9.3` ya tenía todo lo que hacía falta.
+
+### Añadido
+- **`/mis-ingresos`**, segunda pantalla del portal del creador. Saldo **por
+  moneda** —sumar dos exige un tipo de cambio, y el de hoy no es el del día del
+  pago— y la lista de movimientos con su estado.
+- **Sin un solo botón.** El creador no mueve dinero: lo mira. Darle una acción
+  aquí sería darle una palanca sobre un libro que no se edita.
+- Mientras un asiento está devengado se enseña **qué falta**, con las palabras de
+  las cinco condiciones. Es accionable; una fecha no lo sería (`DEC-173`).
+
+### Sabido y dicho
+- **El motivo interno de una retención no cruza** (`DEC-172`). Se escribe para el
+  expediente y puede nombrar sospechas sin confirmar. El creador ve «En revisión
+  — te escribimos», y el correo de `8.8` es donde se le explica bien.
+- Tampoco cruzan los asientos anulados, ni el margen, ni el dinero de otro
+  creador — y si no hay creador para el usuario, **404 y no 403**.
+
 ## [9.4 · El devengo por evento] — 2026-08-27
 
 `9.3` dejó `Ledger::devengar()` y nadie lo llamaba. Ahora aceptar una invitación

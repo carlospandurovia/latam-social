@@ -7,6 +7,15 @@
 @section('titulo', 'Mis entregas')
 
 @section('contenido')
+  {{-- 9.8: el creador entra aqui a trabajar y se pregunta por su dinero en la
+       misma visita. Un enlace y no un menu: el portal tiene dos pantallas. --}}
+  <div class="mb-5 text-right">
+    <a href="{{ route('ingresos.mios') }}"
+       class="text-sm text-marca-600 hover:text-marca-700 underline underline-offset-2">
+      Ver mis ingresos
+    </a>
+  </div>
+
   @if (session('exito'))
     <div class="mb-5 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
       {{ session('exito') }}

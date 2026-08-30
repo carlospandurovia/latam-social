@@ -29,6 +29,7 @@ use App\Modules\Creator\Http\Controllers\PerfilComercialController;
 use App\Modules\Creator\Http\Controllers\PerfilFiscalController;
 use App\Modules\Creator\Http\Controllers\RedesSocialesController;
 use App\Modules\Creator\Http\Controllers\SolicitudesController;
+use App\Modules\Finance\Http\Controllers\MisIngresosController;
 use App\Modules\Identity\Http\Controllers\AccesoController;
 use App\Modules\Identity\Http\Controllers\PasswordController;
 use App\Modules\Identity\Http\Controllers\RecuperacionController;
@@ -616,6 +617,13 @@ Route::middleware('auth')->group(function (): void {
         ->middleware(['permiso:creator.portal', 'throttle:20,1'])
         ->whereUuid('uuid')
         ->name('entregas.publicar');
+
+    // 9.8: lo que ha ganado. Solo lectura y sin un solo boton: el creador no
+    // mueve dinero, lo mira. `creator.portal` dice que puede ver UN portal;
+    // cual, lo decide `creators.user_id = Auth::id()` dentro de la accion.
+    Route::get('/mis-ingresos', MisIngresosController::class)
+        ->middleware('permiso:creator.portal')
+        ->name('ingresos.mios');
 
     // 7.7: el panel de seguimiento. Es VER: contesta «como va», no cambia nada.
     // La ficha (`campanas.show`) contesta «que es»; mezclarlas daria una pagina

@@ -204,7 +204,7 @@ Iterativa y exhaustiva, tal como pide la especificación. **Nada de frontend aqu
 | 9.5 | Requisitos documentales por país/régimen (recibo por honorarios, factura, etc.) |
 | 9.6 | Lotes de pago: generación, aprobación (doble control sobre umbral), exportación bancaria |
 | 9.7 | Registro de pago, comprobante, notificación al creador |
-| 9.8 | Vista "Mis ingresos" en el portal del creador |
+| 9.8 | ✅ **Cerrada (2026-08-27).** La primera vez que un creador ve su dinero. Sin migración: el libro mayor ya tenía todo. **Sin un solo botón** —el creador no mueve dinero, lo mira—. Saldo **por moneda** y no sumado, porque sumar dos monedas exige un tipo de cambio y el de hoy no es el del día del pago. El **motivo interno** de una retención no cruza: se escribe para el expediente y puede nombrar sospechas sin confirmar (`DEC-172`); la frontera vive en `Ledger::misIngresos()`, que enumera columnas. Y la **fecha de cobro sólo cuando ya es pagable** (`DEC-173`): antes se enseña qué falta, que es accionable |
 | 9.9 | Facturación al cliente **emitida desde la entidad legal**: hitos, registro de OC, documento con snapshot del emisor, instrucciones de pago de sus cuentas, CxC, cobro, conciliación |
 | 9.10 | Rentabilidad por campaña (P&L interno) **y por sociedad**, con control de acceso estricto |
 | ~~9.11~~ | ⬆️ **Adelantada por `DEC-157` a la iteración que estrene `payout_batches`.** Era la validación de `billing_legal_entity ≠ settlement_legal_entity`, y una regla 🔴 en la posición 11 de 14 llega después de que diez iteraciones la den por buena. Va **a la base** y es cross-table, así que es un disparador. `DEC-020` ya no es «en el MVP»: es la regla (`DEC-156`) |
