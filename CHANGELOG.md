@@ -2,6 +2,37 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 
+## [9.3 · El libro mayor del creador] — 2026-08-27
+
+`ledger_entries` llevaba en el esquema desde la Fase 2 con doce `CHECK` y sus dos
+disparadores de inmutabilidad. **Y cero filas.** Aquí empieza a haber dinero.
+
+### Añadido
+- **`Ledger`**: `devengar`, `requisitos`, `revisarPagable`, `retener`, `liberar`,
+  `anular`, `saldo`. El saldo es una **suma**, nunca una columna (`BR-FIN-001`).
+- **`ledger:revisar`**, a las 06:30 — después de `permanencia:vigilar`, porque de
+  ella depende que una publicación cuente como verificada. Pasar a pagable lo
+  hace el sistema: las cinco condiciones de `BR-FIN-003` ya las firmó alguien una
+  por una (`DEC-166`).
+- **`uq_ledger_devengo`**: un devengo por participación. `BR-FIN-015` lo daba por
+  hecho sin decirlo. Vigesimosexta columna puerta — y un devengo anulado libera
+  el sitio, porque anularlo significa que no debió existir.
+- **`tg_ledger_estado`**: el grafo de estados, con `paid` y `void` terminales. Un
+  pago que se deshace se corrige con un asiento de reversión, no cambiando el
+  estado (`DEC-169`).
+- Un post caído **retiene** el asiento y espera a una persona (`DEC-167`); el
+  asiento va en la **moneda pactada** y se convierte al pagar (`DEC-168`).
+
+### Corregido
+- **`T-62`: el motivo de la transición anterior explicaba la siguiente.** Los dos
+  campos siguen en la fila después del movimiento previo, así que un `UPDATE …
+  SET status='on_hold'` a secas pasaba. **Lo cazó la suite de `2.13`** — que a su
+  vez tenía una aserción afirmando ese hueco como correcto desde la Fase 2, igual
+  que `T-16`. Ahora `status_changed_at` tiene que cambiar.
+- Y de ahí, lo segundo: un `Carbon` sin formatear se escribe sin fracción aunque
+  la columna sea `DATETIME(3)`, así que dos transiciones en el mismo segundo
+  quedaban idénticas — y pasar a pagable y retener seguido es constante.
+
 ## [9.2 · Que las tasas lleguen solas] — 2026-08-27
 
 `9.1` dejó la máquina montada y vacía. Esto le da cuerda: un cron, un cliente de

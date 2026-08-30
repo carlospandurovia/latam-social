@@ -132,6 +132,11 @@ CREATE TABLE ledger_entries (
   amount              DECIMAL(18,4) NOT NULL,
   currency_code       CHAR(3)       NOT NULL,
   status              VARCHAR(15)   NOT NULL DEFAULT 'accrued',
+  -- 9.3: quien movio el asiento, cuando y por que. Los tres o ninguno: media
+  -- firma parece que la pregunta «quien paro este pago» tiene respuesta.
+  status_changed_at         DATETIME(3)   NULL,
+  status_changed_by_user_id BIGINT UNSIGNED NULL,
+  status_reason             VARCHAR(255)  NULL,
   campaign_creator_id BIGINT UNSIGNED NULL,
   payout_id           BIGINT UNSIGNED NULL,
   -- BR-FIN-009: la tasa aplicada se congela con su fecha y su fuente. Los
@@ -160,6 +165,13 @@ CREATE TABLE ledger_entries (
   UNIQUE KEY uq_ledger_payout (payout_id),
   -- Un asiento solo se revierte una vez.
   UNIQUE KEY uq_ledger_reverses (reverses_entry_id),
+  -- 9.3: UN devengo por participacion. `BR-FIN-015` exigia que un devengo
+  -- tuviera participacion; no decia que fuera UNA. `status <> 'void'` a
+  -- proposito: anular un devengo significa que no debio existir, y entonces la
+  -- participacion tiene que poder volver a devengar.
+  devengo_gate TINYINT UNSIGNED GENERATED ALWAYS AS (CASE WHEN entry_type = 'earning' AND status <> 'void' THEN 1 ELSE NULL END) STORED,
+  UNIQUE KEY uq_ledger_devengo (devengo_gate, campaign_creator_id),
+  KEY ix_ledger_status_user (status_changed_by_user_id),
   KEY ix_ledger_creator (creator_id, status, occurred_at),
   KEY ix_ledger_participation (campaign_creator_id),
   KEY ix_ledger_type (entry_type, occurred_at),
@@ -172,6 +184,7 @@ CREATE TABLE ledger_entries (
   CONSTRAINT fk_ledger_currency FOREIGN KEY (currency_code) REFERENCES currencies(code) ON DELETE RESTRICT,
   CONSTRAINT fk_ledger_base_currency FOREIGN KEY (base_currency_code) REFERENCES currencies(code) ON DELETE RESTRICT,
   CONSTRAINT fk_ledger_user FOREIGN KEY (created_by_user_id) REFERENCES users(id) ON DELETE RESTRICT,
+  CONSTRAINT fk_ledger_status_user FOREIGN KEY (status_changed_by_user_id) REFERENCES users(id) ON DELETE RESTRICT,
   CONSTRAINT ck_ledger_type CHECK (entry_type IN ('earning','payment','payment_reversal','adjustment','bonus','penalty','withholding')),
   CONSTRAINT ck_ledger_status CHECK (status IN ('accrued','payable','paid','on_hold','void')),
   -- Un asiento de importe cero no dice nada y ensucia el saldo.
@@ -216,7 +229,12 @@ CREATE TABLE ledger_entries (
   ),
   CONSTRAINT ck_ledger_reverses_type CHECK (
     reverses_entry_id IS NULL OR entry_type IN ('payment_reversal','adjustment')
-  )
+  ),
+  -- 9.3: mover un asiento exige decir por que, y un asiento nace devengado o
+  -- pagado. A pagable se LLEGA: nacer ahi se salta las cinco condiciones de
+  -- `BR-FIN-003`.
+  CONSTRAINT ck_ledger_status_firma CHECK (status_changed_at IS NULL OR status_reason IS NOT NULL),
+  CONSTRAINT ck_ledger_estado_inicial CHECK (status_changed_at IS NOT NULL OR status IN ('accrued','paid'))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ============================ Facturas al cliente (BR-LE-005, BR-FIN-010)
@@ -354,6 +372,43 @@ CREATE TABLE payments (
 DELIMITER //
 
 -- El libro mayor es solo-insercion. Lo unico que evoluciona es el estado.
+-- 9.3 -- La maquina de estados.
+--
+-- `tg_ledger_no_update` es columna por columna y deja pasar `status` a
+-- proposito: `accrued -> payable -> paid` es el ciclo de vida del asiento y sin
+-- el la tabla no serviria. Pero de ahi no salia QUE TRANSICION es valida: un
+-- `paid` podia volver a `accrued`, y eso es dinero ya pagado que reaparece como
+-- deuda. Es la forma de `tg_del_rondas` en 8.4 --un contador que podia bajar--.
+--
+-- `paid` y `void` son TERMINALES. Un pago que se deshace no se deshace cambiando
+-- este estado: se corrige con un asiento de `payment_reversal` (`BR-FIN-002`),
+-- que deja rastro de las dos cosas.
+CREATE TRIGGER `tg_ledger_estado`
+BEFORE UPDATE ON `ledger_entries`
+FOR EACH ROW
+BEGIN
+    IF NOT (NEW.`status` <=> OLD.`status`) THEN
+        IF NOT (
+               (OLD.`status` = 'accrued' AND NEW.`status` IN ('payable','on_hold','void'))
+            OR (OLD.`status` = 'payable' AND NEW.`status` IN ('paid','on_hold','void'))
+            OR (OLD.`status` = 'on_hold' AND NEW.`status` IN ('payable','void'))
+        ) THEN
+            SIGNAL SQLSTATE '45000'
+              SET MESSAGE_TEXT = 'Ese cambio de estado no existe en el libro mayor: un pagado o un anulado no vuelven.';
+        END IF;
+
+        -- `status_changed_at` tiene que CAMBIAR, no solo estar. Si solo se
+        -- mirara que no es nula, el motivo de la transicion ANTERIOR --que
+        -- sigue en la fila-- explicaria la siguiente.
+        IF NEW.`status_reason` IS NULL OR NEW.`status_reason` = ''
+           OR NEW.`status_changed_at` IS NULL
+           OR NEW.`status_changed_at` <=> OLD.`status_changed_at` THEN
+            SIGNAL SQLSTATE '45000'
+              SET MESSAGE_TEXT = 'Mover un asiento exige decir cuando y por que, en ESE movimiento.';
+        END IF;
+    END IF;
+END//
+
 CREATE TRIGGER tg_ledger_no_update BEFORE UPDATE ON ledger_entries
 FOR EACH ROW
 BEGIN

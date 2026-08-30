@@ -1,5 +1,10 @@
 # 09 — Estado del proyecto y siguiente iteración
 
+> **Versión 3.4 — 2026-08-27.** Actualizado al cerrar `9.3`. **El libro mayor
+> deja de ser una tabla vacía**: hay devengos, un grafo de estados que impide que
+> un pagado vuelva, y un barrido diario que pasa a pagable lo que cumple las
+> cinco condiciones de `BR-FIN-003`.
+>
 > **Versión 3.3 — 2026-08-27.** Actualizado al cerrar `9.2`. Las tasas llegan
 > solas: cron a las 05:30, pantalla de Tipos de cambio, y la credencial
 > configurable sin entrar por SSH — cifrada, firmada y sin reenseñarse nunca.
@@ -85,13 +90,13 @@
 
 | | |
 |---|---|
-| Tablas | 73 · **25 columnas puerta**, contadas y no heredadas (`T-57`) |
-| Migraciones | 60, verdes desde cero en MySQL 8 y con vuelta atrás completa |
-| Pruebas de PHPUnit | **751**, 2.445 aserciones |
-| Aserciones de restricción (SQL) | **1.654** en MariaDB, **1.644** en MySQL 8 · 32 suites |
+| Tablas | 73 · **26 columnas puerta**, contadas y no heredadas (`T-57`) |
+| Migraciones | 61, verdes desde cero en MySQL 8 y con vuelta atrás completa |
+| Pruebas de PHPUnit | **769**, 2.495 aserciones |
+| Aserciones de restricción (SQL) | **1.684** en MariaDB, **1.674** en MySQL 8 · 33 suites |
 | Puertas de calidad | **7**: formato, análisis estático, fronteras, pruebas, vigencias, nombres entre capas y **las suites** (8.11) |
 | Verificadores fuera de PHPUnit | 4: fixturas, periodos, nombres entre capas y **mensajes de la base** (nuevo en 8.1) |
-| Decisiones registradas | hasta `DEC-165` |
+| Decisiones registradas | hasta `DEC-169` |
 
 ### Lo que se puede hacer hoy por pantalla
 
@@ -197,6 +202,12 @@ porque no hay nada que elegir: el esquema garantiza como mucho una por país y
 fecha. Al ir a enseñarlo salió `T-58` — la pantalla llevaba desde 7.1 imprimiendo
 la sociedad que tocaría **hoy** bajo el rótulo de la guardada.
 
+Y desde `9.3`, **el libro mayor del creador está vivo**: se devenga lo pactado
+—una sola vez por participación, y lo garantiza la base—, un barrido diario pasa
+a pagable lo que cumple las cinco condiciones, un post caído retiene el asiento
+en vez de anularlo, y un pagado no vuelve. El saldo es una suma, nunca una
+columna.
+
 Y desde `9.2`, **las tasas llegan solas**: un cron a las 05:30 las trae de
 Decolecta, una pantalla enseña qué fuente manda, qué hay y si el cron sigue vivo,
 y la credencial se configura sin entrar por SSH — cifrada, firmada, y sin
@@ -267,20 +278,18 @@ Ninguna bloquea código hoy; todas bloquean una iteración futura concreta.
 
 ## 4. Lo que propongo como siguiente iteración
 
-**`9.3` — el libro mayor del creador** (era `9.2` en el roadmap original).
+**`9.4` — el devengo automático por eventos de campaña.**
 
-Es donde empieza a haber dinero de verdad: `ledger_entries` existe desde la
-Fase 2 con sus reglas escritas —`BR-FIN-001` (el saldo es una suma, no una
-columna), `BR-FIN-002` (sólo-inserción, la corrección es un asiento de
-reversión)— y **nadie escribe todavía en ella**.
+`9.3` dejó `Ledger::devengar()` y **nadie lo llama todavía**: el asiento hay que
+crearlo a mano. `9.4` lo engancha a los eventos que ya existen —la aceptación de
+la invitación, que es cuando el importe queda pactado— igual que `8.1` engancha
+la generación de entregables.
 
-Y ahí es donde hay que pagar `DEC-157`: la comprobación de que **la sociedad que
-paga es la de la campaña** (`BR-LE-009`, 🔴) estaba en el roadmap como `9.11`,
-la penúltima de catorce. Se adelantó a la iteración que estrene
-`payout_batches`, y el asiento del ledger es lo que ata una campaña a un pago.
+Es pequeño y cierra el ciclo: aceptar una campaña deja el dinero anotado, y el
+barrido de las 06:30 lo mueve solo cuando el trabajo está hecho.
 
-Lo que **no** bloquea: `Q-40` y `Q-44` son las tasas de retención y el IGV, y eso
-es `9.5` y `9.9`. La estructura del ledger no las necesita.
+Después viene `9.5` (requisitos documentales por país) y ahí sí hace falta
+`Q-40`.
 
 
 ## 5. Deuda de documentación reconocida

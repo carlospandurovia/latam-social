@@ -164,8 +164,16 @@ probar "conversion: tasa y fecha pero sin importe base" \
 
 echo ""
 echo "--- Libro mayor: solo insercion (BR-FIN-001 / BR-FIN-002) ---"
-probar "mayor: cambiar el estado de un asiento" \
- "UPDATE ledger_entries SET status='payable' WHERE entry_type='earning';" OK
+# Desde 9.3 mover un asiento exige decir CUANDO y POR QUE. Esta asercion decia
+# antes `UPDATE ... SET status='payable'` a secas y se ponia verde: afirmaba como
+# correcto justo el hueco que 9.3 cerro --un pago que se para sin que nadie
+# escriba por que--. Es el mismo error que `T-16`: una prueba que fija un agujero
+# como si fuera la regla.
+probar "mayor: cambiar el estado de un asiento, con su motivo" \
+ "UPDATE ledger_entries SET status='payable', status_changed_at=NOW(3),
+    status_reason='Cumple las cinco condiciones.' WHERE entry_type='earning';" OK
+porque "mayor: cambiarlo SIN motivo, no" \
+ "UPDATE ledger_entries SET status='on_hold' WHERE entry_type='earning';" "exige decir cuando y por que"
 probar "mayor: cambiar el IMPORTE de un asiento" \
  "UPDATE ledger_entries SET amount=99.0000 WHERE entry_type='earning';" RECHAZO
 probar "mayor: cambiar la fecha del hecho economico" \

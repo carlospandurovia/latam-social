@@ -21,4 +21,8 @@ return [
     // Va por evento porque Campaign no puede conocer a Content --y no debe:
     // si generar la lista de tareas falla, la aceptacion sigue siendo cierta--.
     App\Modules\Content\Providers\ContentServiceProvider::class,
+    // 9.3: el barrido diario que pasa a pagable lo que cumple `BR-FIN-003`.
+    // A las 06:30, DESPUES de la vigilancia de permanencia de las 06:00: de
+    // ella depende que una publicacion cuente como verificada.
+    App\Modules\Finance\Providers\FinanceServiceProvider::class,
 ];

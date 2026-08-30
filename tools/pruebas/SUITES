@@ -58,3 +58,7 @@
 # `fx_sources`, dejandolas como estaban. No se pisa con 9.1: aquella escribe
 # tasas y periodos, esta ni los mira.
 9.2-traida
+# 9.3 escribe en `ledger_entries`, que no toca nadie mas y NO se puede limpiar
+# --entro en la lista de 3.12 desde el principio--, asi que afirma su premisa en
+# vez de forzarla. Usa las dos primeras participaciones de la semilla.
+9.3-libro-mayor
