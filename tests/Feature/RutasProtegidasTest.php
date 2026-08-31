@@ -36,6 +36,13 @@ final class RutasProtegidasTest extends TestCase
         // cambiar su contrasena, y ese es justo al que mas urge.
         'contrasena' => 'Cambiar la propia contrasena no puede depender de un permiso.',
         'contrasena.cambiar' => 'Idem: es la accion de la anterior.',
+        // `9.19`. Es la pantalla a la que lleva el muro de los terminos y la
+        // unica que puede abrir un creador bloqueado por no aceptarlos: un
+        // permiso aqui dejaria sin salida justo a quien la necesita. La
+        // autorizacion es tener una ficha de creador atada a la sesion, y la
+        // comprueba el controlador --sin ficha, 404--.
+        'terminos.mios' => 'La unica salida de un creador bloqueado por no aceptar los terminos.',
+        'terminos.aceptar' => 'Idem: es la accion de la anterior, con throttle:10,1.',
     ];
 
     public function test_toda_ruta_autenticada_declara_su_permiso(): void
@@ -77,11 +84,18 @@ final class RutasProtegidasTest extends TestCase
         );
     }
 
-    /** Las excepciones se revisan a mano; que no crezcan sin que nadie mire. */
+    /**
+     * Las excepciones se revisan a mano; que no crezcan sin que nadie mire.
+     *
+     * El número **se sube a mano y con motivo**, que es todo el sentido de este
+     * trinquete. Pasó de cuatro a seis en `9.19`: las dos rutas del muro de los
+     * términos son la única salida de un creador bloqueado, y ponerles un
+     * permiso dejaría sin salida justo a quien la necesita.
+     */
     public function test_las_excepciones_siguen_siendo_pocas(): void
     {
         $this->assertLessThanOrEqual(
-            4,
+            6,
             count(self::SIN_PERMISO),
             'Hay demasiadas rutas exentas de permiso. Revísalas una por una.',
         );

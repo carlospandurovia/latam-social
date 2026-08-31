@@ -384,6 +384,50 @@ ALTER TABLE exchange_rates
 -- motores.
 -- ===========================================================================
 
+-- ============================ D2 Core: la politica de precios (9.18)
+-- La retencion que se le aplica al creador que no emite comprobante (Q-13) y el
+-- umbral de rentabilidad aceptable (Q-40). Ninguno de los dos puede estar en el
+-- codigo: el 29,5 % cambia por decreto y el 20 % es un juicio comercial.
+--
+-- `margin_basis` es el tercer numero, y es configuracion y no una pregunta: con
+-- 100 de neto y 29,5 % el costo es 141,84; el ejemplo del negocio decia 170,21,
+-- que es 141,84 x 1,20 --recargo SOBRE EL COSTO--. Un 20 % de margen sobre el
+-- INGRESO habria dado 177,30. Se configura y la pantalla ensena las dos.
+--
+-- Con VIGENCIA: subir el umbral del 20 al 25 % no puede convertir en mala una
+-- participacion que se pacto cuando el umbral era 20.
+CREATE TABLE pricing_policies (
+  id                BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  uuid              CHAR(36)      NOT NULL,
+  -- Porcentaje, no fraccion: 29.5 y no 0.295. Es como se escribe en un decreto
+  -- y como se teclea sin equivocarse.
+  withholding_rate  DECIMAL(7,4)  NOT NULL DEFAULT 0,
+  min_margin_pct    DECIMAL(7,4)  NOT NULL DEFAULT 0,
+  margin_basis      VARCHAR(10)   NOT NULL DEFAULT 'cost',
+  -- Por que se puso este numero. Un umbral sin explicacion es un numero que
+  -- nadie se atreve a cambiar dentro de un ano.
+  note              VARCHAR(255)  NULL,
+  valid_from        DATE          NOT NULL,
+  valid_to          DATE          NULL,
+  created_by_user_id BIGINT UNSIGNED NULL,
+  created_at        DATETIME(3)   NULL,
+  updated_at        DATETIME(3)   NULL,
+  -- La puerta: UNA sola politica vigente. Con dos, la mitad de las
+  -- participaciones se pactarian con una tasa y la otra mitad con otra sin que
+  -- nada fallara.
+  current_gate      TINYINT UNSIGNED GENERATED ALWAYS AS (CASE WHEN valid_to IS NULL THEN 1 ELSE NULL END) STORED,
+  UNIQUE KEY uq_pp_uuid (uuid),
+  UNIQUE KEY uq_pp_current (current_gate),
+  KEY ix_pp_desde (valid_from),
+  KEY ix_pp_autor (created_by_user_id),
+  CONSTRAINT fk_pp_autor FOREIGN KEY (created_by_user_id) REFERENCES users(id) ON DELETE RESTRICT,
+  -- Cien por cien de retencion deja el bruto en infinito: neto / (1 - 1).
+  CONSTRAINT ck_pp_tasa CHECK (withholding_rate >= 0 AND withholding_rate < 100),
+  CONSTRAINT ck_pp_umbral CHECK (min_margin_pct >= 0 AND min_margin_pct < 100),
+  CONSTRAINT ck_pp_base CHECK (margin_basis IN ('cost','revenue')),
+  CONSTRAINT ck_pp_fechas CHECK (valid_to IS NULL OR valid_to >= valid_from)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 DELIMITER //
 
 CREATE TRIGGER tg_audit_no_update BEFORE UPDATE ON audit_logs
@@ -499,6 +543,65 @@ BEGIN
     ) THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Ya hay una fuente oficial para ese par en esas fechas: cierre la anterior el dia antes.';
     END IF;
+END//
+
+-- 9.18: sin solape, con la tabla ENTERA como serie. `Periodo::sinSolape()` no
+-- sirve aqui y lo dice el mismo: se niega a trabajar con una serie vacia porque
+-- «prohibiria dos periodos cualesquiera de la tabla entera». Eso es exactamente
+-- lo que hace falta, asi que va a mano y con esta nota para que nadie lo tome
+-- por un descuido.
+CREATE TRIGGER `tg_pp_sin_solape_ins`
+BEFORE INSERT ON `pricing_policies`
+FOR EACH ROW
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM `pricing_policies`
+         WHERE NEW.`valid_from` <= IFNULL(`valid_to`, '9999-12-31')
+           AND `valid_from` <= IFNULL(NEW.`valid_to`, '9999-12-31')
+    ) THEN
+        SIGNAL SQLSTATE '45000'
+          SET MESSAGE_TEXT = 'Ya hay una politica de precios en esas fechas: cierre la anterior el dia antes.';
+    END IF;
+END//
+
+CREATE TRIGGER `tg_pp_sin_solape_upd`
+BEFORE UPDATE ON `pricing_policies`
+FOR EACH ROW
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM `pricing_policies`
+         WHERE NEW.`valid_from` <= IFNULL(`valid_to`, '9999-12-31')
+           AND `valid_from` <= IFNULL(NEW.`valid_to`, '9999-12-31')
+           AND `id` <> NEW.`id`
+    ) THEN
+        SIGNAL SQLSTATE '45000'
+          SET MESSAGE_TEXT = 'Ya hay una politica de precios en esas fechas: cierre la anterior el dia antes.';
+    END IF;
+END//
+
+-- Una politica CERRADA no se reescribe: es la que explica por que un compromiso
+-- de hace tres meses se pacto como se pacto.
+CREATE TRIGGER `tg_pp_inmutable`
+BEFORE UPDATE ON `pricing_policies`
+FOR EACH ROW
+BEGIN
+    IF OLD.`valid_to` IS NOT NULL THEN
+        IF NOT (NEW.`withholding_rate` <=> OLD.`withholding_rate`)
+           OR NOT (NEW.`min_margin_pct` <=> OLD.`min_margin_pct`)
+           OR NOT (NEW.`margin_basis` <=> OLD.`margin_basis`)
+           OR NOT (NEW.`valid_from` <=> OLD.`valid_from`) THEN
+            SIGNAL SQLSTATE '45000'
+              SET MESSAGE_TEXT = 'Una politica cerrada no se reescribe: publique la siguiente.';
+        END IF;
+    END IF;
+END//
+
+CREATE TRIGGER `tg_pp_no_delete`
+BEFORE DELETE ON `pricing_policies`
+FOR EACH ROW
+BEGIN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'pricing_policies no admite borrado: explica como se pacto cada compromiso.';
 END//
 
 DELIMITER ;

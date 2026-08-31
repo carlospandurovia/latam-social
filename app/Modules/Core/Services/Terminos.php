@@ -225,8 +225,14 @@ final class Terminos
      *
      * `$cambio` es la declaración que decide si todo el mundo vuelve a aceptar.
      */
-    public static function publicar(string $uuid, string $cambio, ?string $desde, int $autorId): void
-    {
+    public static function publicar(
+        string $uuid,
+        string $cambio,
+        ?string $desde,
+        int $autorId,
+        ?int $diasParaAceptar = null,
+        ?int $diasDeSoloLectura = null,
+    ): void {
         $version = self::porUuid($uuid);
 
         if ($version->published_at !== null) {
@@ -248,7 +254,8 @@ final class Terminos
             );
         }
 
-        DB::transaction(function () use ($version, $vigente, $cambio, $desde, $autorId): void {
+        DB::transaction(function () use ($version, $vigente, $cambio, $desde, $autorId,
+            $diasParaAceptar, $diasDeSoloLectura): void {
             if ($vigente !== null) {
                 DB::table('terms_versions')->where('id', $vigente->id)->update([
                     'effective_to' => Vigencia::cerrarElDiaAntesDe($desde),
@@ -264,6 +271,11 @@ final class Terminos
                 // nada que declarar: `ck_terms_change_type` admite el nulo.
                 'change_type' => $vigente === null ? null : $cambio,
                 'supersedes_version_id' => $vigente?->id,
+                // 9.19: los plazos se fijan AL PUBLICAR y despues son
+                // inmutables (`tg_terms_inmutable`). Si no se dicen, valen los
+                // de la columna, que es lo configurable (DEC-216).
+                'acceptance_days' => $diasParaAceptar ?? $version->acceptance_days,
+                'readonly_days' => $diasDeSoloLectura ?? $version->readonly_days,
                 'updated_at' => now(),
             ]);
         });
@@ -298,6 +310,170 @@ final class Terminos
             idEntidad: (int) $version->id,
             cambios: ['revision' => ['antes' => $version->review_status, 'despues' => $estado]],
         );
+    }
+
+    // ------------------------------------------- volver a aceptar (9.19)
+
+    /** Está al día: no hay nada que aceptar. */
+    public const AL_DIA = 'al_dia';
+
+    /** Hay una versión sin aceptar y todavía está dentro del plazo. */
+    public const PENDIENTE = 'pendiente';
+
+    /** Se pasó el plazo: puede mirar, no puede tocar. */
+    public const SOLO_LECTURA = 'solo_lectura';
+
+    /** Se pasó también la ventana de sólo lectura: sólo la pantalla de aceptar. */
+    public const BLOQUEADO = 'bloqueado';
+
+    /**
+     * Qué le pasa a este creador con los términos vigentes (9.19).
+     *
+     * ### El reloj no empieza cuando se publica: empieza cuando le toca a él
+     *
+     * Un creador que se activó **ayer** no puede aparecer bloqueado por una
+     * versión de hace tres meses. Su plazo cuenta desde el día en que se activó,
+     * o desde la fecha de la versión si ésta es posterior — lo que llegue más
+     * tarde.
+     *
+     * Sin esto, el primer creador que se diera de alta después de un cambio de
+     * fondo entraría **directamente al muro**, sin haber tenido un solo día. Es
+     * la clase de fallo que no se ve hasta que le pasa a una persona de verdad.
+     *
+     * ### Y si no hay términos publicados, no hay nada que aceptar
+     *
+     * `DEC-190`: una configuración que falta no bloquea a nadie. Un sistema sin
+     * términos deja a todo el mundo `al_dia`, y el panel de configuración lo
+     * dice en rojo, que es donde tiene que decirse.
+     *
+     * @return array{estado: string, version: ?object, desde: ?string, limite: ?string,
+     *               finLectura: ?string, dias: int}
+     */
+    public static function estadoDe(int $creadorId, ?string $hoy = null): array
+    {
+        $hoy ??= now()->toDateString();
+        $sinNada = ['estado' => self::AL_DIA, 'version' => null, 'desde' => null,
+            'limite' => null, 'finLectura' => null, 'dias' => 0];
+
+        $vigente = self::vigente(self::codigo());
+
+        if ($vigente === null) {
+            return $sinNada;
+        }
+
+        $aceptada = DB::table('terms_acceptances')
+            ->where('subject_type', 'creator')
+            ->where('subject_id', $creadorId)
+            ->whereIn('terms_version_id', self::versionesQueValen(self::codigo()))
+            ->exists();
+
+        if ($aceptada) {
+            return $sinNada;
+        }
+
+        $creador = DB::table('creators')->where('id', $creadorId)
+            ->first(['activated_at', 'created_at']);
+
+        // El mas TARDE de los dos. `activated_at` puede ser nulo --un creador
+        // que no llego a activarse-- y entonces vale su fecha de alta.
+        $suyo = (string) ($creador->activated_at ?? $creador->created_at ?? $hoy);
+        // Todo el calculo de dias pasa por `Vigencia`. La primera version lo
+        // hizo con `CarbonImmutable` aqui mismo y la puerta de vigencias lo
+        // caza: seria el noveno sitio del proyecto donde el error de un dia
+        // puede volver a aparecer.
+        $desde = max(
+            Vigencia::fecha((string) $vigente->effective_from),
+            Vigencia::fecha(mb_substr($suyo, 0, 10)),
+        );
+
+        $limite = Vigencia::masDias($desde, (int) $vigente->acceptance_days);
+        $finLectura = Vigencia::masDias($limite, (int) $vigente->readonly_days);
+        $hoy = Vigencia::fecha($hoy);
+
+        if ($hoy <= $limite) {
+            $estado = self::PENDIENTE;
+            $dias = Vigencia::diasEntre($hoy, $limite);
+        } elseif ($hoy <= $finLectura) {
+            $estado = self::SOLO_LECTURA;
+            $dias = Vigencia::diasEntre($hoy, $finLectura);
+        } else {
+            $estado = self::BLOQUEADO;
+            $dias = 0;
+        }
+
+        return ['estado' => $estado, 'version' => $vigente, 'desde' => $desde,
+            'limite' => $limite, 'finLectura' => $finLectura, 'dias' => $dias];
+    }
+
+    /**
+     * Registra que este creador acepta la versión vigente, por el portal.
+     *
+     * `channel = 'portal'` es el único que no exige un revisor y un archivo de
+     * respaldo (`ck_terms_acceptances_backing`): lo hizo el interesado con su
+     * sesión, y de eso quedan la IP y el navegador.
+     */
+    public static function aceptar(int $creadorId, ?string $ip, ?string $navegador): void
+    {
+        $vigente = self::vigente(self::codigo());
+
+        if ($vigente === null) {
+            throw new RuntimeException('No hay ninguna version publicada que aceptar.');
+        }
+
+        // `uq_terms_acceptances_subject` impide la fila repetida; se comprueba
+        // antes para poder no hacer nada en vez de dejar salir un 1062. Aceptar
+        // dos veces no es un error del usuario: es pulsar dos veces.
+        $ya = DB::table('terms_acceptances')
+            ->where('subject_type', 'creator')->where('subject_id', $creadorId)
+            ->where('terms_version_id', $vigente->id)->exists();
+
+        if ($ya) {
+            return;
+        }
+
+        DB::table('terms_acceptances')->insert([
+            'uuid' => (string) Str::uuid(),
+            'terms_version_id' => $vigente->id,
+            'subject_type' => 'creator',
+            'subject_id' => $creadorId,
+            'channel' => 'portal',
+            // La columna es VARBINARY(16): cabe una IPv6 empaquetada, no el
+            // texto. Una IP invalida se guarda como nula en vez de reventar.
+            'ip_address' => $ip === null ? null : (@inet_pton($ip) ?: null),
+            'user_agent' => $navegador === null ? null : mb_substr($navegador, 0, 255),
+            'accepted_at' => now(),
+            'created_at' => now(),
+        ]);
+
+        Bitacora::registrar(
+            accion: 'terms.accepted', tipoEntidad: 'creator', idEntidad: $creadorId,
+            cambios: ['version' => ['antes' => null, 'despues' => $vigente->version]],
+        );
+    }
+
+    /**
+     * Cuántos creadores activos están en cada estado, para el panel.
+     *
+     * @return array{pendientes: int, solo_lectura: int, bloqueados: int}
+     */
+    public static function recuentoDeReaceptacion(): array
+    {
+        $recuento = ['pendientes' => 0, 'solo_lectura' => 0, 'bloqueados' => 0];
+
+        if (self::vigente(self::codigo()) === null) {
+            return $recuento;
+        }
+
+        foreach (DB::table('creators')->where('status', 'active')->pluck('id') as $id) {
+            match (self::estadoDe((int) $id)['estado']) {
+                self::PENDIENTE => $recuento['pendientes']++,
+                self::SOLO_LECTURA => $recuento['solo_lectura']++,
+                self::BLOQUEADO => $recuento['bloqueados']++,
+                default => null,
+            };
+        }
+
+        return $recuento;
     }
 
     /**
@@ -340,6 +516,32 @@ final class Terminos
         if ($pendientes > 0) {
             $avisos[] = ['nivel' => 'ambar',
                 'texto' => "El texto vigente tiene {$pendientes} marcas «[REVISAR]» sin resolver."];
+        }
+
+        // 9.19: quien todavia no ha aceptado. Es lo que convierte «se publico
+        // una version de fondo» en un dato accionable: sin esto, nadie sabe
+        // cuanta gente esta a punto de quedarse en solo lectura.
+        $recuento = self::recuentoDeReaceptacion();
+
+        if ($recuento['bloqueados'] > 0) {
+            $avisos[] = ['nivel' => 'rojo',
+                'texto' => $recuento['bloqueados'].' '
+                    .($recuento['bloqueados'] === 1 ? 'creador no puede' : 'creadores no pueden')
+                    .' entrar hasta que acepten los términos vigentes.'];
+        }
+
+        if ($recuento['solo_lectura'] > 0) {
+            $avisos[] = ['nivel' => 'rojo',
+                'texto' => $recuento['solo_lectura'].' '
+                    .($recuento['solo_lectura'] === 1 ? 'creador está' : 'creadores están')
+                    .' en sólo lectura por no haber aceptado a tiempo.'];
+        }
+
+        if ($recuento['pendientes'] > 0) {
+            $avisos[] = ['nivel' => 'ambar',
+                'texto' => $recuento['pendientes'].' '
+                    .($recuento['pendientes'] === 1 ? 'creador todavía no ha aceptado' : 'creadores todavía no han aceptado')
+                    .' la versión vigente, y siguen dentro de plazo.'];
         }
 
         return $avisos;

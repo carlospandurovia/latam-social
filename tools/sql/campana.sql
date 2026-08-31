@@ -179,6 +179,17 @@ CREATE TABLE campaign_creators (
   status             VARCHAR(20)   NOT NULL DEFAULT 'shortlisted',
   -- BR-CREATOR-008: la tarifa declarada es referencia; ESTO es el compromiso.
   agreed_amount      DECIMAL(18,4) NOT NULL DEFAULT 0,
+  -- 9.18: 'gross' = lo pactado es el costo (lo de siempre); 'net' = lo pactado
+  -- es lo que RECIBE el creador y `agreed_amount` es el bruto calculado. Las
+  -- filas anteriores son 'gross' porque nadie dijo lo contrario.
+  agreed_basis       VARCHAR(10)   NOT NULL DEFAULT 'gross',
+  agreed_net_amount  DECIMAL(18,4) NULL,
+  -- Copias de la politica vigente EL DIA EN QUE SE PACTO. Mismo criterio que
+  -- `payment_term_days_snapshot` (BR-FIN-012): subir manana el umbral no puede
+  -- convertir en mala una participacion que se juzgo buena con el de hoy.
+  withholding_rate_snapshot DECIMAL(7,4) NULL,
+  min_margin_pct_snapshot   DECIMAL(7,4) NULL,
+  margin_basis_snapshot     VARCHAR(10)  NULL,
   currency_code      CHAR(3)       NOT NULL,
   -- 2.3 §3: el beneficiario se congela AL ACEPTAR, no al pagar. Si el creador
   -- cumple 18 a mitad de campana, cobra quien firmo.
@@ -225,7 +236,16 @@ CREATE TABLE campaign_creators (
   CONSTRAINT ck_cc_accepted CHECK (
     status IN ('shortlisted','invited','declined','expired','cancelled') OR accepted_at IS NOT NULL
   ),
-  CONSTRAINT ck_cc_declined CHECK (status <> 'declined' OR declined_at IS NOT NULL)
+  CONSTRAINT ck_cc_declined CHECK (status <> 'declined' OR declined_at IS NOT NULL),
+  -- 9.18: se pacta el costo o se pacta el neto del creador, no una tercera cosa.
+  CONSTRAINT ck_ccr_base CHECK (agreed_basis IN ('gross','net')),
+  -- El neto NUNCA pasa del costo: la retencion no puede ser negativa.
+  CONSTRAINT ck_ccr_neto CHECK (agreed_net_amount IS NULL OR (agreed_net_amount >= 0 AND agreed_net_amount <= agreed_amount)),
+  -- Media pactacion no vale: sin la tasa nadie puede rehacer la cuenta.
+  CONSTRAINT ck_ccr_neto_completo CHECK (agreed_basis <> 'net' OR (agreed_net_amount IS NOT NULL AND withholding_rate_snapshot IS NOT NULL)),
+  -- La resta, rehecha por el motor. Un centimo de tolerancia porque
+  -- neto = bruto x (100 - tasa) / 100 no cae exacto en DECIMAL(18,4).
+  CONSTRAINT ck_ccr_neto_cuadra CHECK (agreed_basis <> 'net' OR ABS(agreed_amount * (100 - withholding_rate_snapshot) / 100 - agreed_net_amount) <= 0.01)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 2.2 P-04: la invitacion es entidad propia. Se envia, expira, se reenvia por

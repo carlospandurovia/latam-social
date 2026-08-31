@@ -217,6 +217,26 @@ final class EntidadesLegalesController
             return back()->withInput()->with('aviso', $aviso);
         }
 
+        // `T-73`: una cobertura CERRADA cuyo `valid_to` todavia tapa esta fecha
+        // tambien se solapa, y `abiertaEnPais()` no la ve. Es el caso que se
+        // reporto en produccion: se da de baja una sociedad --`DEC-081` cierra
+        // sus coberturas con la fecha de la baja--, y declarar la del sucesor
+        // ESE MISMO DIA reventaba con un `45000` sin traducir.
+        //
+        // Va DESPUES del veto de estado y ANTES del de relevo: si la sociedad no
+        // puede cubrir, eso se dice primero.
+        $tapa = Cobertura::queTapaLaFecha($paisId, $desde);
+
+        if ($tapa !== null && $tapa->valid_to !== null) {
+            return back()->withInput()->with('aviso', sprintf(
+                'La cobertura de %s en ese pais llega hasta el %s, asi que el %s todavia esta '
+                .'cubierto. La nueva puede empezar el %s o despues. Cerrar una cobertura el dia X '
+                .'significa que ese dia AUN cubre.',
+                $tapa->code, $tapa->valid_to, $desde,
+                Vigencia::elDiaDespuesDe((string) $tapa->valid_to),
+            ));
+        }
+
         if ($ocupada !== null && !Vigencia::puedeRelevar($desde, (string) $ocupada->valid_from)) {
             // Cerrar «el día antes» le pondría a la anterior un `valid_to`
             // previo a su propio `valid_from`: eso es `ck_lec_dates`, un 45000.

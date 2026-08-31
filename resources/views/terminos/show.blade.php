@@ -88,6 +88,27 @@
               <input id="desde" name="desde" type="date" value="{{ now()->toDateString() }}"
                      class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
             </div>
+            {{-- 9.19: los plazos de Q-46. Vienen puestos con el valor de
+                 partida y se cambian aquí; después de publicar son inmutables,
+                 porque son parte de lo que se le comunicó a la gente. --}}
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label for="acceptance_days" class="block text-xs text-slate-500 mb-1">Días para aceptar</label>
+                <input id="acceptance_days" name="acceptance_days" type="number" min="1" max="3650"
+                       value="{{ $version->acceptance_days }}"
+                       class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+              </div>
+              <div>
+                <label for="readonly_days" class="block text-xs text-slate-500 mb-1">Después, sólo lectura</label>
+                <input id="readonly_days" name="readonly_days" type="number" min="0" max="3650"
+                       value="{{ $version->readonly_days }}"
+                       class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+              </div>
+            </div>
+            <p class="text-xs text-slate-400">
+              Sólo cuentan si el cambio es <strong>de fondo</strong>. Cero días de sólo lectura
+              significa que, pasado el plazo, hace falta aceptar para seguir.
+            </p>
             <button class="w-full rounded-lg bg-marca-600 px-4 py-2 text-sm font-medium text-white hover:bg-marca-700">
               Publicar esta versión
             </button>

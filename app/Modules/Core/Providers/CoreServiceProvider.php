@@ -10,6 +10,7 @@ use App\Modules\Core\Services\Cobertura;
 use App\Modules\Core\Services\CredencialFuente;
 use App\Modules\Core\Services\Decolecta;
 use App\Modules\Core\Services\Marca;
+use App\Modules\Core\Services\Politica;
 use App\Modules\Core\Services\Terminos;
 use App\Modules\Core\Services\TraidaDeCambio;
 use App\Shared\Config\Aviso;
@@ -119,6 +120,12 @@ final class CoreServiceProvider extends ServiceProvider
     {
         Preparacion::area('Marca', 'brand.manage', 'marca.index',
             static fn (): array => Aviso::desdeArrays(Marca::avisos()), orden: 10);
+
+        // 9.18: delante de los terminos porque de estos dos numeros sale el
+        // costo de TODO lo que se pacte, y una instalacion sin ellos pacta
+        // netos que no retienen nada.
+        Preparacion::area('Política de precios', 'pricing.manage', 'politica.index',
+            static fn (): array => Politica::avisos(), orden: 15);
 
         Preparacion::area('Términos', 'legal_entity.manage', 'terminos.index',
             static fn (): array => Aviso::desdeArrays(Terminos::avisos()), orden: 20);

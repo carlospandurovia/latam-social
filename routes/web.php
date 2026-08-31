@@ -24,11 +24,13 @@ use App\Modules\Core\Http\Controllers\ConfiguracionController;
 use App\Modules\Core\Http\Controllers\EntidadesLegalesController;
 use App\Modules\Core\Http\Controllers\MarcaController;
 use App\Modules\Core\Http\Controllers\PanelController;
+use App\Modules\Core\Http\Controllers\PoliticaController;
 use App\Modules\Core\Http\Controllers\TerminosController;
 use App\Modules\Core\Http\Controllers\TiposDeCambioController;
 use App\Modules\Creator\Http\Controllers\ActivacionController;
 use App\Modules\Creator\Http\Controllers\CreadoresController;
 use App\Modules\Creator\Http\Controllers\MediosPagoController;
+use App\Modules\Creator\Http\Controllers\MisTerminosController;
 use App\Modules\Creator\Http\Controllers\PerfilComercialController;
 use App\Modules\Creator\Http\Controllers\PerfilFiscalController;
 use App\Modules\Creator\Http\Controllers\RedesSocialesController;
@@ -758,6 +760,28 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/configuracion', ConfiguracionController::class)
         ->middleware('permiso:config.view')
         ->name('configuracion');
+
+    // 9.19 -- Los terminos, desde el lado del creador. SIN `permiso:`, y es
+    // deliberado: es la pantalla a la que lleva el muro, y la unica que puede
+    // abrir quien ya no puede abrir nada mas. Ponerle un permiso dejaria sin
+    // salida justo a quien la necesita. La autorizacion es tener una ficha de
+    // creador atada a esta sesion, y eso lo comprueba el controlador.
+    Route::get('/mis-terminos', [MisTerminosController::class, 'index'])->name('terminos.mios');
+
+    Route::post('/mis-terminos', [MisTerminosController::class, 'aceptar'])
+        ->middleware('throttle:10,1')
+        ->name('terminos.aceptar');
+
+    // 9.18 -- La politica de precios. Permiso propio `pricing.manage`: aqui se
+    // fija con que retencion se pacta y que margen se considera aceptable, que
+    // es una decision de direccion y de finanzas, no de quien monta campanas.
+    Route::get('/politica', [PoliticaController::class, 'index'])
+        ->middleware('permiso:pricing.manage')
+        ->name('politica.index');
+
+    Route::post('/politica', [PoliticaController::class, 'store'])
+        ->middleware('permiso:pricing.manage')
+        ->name('politica.store');
 
     // 9.17 -- La identidad de la plataforma. Permiso PROPIO y no
     // `legal_entity.manage`: quien da de alta sociedades no tiene por que poder

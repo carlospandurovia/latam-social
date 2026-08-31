@@ -9,6 +9,7 @@ use App\Modules\Campaign\Services\Campanas;
 use App\Modules\Campaign\Services\Compromiso;
 use App\Modules\Campaign\Services\Invitaciones;
 use App\Modules\Campaign\Services\ListaCorta;
+use App\Modules\Core\Services\Politica;
 use App\Shared\Audit\Bitacora;
 use App\Shared\Database\Choque;
 use Illuminate\Http\RedirectResponse;
@@ -195,10 +196,37 @@ final class CandidatosController
             return back()->with('aviso', $aviso);
         }
 
-        $importe = round((float) $peticion->input('agreed_amount', 0), 4);
+        // 9.18: se puede pactar el COSTO --lo de siempre-- o **el neto que el
+        // creador recibe**, que es lo que pidio el negocio (`Q-40`): «te pagare
+        // 100 soles pero lo que estaria provisionando serian 141,84».
+        $base = $peticion->input('agreed_basis') === 'net' ? 'net' : 'gross';
+        $tecleado = round((float) $peticion->input('agreed_amount', 0), 4);
 
-        if ($importe < 0) {
+        if ($tecleado < 0) {
             return back()->with('aviso', 'El monto acordado no puede ser negativo.');
+        }
+
+        $politica = Politica::datos();
+        $neto = null;
+        $tasa = null;
+
+        if ($base === 'net') {
+            if ($politica['tasa'] <= 0) {
+                // No se bloquea el pactar: se bloquea el ENGANO de decir que se
+                // pacto un neto cuando no hay retencion con la que convertirlo.
+                // Con tasa 0 el neto y el costo son el mismo numero, y guardarlo
+                // como «neto» haria creer que se retuvo algo.
+                return back()->with('aviso',
+                    'No hay retención configurada, así que pactar «lo que recibe el creador» daría '
+                    .'exactamente el mismo número que pactar el costo. Póngala en Política de '
+                    .'precios, o pacte el costo directamente.');
+            }
+
+            $neto = $tecleado;
+            $tasa = $politica['tasa'];
+            $importe = Politica::brutoDesdeNeto($neto, $tasa);
+        } else {
+            $importe = $tecleado;
         }
 
         if (($aviso = Compromiso::vetoPorPresupuesto($campana, $importe, $participacion)) !== null) {
@@ -207,6 +235,14 @@ final class CandidatosController
 
         DB::table('campaign_creators')->where('id', $participacion)->update([
             'agreed_amount' => $importe,
+            'agreed_basis' => $base,
+            'agreed_net_amount' => $neto,
+            'withholding_rate_snapshot' => $tasa,
+            // El umbral se congela SIEMPRE, tambien cuando se pacta el costo:
+            // es con lo que se juzgo esta participacion, y subirlo manana no
+            // puede reescribir ese juicio (BR-FIN-012 aplicado al margen).
+            'min_margin_pct_snapshot' => $politica['configurada'] ? $politica['umbral'] : null,
+            'margin_basis_snapshot' => $politica['configurada'] ? $politica['base'] : null,
             'updated_at' => now(),
         ]);
 
@@ -220,7 +256,28 @@ final class CandidatosController
             ]],
         );
 
-        return back()->with('exito', 'Monto acordado actualizado.');
+        // Lo que el negocio pidio ver: «el ingreso aceptable mas bajo por este
+        // creador seria de 170.21 soles». Es informacion, no una puerta: quien
+        // lleva la campana decide si acepta menos margen, y para eso tiene que
+        // ver el numero ANTES de invitar (DEC-214).
+        $mensaje = $base === 'net'
+            ? sprintf(
+                'Pactado: el creador recibe %s y la campaña provisiona %s (retención %s %%).',
+                number_format((float) $neto, 2), number_format($importe, 2),
+                rtrim(rtrim(number_format((float) $tasa, 4, '.', ''), '0'), '.'))
+            : 'Monto acordado actualizado.';
+
+        if ($politica['configurada'] && $politica['umbral'] > 0 && $importe > 0) {
+            $mensaje .= sprintf(
+                ' Para dejar el %s %% sobre el %s, el ingreso atribuible a esta participación '
+                .'tendría que llegar a %s.',
+                rtrim(rtrim(number_format($politica['umbral'], 4, '.', ''), '0'), '.'),
+                $politica['base'] === Politica::INGRESO ? 'ingreso' : 'costo',
+                number_format(Politica::ingresoMinimo($importe), 2),
+            );
+        }
+
+        return back()->with('exito', $mensaje);
     }
 
     /**

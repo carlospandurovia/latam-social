@@ -58,6 +58,9 @@ final class ListaCorta
             ->get([
                 'cc.id', 'cc.uuid', 'cc.creator_id', 'cc.status', 'cc.campaign_market_id',
                 'cc.agreed_amount', 'cc.accepted_at',
+                // 9.18: lo que RECIBE el creador y con que tasa se convirtio.
+                // La pantalla ensena las dos cifras: la del creador y la nuestra.
+                'cc.agreed_basis', 'cc.agreed_net_amount', 'cc.withholding_rate_snapshot',
                 'c.display_name', 'c.uuid as creador_uuid', 'p.name as mercado',
             ]);
     }

@@ -34,6 +34,15 @@ panel                   # la portada; lo que enseña depende del permiso, no la 
 contrasena              # cambiar la propia contrasena
 contrasena.cambiar      # y guardarla
 
+# --- El muro de los terminos (9.19) -------------------------------------
+#
+# La pantalla a la que lleva el muro y su envio. Sin permiso a proposito: es lo
+# unico que puede abrir un creador que ya no puede abrir nada mas, y ponerle uno
+# dejaria sin salida justo a quien la necesita. La autorizacion es tener una
+# ficha de creador atada a la sesion, y la comprueba el controlador.
+terminos.mios           # leer los terminos vigentes y ver en que situacion estas
+terminos.aceptar        # aceptarlos, con throttle:10,1
+
 # --- Enlaces FIRMADOS: la defensa es la firma, no el rol ------------------
 #
 # Quien entra por aqui no tiene cuenta --un creador invitado, un cliente que

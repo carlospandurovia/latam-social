@@ -45,6 +45,9 @@
           // otras dos porque es la que se toca el primer dia: sin marca, la
           // plataforma se ensena con los valores de partida.
           ['Marca', 'marca.index', 'marca.', 'brand.manage'],
+          // 9.18: con Marca y Terminos porque es configuracion de plataforma,
+          // aunque quien la toca es finanzas y no quien pone el logotipo.
+          ['Política de precios', 'politica.index', 'politica', 'pricing.manage'],
           // 4.5: la pantalla a la que BR-LE-004 lleva mandando desde 4.1.
           // `legal_entity.manage` es solo de admin, asi que el resto no la ve.
           ['Entidades legales', 'entidades.index', 'entidades', 'legal_entity.manage'],
@@ -120,6 +123,30 @@
         <span class="ml-3 text-sm text-slate-500">@yield('subtitulo')</span>
       @endif
     </header>
+
+    {{-- 9.19: mientras un creador no acepte los términos vigentes, la franja
+         está ahí. No es un popup: un popup se cierra sin leerlo y no vuelve
+         hasta la siguiente sesión. --}}
+    @if (($avisoTerminos ?? null) !== null)
+      <div class="px-8 pt-6">
+        <div class="rounded-xl border px-4 py-3 text-sm
+          {{ $avisoTerminos['estado'] === 'pendiente'
+              ? 'bg-amber-50 border-amber-200 text-amber-900'
+              : 'bg-rose-50 border-rose-200 text-rose-900' }}">
+          @if ($avisoTerminos['estado'] === 'pendiente')
+            Hay una versión nueva de los términos.
+            Te quedan <strong>{{ $avisoTerminos['dias'] }}</strong>
+            {{ $avisoTerminos['dias'] === 1 ? 'día' : 'días' }} para aceptarla.
+          @elseif ($avisoTerminos['estado'] === 'solo_lectura')
+            El plazo para aceptar los términos terminó el {{ $avisoTerminos['limite'] }}:
+            puedes mirar, pero no cambiar nada.
+          @else
+            Hace falta aceptar los términos para continuar.
+          @endif
+          <a href="{{ route('terminos.mios') }}" class="ml-1 font-medium underline">Leerlos y aceptar</a>
+        </div>
+      </div>
+    @endif
 
     <main class="flex-1 p-8 overflow-x-auto">
       @if (session('mensaje'))

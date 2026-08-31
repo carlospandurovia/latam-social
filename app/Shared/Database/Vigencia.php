@@ -97,6 +97,40 @@ final class Vigencia
     }
 
     /**
+     * La fecha que cae `$dias` días después de `$desde` (9.19).
+     *
+     * Existe por la misma razón que sus dos hermanas de arriba: `9.19` necesita
+     * «quince días después de esto» y «treinta más», y la primera versión lo
+     * escribió con `CarbonImmutable` a mano dentro de `Terminos`. **La puerta de
+     * vigencias lo cazó**, que es exactamente su trabajo — el noveno cálculo de
+     * días fuera de esta clase habría sido el noveno sitio donde el error de un
+     * día puede volver a aparecer.
+     *
+     * Aquí no hay «un día antes» que confundir: son días naturales contados
+     * hacia adelante, incluido el día de partida como día cero.
+     */
+    public static function masDias(string $desde, int $dias): string
+    {
+        return CarbonImmutable::parse($desde)->addDays($dias)->toDateString();
+    }
+
+    /**
+     * Cuántos días naturales van de `$desde` a `$hasta`.
+     *
+     * Nunca negativo: si `$hasta` ya pasó, la respuesta es cero. Quien pregunta
+     * «¿cuántos días me quedan?» sobre un plazo vencido no espera un número
+     * negativo, espera que le digan que no queda ninguno — y un `-3` impreso en
+     * una pantalla es una cifra que nadie sabe leer.
+     */
+    public static function diasEntre(string $desde, string $hasta): int
+    {
+        $inicio = CarbonImmutable::parse($desde)->startOfDay();
+        $fin = CarbonImmutable::parse($hasta)->startOfDay();
+
+        return $fin->lessThanOrEqualTo($inicio) ? 0 : (int) $inicio->diffInDays($fin);
+    }
+
+    /**
      * Un `Y-m-d` canonico, venga como venga.
      *
      * Se usa en todas las comparaciones de esta clase. Quien tenga que comparar

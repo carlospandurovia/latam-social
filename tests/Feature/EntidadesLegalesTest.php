@@ -176,6 +176,59 @@ final class EntidadesLegalesTest extends TestCase
     }
 
     /**
+     * **`T-73`, reportado en producción.** Una cobertura CERRADA sigue tapando
+     * su último día, y eso también se solapa.
+     *
+     * El caso, tal cual salió: se da de baja una sociedad —`DEC-081` cierra sus
+     * coberturas con la fecha de la baja— y se intenta declarar la del sucesor
+     * **ese mismo día**. `abiertaEnPais()` sólo mira `valid_to IS NULL`, así que
+     * devolvía `null`, la pantalla creía que el país estaba libre y no cerraba
+     * nada; el disparador de no-solape sí mira los periodos cerrados, y el
+     * `INSERT` salía como un `45000` crudo en medio de una pantalla de error.
+     *
+     * La prueba de al lado —`test_dar_de_baja_cierra_las_coberturas...`— no lo
+     * vio porque usa el día **siguiente** al cierre, que es el caso que funciona.
+     * Un día de diferencia, otra vez.
+     */
+    public function test_una_cobertura_cerrada_todavia_tapa_su_ultimo_dia(): void
+    {
+        $admin = $this->admin();
+        $pais = $this->paisSinCobertura();
+
+        $primera = $this->crearSociedad($admin);
+        $this->cubrir($admin, $primera, $pais, '2026-01-01');
+
+        $this->actingAs($admin)
+            ->post("/entidades/{$primera}/baja", ['hasta' => '2026-06-30', 'estado' => 'inactive'])
+            ->assertSessionHas('exito');
+
+        $segunda = $this->crearSociedad($admin, ['code' => 'E45-T73', 'tax_id_number' => '20450000073']);
+
+        // EL MISMO DIA en que se cerró la anterior: ese día todavía está
+        // cubierto. Sale con palabras y con la fecha en la que sí se puede.
+        $this->actingAs($admin)
+            ->post("/entidades/{$segunda}/cobertura", [
+                'country_id' => $pais,
+                'coverage_basis' => 'service_export',
+                'valid_from' => '2026-06-30',
+            ])
+            ->assertSessionHas('aviso', fn (string $m): bool => str_contains($m, '2026-07-01'));
+
+        // Y no se escribió nada: el veto es antes de tocar la base.
+        $this->assertSame(0, DB::table('legal_entity_countries')
+            ->where('country_id', $pais)->whereNull('valid_to')->count());
+
+        // Al día siguiente sí, que es lo que el mensaje dice.
+        $this->actingAs($admin)
+            ->post("/entidades/{$segunda}/cobertura", [
+                'country_id' => $pais,
+                'coverage_basis' => 'service_export',
+                'valid_from' => '2026-07-01',
+            ])
+            ->assertSessionHas('exito');
+    }
+
+    /**
      * Una cobertura que empieza DESPUÉS de la baja no se puede cerrar en esa
      * fecha (`ck_lec_dates`) ni borrar (es evidencia). Se dice y no se toca nada.
      */

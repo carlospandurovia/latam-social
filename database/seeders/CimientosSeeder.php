@@ -285,6 +285,10 @@ final class CimientosSeeder extends Seeder
             // dentro lo decide el permiso de cada area, asi que darlo de mas no
             // ensena de mas: quien no puede arreglar un area no la ve.
             ['config.view',            'Core',     'Abrir el panel de configuracion pendiente (9.17b)'],
+            // 9.18: con que retencion se pacta y que margen se considera
+            // aceptable. Decision de direccion y finanzas, no de quien monta
+            // campanas: quien lo cambia mueve el costo de TODO lo que se pacte.
+            ['pricing.manage',         'Core',     'Fijar la retencion y el umbral de rentabilidad (9.18)'],
             ['finance.cost.manage',    'Finance',  'Anotar y anular gastos de campana (9.10a)'],
             ['finance.payout.create',  'Finance',  'Crear lotes de pago'],
             ['finance.payout.approve', 'Finance',  'Aprobar lotes de pago (BR-FIN-005: distinto del creador)'],
@@ -403,6 +407,10 @@ final class CimientosSeeder extends Seeder
                 // 9.2: quien convierte dinero necesita poder arreglar la tabla
                 // de la que sale la tasa. No la credencial: eso es de `admin`.
                 'fx.manage',
+                // 9.18: finanzas fija la retencion y el umbral. Es su terreno:
+                // la retencion es tributaria y el umbral es el margen que hay
+                // que defender.
+                'pricing.manage',
                 // 9.17b: el panel de configuracion. Finanzas tiene `fx.manage`,
                 // asi que le sale el area de tipos de cambio --y solo esa-- y
                 // se entera de que el cron lleva dias sin traer nada sin tener
@@ -512,6 +520,27 @@ final class CimientosSeeder extends Seeder
                 'updated_at' => $ahora, 'created_at' => $ahora,
             ],
         );
+        // 9.18: la politica de precios de partida. 29,5 % es la retencion que el
+        // negocio confirmo en `Q-13`, y 20 % sobre el COSTO es lo que sale de su
+        // propio ejemplo --100 de neto cuestan 141,84 y el ingreso aceptable mas
+        // bajo era 170,21, que es 141,84 x 1,20--.
+        //
+        // Son valores DE PARTIDA y se cambian desde `/politica` sin desplegar
+        // (DEC-190). `updateOrInsert` sobre la vigente y no sobre un codigo: la
+        // llave natural de una politica es «la que esta abierta».
+        if (DB::table('pricing_policies')->whereNull('valid_to')->doesntExist()) {
+            DB::table('pricing_policies')->insert([
+                'uuid' => (string) Str::uuid(),
+                'withholding_rate' => 29.5,
+                'min_margin_pct' => 20,
+                'margin_basis' => 'cost',
+                'note' => 'Valores de partida de la instalacion: retencion de renta de cuarta '
+                    .'categoria y umbral del 20 % sobre el costo. Revisar con el contador.',
+                'valid_from' => '2026-01-01',
+                'updated_at' => $ahora, 'created_at' => $ahora,
+            ]);
+        }
+
         $marcaId = DB::table('platform_brands')
             ->where('code', (string) config('latam.marca.codigo', 'latam_social'))->value('id');
 

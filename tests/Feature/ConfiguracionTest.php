@@ -204,16 +204,21 @@ final class ConfiguracionTest extends TestCase
     // --------------------------------------------- que las areas esten registradas
 
     /**
-     * Las cinco áreas que existen hoy están registradas.
+     * Las áreas que existen hoy están registradas, y son éstas.
      *
      * Es la prueba que se rompe cuando alguien construye una pantalla de
      * configuración nueva y no la enchufa aquí: existiría un sitio donde falta
      * algo y el panel diría que no falta nada, que es peor que no tener panel.
      */
-    public function test_las_cinco_areas_estan_registradas(): void
+    public function test_las_areas_que_existen_estan_registradas(): void
     {
         $this->assertSame(
-            ['Correo', 'Entidades legales', 'Marca', 'Tipos de cambio', 'Términos'],
+            // 9.18 anadio «Politica de precios» y esta prueba se puso roja, que
+            // es exactamente para lo que esta: la lista se actualiza a mano y a
+            // proposito, para que anadir un area sea una decision y no un
+            // descuido.
+            ['Correo', 'Entidades legales', 'Marca', 'Política de precios',
+                'Tipos de cambio', 'Términos'],
             Preparacion::areasRegistradas(),
         );
     }

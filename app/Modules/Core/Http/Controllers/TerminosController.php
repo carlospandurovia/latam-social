@@ -112,11 +112,17 @@ final class TerminosController
         $datos = $peticion->validate([
             'change_type' => ['required', 'string', 'in:'.implode(',', array_keys(Terminos::CAMBIO))],
             'desde' => ['nullable', 'date'],
+            // 9.19: los plazos de Q-46. Se eligen AL PUBLICAR y despues son
+            // inmutables: son parte de lo que se le comunico a la gente.
+            'acceptance_days' => ['nullable', 'integer', 'min:1', 'max:3650'],
+            'readonly_days' => ['nullable', 'integer', 'min:0', 'max:3650'],
         ]);
 
         try {
             Terminos::publicar($uuid, (string) $datos['change_type'],
-                $datos['desde'] ?? null, (int) Auth::id());
+                $datos['desde'] ?? null, (int) Auth::id(),
+                isset($datos['acceptance_days']) ? (int) $datos['acceptance_days'] : null,
+                isset($datos['readonly_days']) ? (int) $datos['readonly_days'] : null);
         } catch (RuntimeException $e) {
             return redirect()->route('terminos.show', $uuid)->with('aviso', $e->getMessage());
         }

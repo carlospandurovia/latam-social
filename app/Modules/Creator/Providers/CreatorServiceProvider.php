@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 namespace App\Modules\Creator\Providers;
 
+use App\Modules\Core\Services\Terminos;
 use App\Modules\Creator\Console\RecalcularHuellasCommand;
 use App\Shared\Auth\Permisos;
 use App\Shared\Files\Vigilante;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
 
 /**
@@ -30,6 +33,32 @@ final class CreatorServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        // 9.19: el aviso de los terminos, en la barra de arriba de TODAS las
+        // pantallas del creador. Es el «recordatorio al entrar» de `Q-46`
+        // resuelto como una franja y no como un popup: un popup se cierra sin
+        // leerlo y no vuelve a aparecer hasta la siguiente sesion, y esto tiene
+        // que seguir estando mientras siga sin aceptarse.
+        //
+        // Devuelve `null` para el equipo, que es lo que hace que esta consulta
+        // no le cueste una peticion a nadie mas.
+        View::composer('layouts.panel', static function (\Illuminate\View\View $vista): void {
+            $usuario = Auth::user();
+
+            if ($usuario === null || ($usuario->user_type ?? 'internal') === 'internal') {
+                $vista->with('avisoTerminos', null);
+
+                return;
+            }
+
+            $creadorId = DB::table('creators')
+                ->where('user_id', $usuario->getAuthIdentifier())->value('id');
+
+            $estado = $creadorId === null ? null : Terminos::estadoDe((int) $creadorId);
+
+            $vista->with('avisoTerminos',
+                $estado === null || $estado['estado'] === Terminos::AL_DIA ? null : $estado);
+        });
+
         // 9.15: los dos archivos que cuelgan de un creador.
         //
         // **El creador ve los suyos**, incluido su documento de identidad: es

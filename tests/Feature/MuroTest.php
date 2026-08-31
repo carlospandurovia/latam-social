@@ -86,6 +86,9 @@ final class MuroTest extends TestCase
         // las protege es que NO aceptan identificador: sirven los dos archivos
         // de la marca por defecto y nada mas.
         'marca.logo', 'marca.favicon',
+        // 9.19: la pantalla a la que lleva el muro de los terminos y su envio.
+        // Sin permiso porque es la unica salida de un creador bloqueado.
+        'terminos.mios', 'terminos.aceptar',
     ];
 
     protected function setUp(): void

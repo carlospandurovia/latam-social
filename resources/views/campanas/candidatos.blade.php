@@ -163,25 +163,48 @@
                   {{-- Congelado en cuanto acepta: se enseña el número, sin
                        formulario. Un campo editable que rechaza al guardar es
                        peor que un número que se ve y no se toca. --}}
-                  @if ($p->accepted_at !== null)
+                  {{-- 9.18: cuando se pactó el NETO se enseñan las dos cifras.
+                       La de arriba es la del creador —la que él conoce— y debajo
+                       lo que la campaña provisiona de verdad. Enseñar sólo una
+                       de las dos es donde nacen las conversaciones incómodas. --}}
+                  @php $esNeto = $p->agreed_basis === 'net' && $p->agreed_net_amount !== null; @endphp
+
+                  @if ($p->accepted_at !== null || ($invitaciones[$p->id] ?? null))
                     <span class="font-medium">{{ number_format((float) $p->agreed_amount, 2) }}</span>
-                    <span class="ml-1 rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-500">congelado</span>
-                  {{-- 7.6: con una invitación viva tampoco se toca — el creador
-                       está mirando esa cifra. Se enseña, no se ofrece un campo
-                       que la base va a rechazar. --}}
-                  @elseif ($invitaciones[$p->id] ?? null)
-                    <span class="font-medium">{{ number_format((float) $p->agreed_amount, 2) }}</span>
-                    <span class="ml-1 rounded bg-amber-50 px-1.5 py-0.5 text-xs text-amber-700">ofrecido</span>
+                    @if ($p->accepted_at !== null)
+                      <span class="ml-1 rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-500">congelado</span>
+                    @else
+                      {{-- 7.6: con una invitación viva tampoco se toca — el
+                           creador está mirando esa cifra. --}}
+                      <span class="ml-1 rounded bg-amber-50 px-1.5 py-0.5 text-xs text-amber-700">ofrecido</span>
+                    @endif
+                    @if ($esNeto)
+                      <p class="text-xs text-slate-400">
+                        el creador recibe {{ number_format((float) $p->agreed_net_amount, 2) }}
+                        · retención {{ rtrim(rtrim(number_format((float) $p->withholding_rate_snapshot, 4, '.', ''), '0'), '.') }} %
+                      </p>
+                    @endif
                   @elsecan('campaign.manage')
                     <form method="POST"
                           action="{{ route('campanas.candidatos.monto', [$campana->uuid, $p->id]) }}"
                           class="flex items-center justify-end gap-1">
                       @csrf
+                      <select name="agreed_basis"
+                              class="rounded-lg border border-slate-300 px-1 py-1 text-xs">
+                        <option value="gross" @selected(! $esNeto)>cuesta</option>
+                        <option value="net" @selected($esNeto)>recibe</option>
+                      </select>
                       <input name="agreed_amount" type="number" step="0.01" min="0"
-                             value="{{ (float) $p->agreed_amount }}"
-                             class="w-28 rounded-lg border border-slate-300 px-2 py-1 text-sm text-right">
+                             value="{{ (float) ($esNeto ? $p->agreed_net_amount : $p->agreed_amount) }}"
+                             class="w-24 rounded-lg border border-slate-300 px-2 py-1 text-sm text-right">
                       <button class="text-xs text-marca-600 hover:underline">Guardar</button>
                     </form>
+                    @if ($esNeto)
+                      <p class="text-xs text-slate-400">
+                        cuesta {{ number_format((float) $p->agreed_amount, 2) }}
+                        · retención {{ rtrim(rtrim(number_format((float) $p->withholding_rate_snapshot, 4, '.', ''), '0'), '.') }} %
+                      </p>
+                    @endif
                   @else
                     {{ number_format((float) $p->agreed_amount, 2) }}
                   @endcan

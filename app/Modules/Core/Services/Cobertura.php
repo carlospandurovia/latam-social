@@ -104,6 +104,44 @@ final class Cobertura
     }
 
     /**
+     * Cualquier cobertura de ese país que **tape** esa fecha, abierta o cerrada.
+     *
+     * ### El defecto que esto arregla (`T-73`, reportado en producción)
+     *
+     * `abiertaEnPais()` mira sólo `valid_to IS NULL`. La regla de no-solape del
+     * motor —`tg_lec_sin_solape_*`— mira **todos** los periodos. Las dos cosas
+     * juntas dejan un agujero que se abre solo:
+     *
+     * > Se da de baja una sociedad. `DEC-081` cierra sus coberturas poniéndoles
+     * > `valid_to` = la fecha de la baja. Ese periodo **sigue tapando** ese día.
+     * > Al declarar la cobertura del sucesor desde esa misma fecha,
+     * > `abiertaEnPais()` devuelve `null` —no hay ninguna abierta—, la pantalla
+     * > cree que el país está libre, no cierra nada, y el `INSERT` choca contra
+     * > el disparador con un `45000` sin traducir.
+     *
+     * Es exactamente el error que se vio: *«Ya hay una sociedad cubriendo ese
+     * país en esas fechas»* en medio de una pantalla de error de Laravel.
+     *
+     * Devuelve también `valid_to`, que es lo único que permite decir **desde
+     * cuándo sí** se puede.
+     */
+    public static function queTapaLaFecha(int $paisId, string $fecha): ?object
+    {
+        return DB::table('legal_entity_countries as lec')
+            ->join('legal_entities as le', 'le.id', '=', 'lec.legal_entity_id')
+            ->where('lec.country_id', $paisId)
+            ->where('lec.valid_from', '<=', $fecha)
+            ->where(fn ($q) => $q->whereNull('lec.valid_to')->orWhere('lec.valid_to', '>=', $fecha))
+            // La ABIERTA primero: si hay una abierta y una cerrada tapando la
+            // misma fecha, la que hay que relevar es la abierta, y la cerrada
+            // deja de solaparse en cuanto aquella se cierra el dia antes.
+            ->orderByRaw('lec.valid_to IS NULL DESC')
+            ->orderByDesc('lec.valid_from')
+            ->first(['lec.id', 'lec.legal_entity_id', 'lec.valid_from', 'lec.valid_to',
+                'le.code', 'le.legal_name', 'le.status']);
+    }
+
+    /**
      * Las coberturas abiertas de una sociedad, con el nombre del país.
      *
      * @return Collection<int, \stdClass>

@@ -99,3 +99,13 @@
 # cuelgue de ellas. Necesita monedas y una marca sembradas, y lo comprueba antes
 # de usarlas en vez de suponerlo.
 9.17c-domicilio
+# 9.18 crea su campana (`CMP-918`) y su participacion y las borra, pero sus
+# politicas de precios NO se pueden borrar --`tg_pp_no_delete`, igual que las
+# versiones de los terminos-- asi que necesita una base recien rehecha. Lo
+# comprueba al empezar y lo dice, en vez de fallar seis veces acusando a seis
+# reglas que no son.
+9.18-politica
+# 9.19 escribe versiones de un documento propio (`t919`) para no tocar los
+# terminos de creador que usan las demas suites. No se limpia: `terms_versions`
+# no admite borrado desde 3.12.
+9.19-reaceptacion

@@ -68,6 +68,15 @@ CREATE TABLE terms_versions (
   -- telefono-- deja valida la aceptacion anterior. Lo declara una persona al
   -- publicar y queda escrito quien fue.
   change_type        VARCHAR(10)   NULL,
+  -- 9.19: los plazos de Q-46. «Tienes 15 dias» dicho en enero no puede
+  -- convertirse en «tenias 10» porque en marzo alguien cambio un ajuste global,
+  -- asi que van en la VERSION y son inmutables al publicar. El valor por
+  -- defecto es lo configurable: el formulario lo trae puesto.
+  --
+  -- `readonly_days = 0` SI vale: «sin periodo de solo lectura». Un numero muy
+  -- grande significa lo contrario. Las dos son decisiones legitimas.
+  acceptance_days    SMALLINT UNSIGNED NOT NULL DEFAULT 15,
+  readonly_days      SMALLINT UNSIGNED NOT NULL DEFAULT 30,
   supersedes_version_id BIGINT UNSIGNED NULL,
   created_at         DATETIME(3)   NULL,
   updated_at         DATETIME(3)   NULL,
@@ -103,6 +112,9 @@ CREATE TABLE terms_versions (
   CONSTRAINT ck_terms_change_type CHECK (change_type IS NULL OR change_type IN ('fondo','menor')),
   -- Publicar es un acto con responsable.
   CONSTRAINT ck_terms_publicada CHECK (published_at IS NULL OR published_by_user_id IS NOT NULL),
+  -- 9.19: cero dias para aceptar es publicar y bloquear en el mismo instante.
+  CONSTRAINT ck_terms_plazo CHECK (acceptance_days >= 1),
+  CONSTRAINT ck_terms_lectura CHECK (readonly_days >= 0),
   -- Un borrador no se cierra: nunca llego a estar vigente.
   CONSTRAINT ck_terms_borrador_abierto CHECK (published_at IS NOT NULL OR effective_to IS NULL)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -568,7 +580,11 @@ BEGIN
            OR NOT (NEW.`version` <=> OLD.`version`)
            OR NOT (NEW.`audience` <=> OLD.`audience`)
            OR NOT (NEW.`effective_from` <=> OLD.`effective_from`)
-           OR NOT (NEW.`change_type` <=> OLD.`change_type`) THEN
+           OR NOT (NEW.`change_type` <=> OLD.`change_type`)
+           -- 9.19: los plazos entran en la inmutabilidad. Son parte de lo que
+           -- se le comunico a la gente, no un ajuste que se retoca despues.
+           OR NOT (NEW.`acceptance_days` <=> OLD.`acceptance_days`)
+           OR NOT (NEW.`readonly_days` <=> OLD.`readonly_days`) THEN
             SIGNAL SQLSTATE '45000'
               SET MESSAGE_TEXT = 'Una version publicada no se reescribe: cree la siguiente.';
         END IF;
