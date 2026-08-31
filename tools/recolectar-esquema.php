@@ -46,7 +46,19 @@ namespace App\Shared\Database { class Periodo {
             'desde' => $desde, 'hasta' => $hasta, 'clavePrimaria' => $clavePrimaria,
         ];
     }
-    public static function quitar(...$a): void {}
+    // Una regla que una migracion posterior QUITA y vuelve a declarar no existe
+    // dos veces: existe la ULTIMA. Sin esto, `tver_sin_solape` --declarada en
+    // 3.13 y rehecha en 9.16 con el filtro `published_at IS NOT NULL`-- se
+    // recogia dos veces, y `verificar-periodos.py` exigia al esquema de
+    // referencia el texto de la version VIEJA, que en produccion ya no existe.
+    // Daba rojo por una regla que esta bien y callaria el dia que estuviese mal.
+    // El grabador replica las migraciones EN ORDEN: `quitar` tiene que quitar.
+    public static function quitar(string $tabla, string $nombre): void {
+        \Recolector::$periodos = array_values(array_filter(
+            \Recolector::$periodos,
+            static fn (array $p): bool => $p['tabla'] !== $tabla || $p['nombre'] !== $nombre,
+        ));
+    }
     public static function exigirSinSolapePrevio(...$a): void {}
     public static function solapes(...$a): array { return []; }
 } }
@@ -93,7 +105,20 @@ namespace Illuminate\Support\Facades {
             \Recolector::$tablas[$tabla] ??= ['columnas'=>[], 'indices'=>[], 'unicos'=>[], 'fk'=>[]];
             $cb(new \Illuminate\Database\Schema\Blueprint($tabla));
         }
-        public static function dropIfExists(string $t): void {}
+        // 9.12: el grabador replica las migraciones EN ORDEN, asi que soltar
+        // una tabla tiene que OLVIDARLA. Sin esto, una tabla que se rehace
+        // --soltar y volver a crear con otra forma-- se recogia como la union
+        // de las dos: `document_series` salia con la columna `document_type`
+        // que la migracion nueva ya no crea, y `verificar-migraciones.py`
+        // acusaba de una diferencia que en produccion no existe. Es el mismo
+        // hueco que `Periodo::quitar` (`T-75`): un metodo vacio que hacia que
+        // el grabador contase historia en vez de estado.
+        public static function dropIfExists(string $t): void {
+            unset(\Recolector::$tablas[$t]);
+            \Recolector::$creadas = array_values(array_filter(
+                \Recolector::$creadas, static fn (string $c): bool => $c !== $t,
+            ));
+        }
         public static function hasTable(string $t): bool { return true; }
         // Devolvia `true` siempre, y eso convertia en falso positivo cualquier
         // consulta protegida por un `hasColumn` -- justo el patron correcto que

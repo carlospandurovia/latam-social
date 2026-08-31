@@ -48,9 +48,15 @@
           // 9.18: con Marca y Terminos porque es configuracion de plataforma,
           // aunque quien la toca es finanzas y no quien pone el logotipo.
           ['Política de precios', 'politica.index', 'politica', 'pricing.manage'],
+          // 9.17d: con las otras de configuracion. `integration.manage` ya
+          // existia desde 9.2 y solo lo tiene admin.
+          ['Integraciones', 'integraciones.index', 'integraciones', 'integration.manage'],
           // 4.5: la pantalla a la que BR-LE-004 lleva mandando desde 4.1.
           // `legal_entity.manage` es solo de admin, asi que el resto no la ve.
           ['Entidades legales', 'entidades.index', 'entidades', 'legal_entity.manage'],
+          // 9.12: pegada a Entidades legales porque una serie pertenece a la
+          // sociedad que emite (`BR-LE-008`) y la toca la misma persona.
+          ['Series y correlativos', 'series.index', 'series', 'legal_entity.manage'],
           // 9.16: junto a Entidades legales porque las dos son configuracion de
           // la plataforma y las dos las toca la misma persona.
           ['Términos', 'terminos.index', 'terminos', 'legal_entity.manage'],

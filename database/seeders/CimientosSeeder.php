@@ -520,6 +520,68 @@ final class CimientosSeeder extends Seeder
                 'updated_at' => $ahora, 'created_at' => $ahora,
             ],
         );
+        // 9.17d: el catalogo de proveedores de integracion. Es una tabla y no
+        // una constante porque el dia que entre uno nuevo --otro emisor
+        // electronico, una pasarela-- eso es una fila y no un despliegue
+        // (`DEC-190`). Se siembran los que el negocio ya nombro; la CONEXION
+        // --URL, usuario, claves-- se crea desde `/integraciones`, porque esos
+        // valores son de cada instalacion y no del codigo.
+        $proveedores = [
+            ['code' => 'sunat', 'name' => 'SUNAT — facturación electrónica', 'purpose' => 'invoicing',
+                'doc_url' => 'https://cpe.sunat.gob.pe/'],
+            ['code' => 'decolecta', 'name' => 'Decolecta — tipos de cambio', 'purpose' => 'fx',
+                'doc_url' => 'https://decolecta.com/'],
+            ['code' => 'smtp', 'name' => 'Servidor de correo (SMTP)', 'purpose' => 'email',
+                'doc_url' => null],
+        ];
+
+        foreach ($proveedores as $p) {
+            DB::table('integration_providers')->updateOrInsert(
+                ['code' => $p['code']],
+                $p + ['is_active' => true, 'updated_at' => $ahora, 'created_at' => $ahora],
+            );
+        }
+
+        // 9.12: los tipos de comprobante de Peru. Son DATOS, no un enum: hasta
+        // hoy `ck_ds_type` los tenia escritos en el codigo, y la boleta es
+        // peruana --el CFDI mexicano no estaba y anadirlo exigia desplegar--.
+        //
+        // Los codigos oficiales son los del catalogo 01 de SUNAT, y las formas
+        // de serie las que exige para comprobantes electronicos: `F` mas tres
+        // para factura, `B` mas tres para boleta, y las notas van con la serie
+        // del comprobante que corrigen, asi que admiten las dos.
+        //
+        // Se siembran los tipos --que son la regla del pais-- y NO las series,
+        // que son de cada instalacion y se registran ante SUNAT: una serie
+        // inventada produciria comprobantes invalidos. La falta de series sale
+        // en rojo en el panel de configuracion, no bloquea nada (`DEC-190`).
+        $paisPeru = DB::table('countries')->where('iso2', 'PE')->value('id');
+
+        if ($paisPeru !== null) {
+            $tipos = [
+                ['code' => 'invoice', 'name' => 'Factura electrónica', 'official_code' => '01',
+                    'series_pattern' => '^F[A-Z0-9]{3}$', 'series_label' => 'Serie: F y tres más (F001)',
+                    'requires_customer_tax_id' => true, 'sort_order' => 10],
+                ['code' => 'boleta', 'name' => 'Boleta de venta electrónica', 'official_code' => '03',
+                    'series_pattern' => '^B[A-Z0-9]{3}$', 'series_label' => 'Serie: B y tres más (B001)',
+                    'requires_customer_tax_id' => false, 'sort_order' => 20],
+                ['code' => 'credit_note', 'name' => 'Nota de crédito electrónica', 'official_code' => '07',
+                    'series_pattern' => '^[FB][A-Z0-9]{3}$', 'series_label' => 'Serie del comprobante que corrige',
+                    'requires_customer_tax_id' => false, 'sort_order' => 30],
+                ['code' => 'debit_note', 'name' => 'Nota de débito electrónica', 'official_code' => '08',
+                    'series_pattern' => '^[FB][A-Z0-9]{3}$', 'series_label' => 'Serie del comprobante que corrige',
+                    'requires_customer_tax_id' => false, 'sort_order' => 40],
+            ];
+
+            foreach ($tipos as $t) {
+                DB::table('document_types')->updateOrInsert(
+                    ['country_id' => $paisPeru, 'code' => $t['code']],
+                    $t + ['country_id' => $paisPeru, 'number_length' => 8, 'is_active' => true,
+                        'updated_at' => $ahora, 'created_at' => $ahora],
+                );
+            }
+        }
+
         // 9.18: la politica de precios de partida. 29,5 % es la retencion que el
         // negocio confirmo en `Q-13`, y 20 % sobre el COSTO es lo que sale de su
         // propio ejemplo --100 de neto cuestan 141,84 y el ingreso aceptable mas

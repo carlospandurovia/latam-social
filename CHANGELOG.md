@@ -2,6 +2,101 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 
+## [9.12 · Un número sale una sola vez] — 2026-08-31
+
+Cierra `BR-LE-007` (🔴) y `DEC-021`. `document_series` existía desde la Fase 2 y
+nunca la escribió nadie: tenía la forma correcta y ninguna mecánica.
+
+### Añadido
+- **`document_types`**, catálogo **por país**: código oficial (`01`, `03`, `07`,
+  `08` de SUNAT), forma de la serie, cómo se le pide a una persona y cuántos
+  dígitos tiene el correlativo. Se siembran los cuatro peruanos.
+- **`Correlativos::reservar()`**: transacción + `lockForUpdate()` sobre la fila de
+  la serie. Devuelve el número y el `F001-00000123` ya formateado con la longitud
+  del tipo.
+- **`document_numbers`**, el libro: cada número que sale, con su estado.
+  `reserved` → `used` (dice a qué documento) o `voided` (dice por qué, con motivo
+  escrito). Ni se borra ni se reescribe.
+- **`/series`** con `permiso:legal_entity.manage`: series, tipos por país y el
+  libro de cada serie. Lo único que se hace aquí con un número es **anularlo**.
+- Área **«Series y correlativos»** en el panel de `9.17b` (orden 36).
+- `uq_ds_default`, columna puerta **32**: una sola serie por defecto por
+  (sociedad, tipo, entorno).
+- `tools/pruebas/9.12-correlativos.sh` — 34 aserciones **con carrera de verdad**:
+  dos clientes, `1205` determinista, y el contraejemplo sin el cual no
+  significaría nada.
+
+### Decidido
+- `DEC-228`: los tipos son **catálogo por país**, no un enum. No contradice a
+  `DEC-026`: el código se ramifica por `purpose`; por tipo de comprobante **no se
+  ramifica, viaja**.
+- `DEC-229`: **bajo bloqueo**, no `MAX()+1`. Y aun así `uq_dn_number`.
+- `DEC-230`: el hueco **se explica**; el número no se reutiliza nunca.
+- `DEC-231`: una serie por defecto por tipo; la forma la impone el país.
+- `DEC-232`: las series **no se siembran** — única configuración sin valor de
+  fábrica, y por eso avisa en rojo.
+
+### Corregido
+- **`T-76`**: `Schema::dropIfExists()` era otro método vacío del grabador de
+  esquema, así que una tabla rehecha se recogía como la unión de sus dos formas.
+  Misma familia que `T-75`, mismo archivo, misma semana.
+
+### Sabido y dicho
+- **Dos reglas eran decorativas y las cazó la suite el primer día**: `REGEXP` no
+  distingue mayúsculas con la colación de la tabla, y un `CHECK` cuya expresión da
+  `NULL` **no rechaza** — anular sin ningún motivo pasaba.
+- **MySQL 8 volvió a rechazar lo que MariaDB acepta**: `CAST(... AS BINARY)`
+  dentro de `REGEXP` da un `3995`. Segunda iteración seguida.
+- Las series reales **hay que darlas de alta a mano** tras desplegar, con el
+  correlativo por el que vayan hoy.
+
+## [9.17d · Las credenciales de cada API, en un solo sitio] — 2026-08-31
+
+Prerrequisito de `9.9`. Sin un sitio donde poner la URL y las claves secundarias
+de SUNAT, la facturación electrónica no tiene de dónde leerlas — y `.env` habría
+exigido entrar por SSH para pasar de pruebas a producción.
+
+### Añadido
+- **`integration_providers`, `integration_connections`, `integration_credentials`**.
+  El catálogo de proveedores es una **tabla**: uno nuevo es una fila, no un
+  despliegue.
+- **`/configuracion/integraciones`** con `permiso:integration.manage`. Los campos
+  de secreto son `type="password" autocomplete="off"`; de lo guardado sólo se ven
+  los **cuatro últimos**.
+- **Área «Integraciones»** en el panel de `9.17b`: 🔴 activa sin credencial,
+  🟡 en borrador, 🔴 el último intento falló y no ha habido uno bueno después.
+- Dos columnas puerta: `uq_iconn_active` (una sola conexión activa por proveedor,
+  entorno y sociedad) y `uq_icred_vigente` (una sola credencial viva por conexión
+  y clase). Van **31**.
+- Semilla de tres proveedores: `sunat`, `decolecta`, `smtp`.
+
+### Decidido
+- `DEC-223`: esto **no vive en `.env` ni en `legal_entities`**. Una sociedad es
+  quién factura; una conexión es con qué se conecta uno.
+- `DEC-224`: **tres tablas de las cinco de `docs/12`**. Las asignaciones
+  `(marca, sociedad, país)` resuelven un problema que hoy no existe.
+- `DEC-225`: rotar **versiona**, no pisa. Quedan con respuesta «cuál era la de
+  antes» y «cuándo cambió».
+- `DEC-226`: la bitácora anota **que** cambió, nunca el valor ni los últimos
+  cuatro (`BR-SEC-001`).
+- `DEC-227`: una conexión **activa** exige `https://`; un borrador no.
+
+### Corregido
+- **`T-75`**: `correr-todo.sh` terminaba en silencio —la última cifra visible era
+  el total de las suites SQL, que no cuenta los verificadores— y debajo
+  `verificar-periodos.py` llevaba **rojo desde `9.16`**: `Periodo::quitar` era un
+  método vacío en el grabador, así que el verificador exigía al esquema el texto
+  de una regla que ya se había rehecho. Ahora `quitar` quita y la pasada cierra
+  diciendo si es verde.
+
+### Sabido y dicho
+- **MySQL 8 rechazó lo que MariaDB aceptó en silencio**: una columna generada
+  sobre una FK con acción en cascada da `1215`. Se pasó a `restrictOnDelete()`.
+  Hicieron falta los dos motores para verlo, y en producción hay Percona.
+- La pantalla dice **qué NO está todavía**: el certificado digital de SUNAT (es
+  un archivo, va con `9.9`) y que la clave de tipos de cambio sigue en su
+  pantalla.
+
 ## [9.15 · Que los archivos se puedan ver] — 2026-08-31
 
 `Almacen` archivaba desde la Fase 3 y no existía ni una ruta que devolviera un

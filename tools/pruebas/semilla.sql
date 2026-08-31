@@ -67,8 +67,29 @@ INSERT INTO legal_entities (uuid,platform_brand_id,code,legal_name,country_id,ta
    'Por completar','Bogota','COP','America/Bogota','active',NOW(3)
  FROM platform_brands pb, countries c WHERE pb.code='LATAM' AND c.iso2='CO';
 
-INSERT INTO document_series (legal_entity_id,document_type,series,next_number,environment,is_active,created_at)
- SELECT id,'invoice','F001',1,'production',1,NOW(3) FROM legal_entities WHERE code='CTS-PE';
+-- 9.12: los tipos de comprobante son DATOS y son de un pais. Antes eran cinco
+-- palabras peruanas en un CHECK del codigo. Se siembran los dos de Peru --que
+-- es donde se factura-- y uno de Colombia, que hace falta para poder afirmar
+-- que una serie no cruza de pais.
+INSERT INTO document_types (country_id,code,name,official_code,series_pattern,series_label,
+   number_length,requires_customer_tax_id,is_active,sort_order,created_at)
+ SELECT id,'invoice','Factura electronica','01','^F[A-Z0-9]{3}$','Serie: F y tres mas',8,1,1,10,NOW(3)
+ FROM countries WHERE iso2='PE';
+
+INSERT INTO document_types (country_id,code,name,official_code,series_pattern,series_label,
+   number_length,requires_customer_tax_id,is_active,sort_order,created_at)
+ SELECT id,'boleta','Boleta de venta electronica','03','^B[A-Z0-9]{3}$','Serie: B y tres mas',8,0,1,20,NOW(3)
+ FROM countries WHERE iso2='PE';
+
+INSERT INTO document_types (country_id,code,name,official_code,number_length,is_active,sort_order,created_at)
+ SELECT id,'invoice','Factura electronica','01',8,1,10,NOW(3) FROM countries WHERE iso2='CO';
+
+INSERT INTO document_series (legal_entity_id,document_type_id,series,next_number,environment,
+   is_active,is_default,created_at)
+ SELECT le.id,dt.id,'F001',1,'production',1,1,NOW(3)
+ FROM legal_entities le
+ JOIN document_types dt ON dt.country_id = le.country_id AND dt.code = 'invoice'
+ WHERE le.code='CTS-PE';
 
 INSERT INTO client_organizations (uuid,commercial_name,client_code,country_id,status,created_at)
  SELECT UUID(),'Marca Demo S.A.','CLI-0001',id,'active',NOW(3) FROM countries WHERE iso2='PE';

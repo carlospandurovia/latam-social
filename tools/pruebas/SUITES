@@ -109,3 +109,12 @@
 # terminos de creador que usan las demas suites. No se limpia: `terms_versions`
 # no admite borrado desde 3.12.
 9.19-reaceptacion
+# 9.17d crea su proveedor (`x917d`) y sus conexiones (`X917D*`) y las borra:
+# nada de eso es evidencia mientras no cuelgue de ello una factura emitida.
+9.17d-integraciones
+
+# 9.12 crea sus tipos (`x912b`) y sus series (`F912`, `F913`, `F915`, `X912`) y
+# borra lo que puede: las series que ya dieron numeros no se pueden borrar
+# --`fk_dn_serie` es RESTRICT y `tg_dn_no_delete` protege el libro--, y eso es
+# correcto: un numero emitido es un hecho. La suite lo comprueba al empezar.
+9.12-correlativos

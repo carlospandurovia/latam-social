@@ -22,9 +22,11 @@ use App\Modules\Core\Http\Controllers\BitacoraController;
 use App\Modules\Core\Http\Controllers\CatalogosController;
 use App\Modules\Core\Http\Controllers\ConfiguracionController;
 use App\Modules\Core\Http\Controllers\EntidadesLegalesController;
+use App\Modules\Core\Http\Controllers\IntegracionesController;
 use App\Modules\Core\Http\Controllers\MarcaController;
 use App\Modules\Core\Http\Controllers\PanelController;
 use App\Modules\Core\Http\Controllers\PoliticaController;
+use App\Modules\Core\Http\Controllers\SeriesController;
 use App\Modules\Core\Http\Controllers\TerminosController;
 use App\Modules\Core\Http\Controllers\TiposDeCambioController;
 use App\Modules\Creator\Http\Controllers\ActivacionController;
@@ -771,6 +773,51 @@ Route::middleware('auth')->group(function (): void {
     Route::post('/mis-terminos', [MisTerminosController::class, 'aceptar'])
         ->middleware('throttle:10,1')
         ->name('terminos.aceptar');
+
+    // 9.17d -- Las credenciales de cada API. `integration.manage` ya existia
+    // desde 9.2 para la clave de la fuente de tipos de cambio: es el mismo
+    // trabajo --quien puede tocar las llaves de las APIs-- asi que se reutiliza
+    // en vez de inventar el segundo permiso para lo mismo.
+    Route::get('/integraciones', [IntegracionesController::class, 'index'])
+        ->middleware('permiso:integration.manage')
+        ->name('integraciones.index');
+
+    Route::post('/integraciones', [IntegracionesController::class, 'store'])
+        ->middleware('permiso:integration.manage')
+        ->name('integraciones.store');
+
+    Route::put('/integraciones/{uuid}', [IntegracionesController::class, 'update'])
+        ->middleware('permiso:integration.manage')
+        ->whereUuid('uuid')
+        ->name('integraciones.update');
+
+    Route::post('/integraciones/{uuid}/credencial', [IntegracionesController::class, 'credencial'])
+        ->middleware('permiso:integration.manage')
+        ->whereUuid('uuid')
+        ->name('integraciones.credencial');
+
+    // 9.12 -- Series y correlativos. `legal_entity.manage` y no un permiso
+    // nuevo: una serie pertenece a la sociedad que emite (`BR-LE-008`), asi que
+    // quien administra sociedades administra sus series. Un permiso mas para lo
+    // mismo solo anade un sitio donde olvidarse de darlo.
+    Route::get('/series', [SeriesController::class, 'index'])
+        ->middleware('permiso:legal_entity.manage')
+        ->name('series.index');
+
+    Route::post('/series', [SeriesController::class, 'guardarSerie'])
+        ->middleware('permiso:legal_entity.manage')
+        ->name('series.serie');
+
+    Route::post('/series/tipos', [SeriesController::class, 'guardarTipo'])
+        ->middleware('permiso:legal_entity.manage')
+        ->name('series.tipo');
+
+    // Anular un numero es lo UNICO que se hace aqui con el libro, y deja huella:
+    // el motivo es obligatorio y va a la bitacora.
+    Route::post('/series/numeros/{numero}/anular', [SeriesController::class, 'anular'])
+        ->middleware('permiso:legal_entity.manage')
+        ->whereNumber('numero')
+        ->name('series.anular');
 
     // 9.18 -- La politica de precios. Permiso propio `pricing.manage`: aqui se
     // fija con que retencion se pacta y que margen se considera aceptable, que

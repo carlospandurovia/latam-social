@@ -90,4 +90,18 @@ python3 tools/verificar-muro.py || tot_fail=$((tot_fail+1))
 echo ""; echo "===== nombres entre capas ====="
 python3 tools/verificar-pantallas.py || tot_fail=$((tot_fail+1))
 
+# 9.17d: el cierre lo tiene que decir una LINEA, no el codigo de salida.
+#
+# Hasta hoy esto terminaba en silencio: la ultima cifra que se leia era el
+# «TOTAL: N correctas, 0 fallidas» de las suites SQL, que NO cuenta los
+# verificadores de despues. `verificar-periodos.py` llevaba rojo desde 9.16
+# --pedia al esquema el texto viejo de `tver_sin_solape`-- y la pasada entera
+# parecia verde porque nadie miraba `$?`. Un aviso que no se ve no es un aviso.
+echo ""
+if [ "$tot_fail" -eq 0 ]; then
+    printf '\033[32mLa pasada entera en verde: suites y verificadores.\033[0m\n'
+else
+    printf '\033[31m%d comprobacion(es) en rojo en esta pasada.\033[0m\n' "$tot_fail"
+fi
+
 [ "$tot_fail" -eq 0 ]

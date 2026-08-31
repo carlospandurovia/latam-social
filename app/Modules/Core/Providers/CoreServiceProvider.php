@@ -7,8 +7,10 @@ namespace App\Modules\Core\Providers;
 use App\Modules\Core\Console\PublicarTerminosCommand;
 use App\Modules\Core\Console\TraerTiposDeCambioCommand;
 use App\Modules\Core\Services\Cobertura;
+use App\Modules\Core\Services\Correlativos;
 use App\Modules\Core\Services\CredencialFuente;
 use App\Modules\Core\Services\Decolecta;
+use App\Modules\Core\Services\Integraciones;
 use App\Modules\Core\Services\Marca;
 use App\Modules\Core\Services\Politica;
 use App\Modules\Core\Services\Terminos;
@@ -212,6 +214,19 @@ final class CoreServiceProvider extends ServiceProvider
         // `loQueHayQueMirar()` ya contesta la segunda y devuelve `null` cuando
         // no hay nada que mirar, que es como debe ser: una pantalla que siempre
         // tiene un aviso es una pantalla cuyos avisos nadie lee.
+        // 9.17d: delante de los tipos de cambio porque de aqui depende poder
+        // facturar, y aquello se toca dos veces al ano.
+        Preparacion::area('Integraciones', 'integration.manage', 'integraciones.index',
+            static fn (): array => Integraciones::avisos(), orden: 35);
+
+        // 9.12: detras de Integraciones y delante de los tipos de cambio. Sin
+        // serie no se emite nada, y esa es la unica configuracion del sistema
+        // que NO trae valor de partida: una serie se registra ante la
+        // administracion tributaria y una inventada produce comprobantes
+        // invalidos. Por eso avisa en rojo en vez de sembrarse (`DEC-190`).
+        Preparacion::area('Series y correlativos', 'legal_entity.manage', 'series.index',
+            static fn (): array => Correlativos::avisos(), orden: 36);
+
         Preparacion::area('Tipos de cambio', 'fx.manage', 'cambio.index',
             static function (): array {
                 $avisos = [];

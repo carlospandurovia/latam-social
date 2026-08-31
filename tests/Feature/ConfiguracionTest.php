@@ -54,7 +54,7 @@ final class ConfiguracionTest extends TestCase
      *
      * Las pruebas que registran áreas de mentira las dejarían puestas para la
      * siguiente, que volvería a registrar las de verdad **encima** de ellas y
-     * contaría cinco áreas donde hay siete. Se limpia al salir: en la prueba
+     * contaría cinco áreas donde hay nueve. Se limpia al salir: en la prueba
      * siguiente el arranque de la aplicación vuelve a poner las reales.
      */
     protected function tearDown(): void
@@ -213,12 +213,13 @@ final class ConfiguracionTest extends TestCase
     public function test_las_areas_que_existen_estan_registradas(): void
     {
         $this->assertSame(
-            // 9.18 anadio «Politica de precios» y 9.19b «Creadores», y las dos
-            // veces esta prueba se puso roja: es exactamente para lo que esta.
-            // La lista se actualiza a mano y a proposito, para que anadir un
-            // area sea una decision y no un descuido.
-            ['Correo', 'Creadores', 'Entidades legales', 'Marca',
-                'Política de precios', 'Tipos de cambio', 'Términos'],
+            // 9.18 anadio «Politica de precios», 9.19b «Creadores», 9.17d
+            // «Integraciones» y 9.12 «Series y correlativos»; las cuatro veces
+            // esta prueba se puso roja: es exactamente para lo que esta. La
+            // lista se actualiza a mano y a proposito, para que anadir un area
+            // sea una decision y no un descuido.
+            ['Correo', 'Creadores', 'Entidades legales', 'Integraciones', 'Marca',
+                'Política de precios', 'Series y correlativos', 'Tipos de cambio', 'Términos'],
             Preparacion::areasRegistradas(),
         );
     }

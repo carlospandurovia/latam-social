@@ -150,26 +150,95 @@ CREATE TABLE legal_entity_countries (
   CONSTRAINT ck_lec_dates CHECK (valid_to IS NULL OR valid_to >= valid_from)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- ============================ D2 Core: los tipos de comprobante, por pais
+-- 9.12. Antes eran cinco palabras peruanas en un CHECK del codigo. Cada pais
+-- declara los suyos: su codigo oficial ('01' factura, '03' boleta en SUNAT), la
+-- forma de la serie y cuantos digitos tiene el correlativo. Mismo patron que el
+-- codigo de localidad de 9.17c: la regla la pone el pais, no el codigo.
+CREATE TABLE document_types (
+  id            BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  country_id    BIGINT UNSIGNED NOT NULL,
+  code          VARCHAR(30)   NOT NULL,
+  name          VARCHAR(80)   NOT NULL,
+  official_code VARCHAR(5)    NULL,
+  series_pattern VARCHAR(120) NULL,
+  series_label  VARCHAR(60)   NULL,
+  number_length TINYINT UNSIGNED NOT NULL DEFAULT 8,
+  requires_customer_tax_id TINYINT(1) NOT NULL DEFAULT 0,
+  is_active     TINYINT(1)    NOT NULL DEFAULT 1,
+  sort_order    SMALLINT UNSIGNED NOT NULL DEFAULT 100,
+  created_at    DATETIME(3)   NULL,
+  updated_at    DATETIME(3)   NULL,
+  UNIQUE KEY uq_dtype_code (country_id, code),
+  KEY ix_dtype_pais (country_id, is_active, sort_order),
+  CONSTRAINT fk_dtype_country FOREIGN KEY (country_id) REFERENCES countries(id) ON DELETE RESTRICT,
+  CONSTRAINT ck_dtype_code CHECK (code REGEXP '^[a-z][a-z0-9_]{1,29}$' AND code COLLATE utf8mb4_bin = LOWER(code)),
+  CONSTRAINT ck_dtype_largo CHECK (number_length BETWEEN 1 AND 12),
+  CONSTRAINT ck_dtype_patron CHECK (series_pattern IS NULL OR series_label IS NOT NULL)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- ============================ D2 Core: series y correlativos de comprobante
 -- SUNAT exige serie + correlativo sin huecos por tipo de documento. El numero
--- se reserva aqui, no se calcula con MAX(): dos peticiones simultaneas darian
--- el mismo correlativo, que es un problema tributario, no un bug cualquiera.
+-- se reserva bajo bloqueo de esta fila (9.12), no se calcula con MAX(): dos
+-- peticiones simultaneas darian el mismo correlativo, que es un problema
+-- tributario y no un bug cualquiera.
 CREATE TABLE document_series (
   id               BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
   legal_entity_id  BIGINT UNSIGNED NOT NULL,
-  document_type    VARCHAR(30)   NOT NULL,
+  document_type_id BIGINT UNSIGNED NOT NULL,
   series           VARCHAR(10)   NOT NULL,
   next_number      BIGINT UNSIGNED NOT NULL DEFAULT 1,
   environment      VARCHAR(15)   NOT NULL DEFAULT 'production',
   is_active        TINYINT(1)    NOT NULL DEFAULT 1,
+  is_default       TINYINT(1)    NOT NULL DEFAULT 0,
+  notes            VARCHAR(255)  NULL,
   created_at       DATETIME(3)   NULL,
   updated_at       DATETIME(3)   NULL,
-  UNIQUE KEY uq_ds_series (legal_entity_id, document_type, series, environment),
+  -- 9.12: una sola serie POR DEFECTO por (sociedad, tipo, entorno). El empate
+  -- se rechaza al configurar y no al emitir.
+  default_gate     VARCHAR(60)   GENERATED ALWAYS AS (CASE WHEN is_active = 1 AND is_default = 1
+                     THEN CONCAT(legal_entity_id, ':', document_type_id, ':', environment) ELSE NULL END) STORED,
+  UNIQUE KEY uq_ds_series (legal_entity_id, document_type_id, series, environment),
+  UNIQUE KEY uq_ds_default (default_gate),
   KEY ix_ds_entity (legal_entity_id, is_active),
+  KEY ix_ds_tipo (document_type_id),
   CONSTRAINT fk_ds_entity FOREIGN KEY (legal_entity_id) REFERENCES legal_entities(id) ON DELETE RESTRICT,
-  CONSTRAINT ck_ds_type CHECK (document_type IN ('invoice','boleta','credit_note','debit_note','other')),
+  CONSTRAINT fk_ds_tipo FOREIGN KEY (document_type_id) REFERENCES document_types(id) ON DELETE RESTRICT,
   CONSTRAINT ck_ds_env CHECK (environment IN ('sandbox','production')),
-  CONSTRAINT ck_ds_number CHECK (next_number >= 1)
+  CONSTRAINT ck_ds_number CHECK (next_number >= 1),
+  CONSTRAINT ck_ds_serie CHECK (series REGEXP '^[A-Z0-9]{1,10}$' AND series COLLATE utf8mb4_bin = UPPER(series)),
+  CONSTRAINT ck_ds_defecto CHECK (is_default = 0 OR is_active = 1)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ============================ D2 Core: el libro de los numeros que salieron
+-- 9.12. Sin esta tabla «sin huecos» es indemostrable: el contador solo dice por
+-- donde va. Un hueco puede existir --se reservo y no se emitio-- pero queda
+-- ESCRITO y con motivo. Ni se borra ni se reescribe.
+CREATE TABLE document_numbers (
+  id                 BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  document_series_id BIGINT UNSIGNED NOT NULL,
+  number             BIGINT UNSIGNED NOT NULL,
+  full_number        VARCHAR(40)   NOT NULL,
+  status             VARCHAR(15)   NOT NULL DEFAULT 'reserved',
+  reserved_at        DATETIME(3)   NOT NULL,
+  reserved_by_user_id BIGINT UNSIGNED NULL,
+  used_at            DATETIME(3)   NULL,
+  entity_type        VARCHAR(40)   NULL,
+  entity_id          BIGINT UNSIGNED NULL,
+  voided_at          DATETIME(3)   NULL,
+  void_reason        VARCHAR(255)  NULL,
+  created_at         DATETIME(3)   NULL,
+  updated_at         DATETIME(3)   NULL,
+  UNIQUE KEY uq_dn_number (document_series_id, number),
+  KEY ix_dn_estado (status, reserved_at),
+  KEY ix_dn_entidad (entity_type, entity_id),
+  CONSTRAINT fk_dn_serie FOREIGN KEY (document_series_id) REFERENCES document_series(id) ON DELETE RESTRICT,
+  CONSTRAINT fk_dn_autor FOREIGN KEY (reserved_by_user_id) REFERENCES users(id) ON DELETE RESTRICT,
+  CONSTRAINT ck_dn_status CHECK (status IN ('reserved','used','voided')),
+  CONSTRAINT ck_dn_numero CHECK (number >= 1),
+  CONSTRAINT ck_dn_usado CHECK (status <> 'used' OR (used_at IS NOT NULL AND entity_type IS NOT NULL AND entity_id IS NOT NULL)),
+  CONSTRAINT ck_dn_anulado CHECK (status <> 'voided' OR (voided_at IS NOT NULL AND void_reason IS NOT NULL AND CHAR_LENGTH(void_reason) >= 10)),
+  CONSTRAINT ck_dn_reservado CHECK (status <> 'reserved' OR (used_at IS NULL AND voided_at IS NULL))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ===========================================================================
@@ -308,6 +377,103 @@ BEGIN
     IF NOT (NEW.`code` <=> OLD.`code`) THEN
         SIGNAL SQLSTATE '45000'
           SET MESSAGE_TEXT = 'El codigo de la marca no se cambia: cambie el nombre.';
+    END IF;
+END//
+
+-- 9.12 -- La forma de la serie la declara el TIPO, y el tipo es de un pais.
+-- Regla entre tablas: ningun CHECK la admite, tampoco en MySQL 8. La colacion
+-- de la variable se declara a mano por la leccion de 9.17c (un 1267 en cada
+-- alta, invisible mientras el campo viniera nulo).
+
+CREATE TRIGGER `tg_ds_forma_ins`
+BEFORE INSERT ON `document_series`
+FOR EACH ROW
+BEGIN
+    DECLARE v_patron VARCHAR(120) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+    DECLARE v_largo TINYINT UNSIGNED;
+    DECLARE v_pais_tipo BIGINT UNSIGNED;
+    DECLARE v_pais_soc  BIGINT UNSIGNED;
+
+    SELECT `series_pattern`, `number_length`, `country_id`
+      INTO v_patron, v_largo, v_pais_tipo
+      FROM `document_types` WHERE `id` = NEW.`document_type_id`;
+
+    SELECT `country_id` INTO v_pais_soc
+      FROM `legal_entities` WHERE `id` = NEW.`legal_entity_id`;
+
+    IF v_pais_tipo <> v_pais_soc THEN
+        SIGNAL SQLSTATE '45000'
+          SET MESSAGE_TEXT = 'Ese tipo de comprobante es de otro pais: la serie es de la sociedad que lo emite.';
+    END IF;
+
+    IF v_patron IS NOT NULL AND NEW.`series` NOT REGEXP v_patron THEN
+        SIGNAL SQLSTATE '45000'
+          SET MESSAGE_TEXT = 'La serie no tiene la forma que exige ese tipo de comprobante.';
+    END IF;
+
+    IF NEW.`next_number` > POW(10, v_largo) - 1 THEN
+        SIGNAL SQLSTATE '45000'
+          SET MESSAGE_TEXT = 'La serie se agoto: el correlativo ya no cabe en su longitud.';
+    END IF;
+END//
+
+CREATE TRIGGER `tg_ds_forma_upd`
+BEFORE UPDATE ON `document_series`
+FOR EACH ROW
+BEGIN
+    DECLARE v_patron VARCHAR(120) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+    DECLARE v_largo TINYINT UNSIGNED;
+    DECLARE v_pais_tipo BIGINT UNSIGNED;
+    DECLARE v_pais_soc  BIGINT UNSIGNED;
+
+    SELECT `series_pattern`, `number_length`, `country_id`
+      INTO v_patron, v_largo, v_pais_tipo
+      FROM `document_types` WHERE `id` = NEW.`document_type_id`;
+
+    SELECT `country_id` INTO v_pais_soc
+      FROM `legal_entities` WHERE `id` = NEW.`legal_entity_id`;
+
+    IF v_pais_tipo <> v_pais_soc THEN
+        SIGNAL SQLSTATE '45000'
+          SET MESSAGE_TEXT = 'Ese tipo de comprobante es de otro pais: la serie es de la sociedad que lo emite.';
+    END IF;
+
+    IF v_patron IS NOT NULL AND NEW.`series` NOT REGEXP v_patron THEN
+        SIGNAL SQLSTATE '45000'
+          SET MESSAGE_TEXT = 'La serie no tiene la forma que exige ese tipo de comprobante.';
+    END IF;
+
+    IF NEW.`next_number` > POW(10, v_largo) - 1 THEN
+        SIGNAL SQLSTATE '45000'
+          SET MESSAGE_TEXT = 'La serie se agoto: el correlativo ya no cabe en su longitud.';
+    END IF;
+END//
+
+-- 9.12 -- Informacion fiscal: ni se borra ni se reescribe.
+
+CREATE TRIGGER `tg_dn_no_delete`
+BEFORE DELETE ON `document_numbers`
+FOR EACH ROW
+BEGIN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'Un numero emitido no se borra: anulelo con su motivo.';
+END//
+
+CREATE TRIGGER `tg_dn_inmutable`
+BEFORE UPDATE ON `document_numbers`
+FOR EACH ROW
+BEGIN
+    IF NOT (NEW.`number` <=> OLD.`number`)
+       OR NOT (NEW.`document_series_id` <=> OLD.`document_series_id`)
+       OR NOT (NEW.`full_number` <=> OLD.`full_number`)
+       OR NOT (NEW.`reserved_at` <=> OLD.`reserved_at`) THEN
+        SIGNAL SQLSTATE '45000'
+          SET MESSAGE_TEXT = 'Un numero no se reescribe: es lo que hace demostrable que no hay huecos.';
+    END IF;
+
+    IF OLD.`status` <> 'reserved' AND NEW.`status` <> OLD.`status` THEN
+        SIGNAL SQLSTATE '45000'
+          SET MESSAGE_TEXT = 'Solo un numero reservado cambia de estado: usado y anulado son finales.';
     END IF;
 END//
 
