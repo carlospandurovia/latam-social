@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Creator\Services;
 
+use App\Modules\Core\Services\Terminos;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 
@@ -363,6 +364,10 @@ final class CompletitudOperativa
             ->where('audience', 'creator')
             ->where('code', $codigo)
             ->whereNull('effective_to')
+            // 9.16: y PUBLICADA. Un borrador tambien tiene `effective_to` nulo,
+            // y sin esto el requisito exigiria aceptar un texto que todavia
+            // esta escribiendose.
+            ->whereNotNull('published_at')
             ->first(['id', 'version']);
 
         if ($version === null) {
@@ -377,18 +382,27 @@ final class CompletitudOperativa
             );
         }
 
-        $aceptacion = DB::table('terms_acceptances')
-            ->where('subject_type', 'creator')
-            ->where('subject_id', $creadorId)
-            ->where('terms_version_id', $version->id)
-            ->first(['accepted_at', 'channel']);
+        // 9.16: cuenta la aceptacion de la vigente **o la de una anterior de la
+        // que solo la separen cambios MENORES**. Sin esto, corregir una errata
+        // dejaba a todos los creadores incompletos hasta que volvieran a
+        // aceptar, y en la practica eso significa que nadie corrige nada.
+        $aceptacion = DB::table('terms_acceptances as ta')
+            ->join('terms_versions as tv', 'tv.id', '=', 'ta.terms_version_id')
+            ->where('ta.subject_type', 'creator')
+            ->where('ta.subject_id', $creadorId)
+            ->whereIn('ta.terms_version_id', Terminos::versionesQueValen($codigo))
+            ->orderByDesc('ta.accepted_at')
+            ->first(['ta.accepted_at', 'ta.channel', 'tv.version as version_aceptada']);
 
         return new Requisito(
             codigo: self::TERMINOS,
             titulo: 'Aceptación vigente de los términos',
             cumple: $aceptacion !== null,
             detalle: $aceptacion !== null
-                ? "Versión {$version->version} aceptada el {$aceptacion->accepted_at} (vía {$aceptacion->channel})."
+                ? "Versión {$aceptacion->version_aceptada} aceptada el {$aceptacion->accepted_at} "
+                    ."(vía {$aceptacion->channel})."
+                    .($aceptacion->version_aceptada === $version->version ? ''
+                        : " La vigente es la {$version->version}, y sólo la separan cambios menores.")
                 : "No consta que haya aceptado la versión vigente ({$version->version}).",
             regla: 'BR-CREATOR-006',
         );

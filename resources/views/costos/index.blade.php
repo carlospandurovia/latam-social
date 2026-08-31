@@ -50,7 +50,14 @@
                   {{ $tipos[$c->cost_type] ?? $c->cost_type }} ·
                   {{ substr((string) $c->incurred_on, 0, 10) }}
                   @if ($c->autor) · anotado por {{ $c->autor }} @endif
-                  @if ($c->file_id) · con comprobante @endif
+                  @if ($c->file_id)
+                    ·
+                    {{-- 9.15: hasta ahora esto decia «con comprobante» y no habia
+                         forma de abrirlo. Una evidencia que nadie puede mirar no
+                         es una evidencia. --}}
+                    <a href="{{ route('archivos.ver', $c->archivo_uuid) }}" target="_blank"
+                       rel="noopener" class="text-marca-700 hover:underline">ver comprobante</a>
+                  @endif
                 </p>
                 {{-- El anulado se enseña tachado y con su motivo, no se esconde:
                      quien mira una cifra que no le cuadra necesita ver que hubo

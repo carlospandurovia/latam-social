@@ -6,7 +6,9 @@ namespace App\Modules\Finance\Providers;
 
 use App\Modules\Finance\Console\RevisarDevengosCommand;
 use App\Modules\Finance\Listeners\DevengarParticipacion;
+use App\Shared\Auth\Permisos;
 use App\Shared\Eventos\EventoOcurrido;
+use App\Shared\Files\Vigilante;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
@@ -29,6 +31,27 @@ final class FinanceServiceProvider extends ServiceProvider
         // proposito --la aceptacion ocurre por HTTP, no por comando--, que es
         // donde `ContentServiceProvider` registra el suyo desde `8.1`.
         Event::listen(EventoOcurrido::class, DevengarParticipacion::class);
+
+        // 9.15: quien puede mirar los archivos de finanzas. La regla vive AQUI
+        // y no en un `switch` central porque necesita saber de `payouts` y de
+        // `campaign_costs`, y ponerlas en Shared seria romper la frontera por
+        // una consulta que `deptrac` no ve --tablas, no clases importadas--.
+        //
+        // El comprobante de pago es SENSIBLE: lleva la referencia del banco y a
+        // veces el extracto entero, asi que abrirlo deja rastro.
+        Vigilante::regla(
+            'payout_proof',
+            static fn (object $archivo, int $usuarioId): bool => Permisos::tiene($usuarioId, 'finance.view'),
+            sensible: true,
+        );
+
+        // El comprobante de un gasto no lleva datos de nadie: es una factura
+        // nuestra. Lo ve quien puede cargar gastos y quien ve finanzas.
+        Vigilante::regla(
+            'campaign_cost',
+            static fn (object $archivo, int $usuarioId): bool => Permisos::tiene($usuarioId, 'finance.cost.manage')
+                || Permisos::tiene($usuarioId, 'finance.view'),
+        );
 
         if (!$this->app->runningInConsole()) {
             return;

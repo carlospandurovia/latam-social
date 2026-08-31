@@ -2,6 +2,70 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 
+## [9.15 · Que los archivos se puedan ver] — 2026-08-31
+
+`Almacen` archivaba desde la Fase 3 y no existía ni una ruta que devolviera un
+archivo. Una evidencia que nadie puede mirar no es una evidencia.
+
+### Añadido
+- **`/archivos/{uuid}`**, la única puerta por la que sale un archivo. Dos
+  escalones: `file.view` deja **pedir** uno, el `Vigilante` decide **cuál**.
+- **`App\Shared\Files\Vigilante`**: registro de reglas por propósito. Cada
+  módulo declara las suyas en su ServiceProvider — Creator las de identidad y
+  términos, Content las de entregables y capturas, Finance las de comprobantes.
+- **Enlaces** donde antes sólo se decía «con comprobante»: la pantalla de gastos
+  y el detalle de rentabilidad.
+- Permiso `file.view`, para los roles internos y el creador.
+
+### Decidido
+- `DEC-197`: **se niega por omisión**, y cada módulo declara lo suyo. Un decisor
+  central pondría a Shared a saber de `payouts`, y `deptrac` no lo vería —
+  consultas a tablas, no clases importadas.
+- `DEC-198`: **el permiso se mira en cada petición**. Una URL firmada sobrevive a
+  un permiso retirado y a un reenvío. Búsqueda por `uuid`, `no-store`, `nosniff`
+  y una CSP que impide ejecutar un SVG subido como «evidencia».
+
+### Sabido y dicho
+- Las fixturas **creaban la fila y no el archivo**: hasta hoy nadie servía nada y
+  con la fila bastaba. El controlador comprueba que el archivo esté de verdad.
+- **Sigue sin verse el texto de los términos**: vive en `terms_versions.body`, no
+  en `files`. Aceptar algo que no se puede leer no es aceptar.
+
+## [9.16 · Los términos, editables desde el admin] — 2026-08-30
+
+Corrige el criterio de `3.5`: sin correr un comando no se activaba ningún
+creador. Eso convertía una configuración en un bloqueo.
+
+### Añadido
+- **Pantalla de Términos** en el admin: crear versión, editar el borrador,
+  publicar y marcar el estado de revisión legal.
+- **Texto base sembrado y publicado**, 15 cláusulas, con `review_status =
+  sin_revisar` y once marcas `[REVISAR]` que el sistema cuenta solo.
+- **Borrador / publicada**: `tg_terms_inmutable` congela el texto en cuanto hay
+  firmas apuntando a él.
+- **«Cambio menor»**: al publicar se declara si todos vuelven a aceptar o si la
+  aceptación anterior sigue valiendo. Una errata ya no deja a todos incompletos.
+- **Avisos con prioridad** en lugar de bloqueos: rojo si el texto vigente no lo
+  ha revisado un abogado, ámbar si quedan marcas sin resolver.
+
+### Decidido
+- **`DEC-190` (🔴 principio rector): la plataforma es white label y todo se
+  configura desde el admin.** Lo que el código aporta es la regla; el valor sale
+  de la configuración. Corrige el criterio de varias decisiones anteriores
+  (`T-69`).
+- `DEC-191` retención sobre el neto pactado y umbral de rentabilidad ·
+  `DEC-192` facturación electrónica directa con SUNAT y monitor de documentos ·
+  `DEC-193` reaceptación con plazo y solo lectura · `DEC-194` premios canjeables
+  por XP · `DEC-195` lado del tipo de cambio configurable por tipo de operación.
+
+### Sabido y dicho
+- **El comando de `3.5` habría dejado de funcionar en silencio**: insertaba sin
+  `published_at`, o sea creaba un borrador diciendo «publicada».
+- **La semilla degradaba en silencio**: leía de `docs/`, que no viaja con la
+  aplicación, y sembraba 192 caracteres en vez de 9.267. Se vio midiendo.
+- La regla de no solape de `3.13` no conocía los borradores y rechazaba el
+  segundo. Lo cazó la prueba de publicar.
+
 ## [9.14b · La auditoría de seguridad] — 2026-08-30
 
 `9.14` midió lo que la base impide. Esto mide **quién llega a qué**.

@@ -71,7 +71,7 @@ probar "UPDATE a activo saltandose la aplicacion" \
 echo ""
 echo "--- Terminos versionados (DEC-059) ---"
 probar "segunda version vigente del mismo documento" \
- "INSERT INTO terms_versions (uuid,audience,code,version,title,body,content_sha256,effective_from,created_at) VALUES (UUID(),'creator','creator_terms','2026.2','Otros terminos','Texto',REPEAT('e',64),'2026-06-01',NOW(3));" RECHAZO
+ "INSERT INTO terms_versions (uuid,audience,code,version,title,body,content_sha256,effective_from,published_at,published_by_user_id,created_at) VALUES (UUID(),'creator','creator_terms','2026.2','Otros terminos','Texto',REPEAT('e',64),'2026-06-01',NOW(3),(SELECT id FROM (SELECT id FROM users ORDER BY id LIMIT 1) uu),NOW(3));" RECHAZO
 # EL DIA ANTES, no el mismo dia. Esta linea decia `2026-06-01` --el mismo dia en
 # que empieza la 2026.2-- y con eso esta suite daba por buena la ambiguedad: ese
 # dia habia DOS textos vigentes, y es el texto que el creador acepta.
@@ -81,17 +81,17 @@ probar "segunda version vigente del mismo documento" \
 probar "version cerrada EL DIA ANTES + version nueva vigente" \
  "UPDATE terms_versions SET effective_to='2026-05-31' WHERE code='creator_terms' AND effective_to IS NULL;" OK
 probar "ahora si entra la 2026.2" \
- "INSERT INTO terms_versions (uuid,audience,code,version,title,body,content_sha256,effective_from,created_at) VALUES (UUID(),'creator','creator_terms','2026.2','Otros terminos','Texto',REPEAT('e',64),'2026-06-01',NOW(3));" OK
+ "INSERT INTO terms_versions (uuid,audience,code,version,title,body,content_sha256,effective_from,published_at,published_by_user_id,created_at) VALUES (UUID(),'creator','creator_terms','2026.2','Otros terminos','Texto',REPEAT('e',64),'2026-06-01',NOW(3),(SELECT id FROM (SELECT id FROM users ORDER BY id LIMIT 1) uu),NOW(3));" OK
 probar "misma version dos veces" \
- "INSERT INTO terms_versions (uuid,audience,code,version,title,body,content_sha256,effective_from,created_at) VALUES (UUID(),'creator','creator_terms','2026.2','Duplicada','Texto',REPEAT('f',64),'2026-07-01',NOW(3));" RECHAZO
+ "INSERT INTO terms_versions (uuid,audience,code,version,title,body,content_sha256,effective_from,published_at,published_by_user_id,created_at) VALUES (UUID(),'creator','creator_terms','2026.2','Duplicada','Texto',REPEAT('f',64),'2026-07-01',NOW(3),(SELECT id FROM (SELECT id FROM users ORDER BY id LIMIT 1) uu),NOW(3));" RECHAZO
 probar "terminos sin texto ni documento" \
- "INSERT INTO terms_versions (uuid,audience,code,version,title,content_sha256,effective_from,created_at) VALUES (UUID(),'creator','otros_terminos','1.0','Vacios',REPEAT('e',64),'2026-01-01',NOW(3));" RECHAZO
+ "INSERT INTO terms_versions (uuid,audience,code,version,title,content_sha256,effective_from,published_at,published_by_user_id,created_at) VALUES (UUID(),'creator','otros_terminos','1.0','Vacios',REPEAT('e',64),'2026-01-01',NOW(3),(SELECT id FROM (SELECT id FROM users ORDER BY id LIMIT 1) uu),NOW(3));" RECHAZO
 probar "huella que no es un sha256" \
- "INSERT INTO terms_versions (uuid,audience,code,version,title,body,content_sha256,effective_from,created_at) VALUES (UUID(),'creator','otros_terminos','1.0','Cortos','Texto','abc','2026-01-01',NOW(3));" RECHAZO
+ "INSERT INTO terms_versions (uuid,audience,code,version,title,body,content_sha256,effective_from,published_at,published_by_user_id,created_at) VALUES (UUID(),'creator','otros_terminos','1.0','Cortos','Texto','abc','2026-01-01',NOW(3),(SELECT id FROM (SELECT id FROM users ORDER BY id LIMIT 1) uu),NOW(3));" RECHAZO
 probar "vigencia que termina antes de empezar" \
- "INSERT INTO terms_versions (uuid,audience,code,version,title,body,content_sha256,effective_from,effective_to,created_at) VALUES (UUID(),'creator','otros_terminos','1.0','Imposibles','Texto',REPEAT('e',64),'2026-05-01','2026-01-01',NOW(3));" RECHAZO
+ "INSERT INTO terms_versions (uuid,audience,code,version,title,body,content_sha256,effective_from,effective_to,published_at,published_by_user_id,created_at) VALUES (UUID(),'creator','otros_terminos','1.0','Imposibles','Texto',REPEAT('e',64),'2026-05-01','2026-01-01',NOW(3),(SELECT id FROM (SELECT id FROM users ORDER BY id LIMIT 1) uu),NOW(3));" RECHAZO
 probar "publico inventado" \
- "INSERT INTO terms_versions (uuid,audience,code,version,title,body,content_sha256,effective_from,created_at) VALUES (UUID(),'proveedor','proveedor_terminos','1.0','Ajenos','Texto',REPEAT('e',64),'2026-01-01',NOW(3));" RECHAZO
+ "INSERT INTO terms_versions (uuid,audience,code,version,title,body,content_sha256,effective_from,published_at,published_by_user_id,created_at) VALUES (UUID(),'proveedor','proveedor_terminos','1.0','Ajenos','Texto',REPEAT('e',64),'2026-01-01',NOW(3),(SELECT id FROM (SELECT id FROM users ORDER BY id LIMIT 1) uu),NOW(3));" RECHAZO
 
 echo ""
 echo "--- Aceptaciones: 'acepto' no es la palabra de quien teclea ---"

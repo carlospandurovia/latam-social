@@ -6,8 +6,11 @@ namespace App\Modules\Content\Providers;
 
 use App\Modules\Content\Console\VigilarPermanenciaCommand;
 use App\Modules\Content\Listeners\GenerarEntregables;
+use App\Shared\Auth\Permisos;
 use App\Shared\Eventos\EventoOcurrido;
+use App\Shared\Files\Vigilante;
 use Illuminate\Console\Scheduling\Schedule;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
 
@@ -41,6 +44,47 @@ final class ContentServiceProvider extends ServiceProvider
     public function boot(): void
     {
         Event::listen(EventoOcurrido::class, GenerarEntregables::class);
+
+        // 9.15: los dos archivos de contenido. **Ninguno de los dos es
+        // sensible**: se abren decenas de veces al dia --revisar una pieza es
+        // mirarla-- y anotar cada apertura convertiria la bitacora en ruido que
+        // nadie lee. Lo que se mira aqui es de quien son, no cuantas veces.
+
+        // Lo que el creador entrega. Lo ve quien revisa entregables, y **el
+        // creador que lo entrego**: es su trabajo.
+        Vigilante::regla('deliverable', static function (object $archivo, int $usuarioId): bool {
+            if (Permisos::tiene($usuarioId, 'content.deliverable.view')) {
+                return true;
+            }
+
+            return DB::table('deliverable_versions as dv')
+                ->join('deliverables as d', 'd.id', '=', 'dv.deliverable_id')
+                ->join('campaign_creators as cc', 'cc.id', '=', 'd.campaign_creator_id')
+                ->join('creators as c', 'c.id', '=', 'cc.creator_id')
+                ->where('dv.file_id', $archivo->id)
+                ->where('c.user_id', $usuarioId)
+                ->exists();
+        });
+
+        // La captura que prueba que el post existe. La ve quien verifica, quien
+        // ve finanzas --de esto depende un pago-- y **el creador del post**: si
+        // se le rechaza por lo que se ve en la captura, tiene que poder verla.
+        Vigilante::regla('publication_evidence', static function (object $archivo, int $usuarioId): bool {
+            if (Permisos::tiene($usuarioId, 'content.verify')
+                || Permisos::tiene($usuarioId, 'content.deliverable.view')
+                || Permisos::tiene($usuarioId, 'finance.view')) {
+                return true;
+            }
+
+            return DB::table('publication_evidence as pe')
+                ->join('publications as p', 'p.id', '=', 'pe.publication_id')
+                ->join('deliverables as d', 'd.id', '=', 'p.deliverable_id')
+                ->join('campaign_creators as cc', 'cc.id', '=', 'd.campaign_creator_id')
+                ->join('creators as c', 'c.id', '=', 'cc.creator_id')
+                ->where('pe.file_id', $archivo->id)
+                ->where('c.user_id', $usuarioId)
+                ->exists();
+        });
 
         if (!$this->app->runningInConsole()) {
             return;

@@ -20,6 +20,14 @@ recuperar.usar          # abrir el enlace, con throttle:20,1
 recuperar.formulario    # elegir la contrasena nueva
 recuperar.fijar         # guardarla, con throttle:10,1
 
+# --- La marca, antes de entrar (9.17) -------------------------------------
+#
+# El logotipo sale en la pantalla de acceso, que la ve quien no ha entrado. No
+# hay permiso que exigir. Lo que las protege es que NO aceptan identificador:
+# sirven el logotipo y el favicon de la marca por defecto y nada mas.
+marca.logo              # el logotipo de la marca por defecto
+marca.favicon           # y el icono de la pestana; si no hay, se sirve el logotipo
+
 # --- Dentro, pero sin permiso: son de CUALQUIER autenticado ---------------
 salir                   # cerrar sesion
 panel                   # la portada; lo que enseña depende del permiso, no la ruta (5.9)

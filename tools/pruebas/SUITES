@@ -85,3 +85,12 @@
 # no se pueden limpiar (3.12). Va al final: reusa lo que dejan las anteriores
 # cuando existe.
 9.14-dinero-mudo
+# 9.16 escribe versiones de un documento propio (`t916`) para no tocar los
+# terminos de creador que usan las demas suites. No se limpia: `terms_versions`
+# no admite borrado desde 3.12.
+9.16-terminos
+# 9.17 crea sus propias marcas (`p917`, `p917b`) y las borra: `platform_brands`
+# no es evidencia de nada mientras no cuelgue de ella ninguna sociedad. Aparta
+# la marca por defecto que hubiera y la restituye al final, asi que puede
+# correr contra la base sembrada sin dejarla distinta.
+9.17-marca

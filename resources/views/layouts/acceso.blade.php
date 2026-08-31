@@ -9,25 +9,24 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>@yield('titulo', 'Acceso') · LATAM Social</title>
+  <title>@yield('titulo', 'Acceso') · {{ $marca['nombre'] }}</title>
   {{-- Que el token de un enlace de contraseña no salga de aquí dentro de una
        cabecera `Referer` hacia el dominio de las tipografías. La redirección a
        una URL limpia ya lo evita; esto es el cinturón del cinturón. --}}
   <meta name="referrer" content="same-origin">
-  <link rel="icon" href="{{ asset('img/brand/favicon.svg') }}">
-  <link rel="preconnect" href="https://fonts.bunny.net">
-  <link href="https://fonts.bunny.net/css?family=plus-jakarta-sans:400,500,600,700" rel="stylesheet">
-  @vite('resources/css/app.css')
+  @include('parciales.marca')
 </head>
 <body class="h-full bg-navy font-sans antialiased">
 <div class="min-h-full flex items-center justify-center p-6">
   <div class="w-full max-w-sm">
 
     <div class="flex items-center gap-3 mb-8">
-      <div class="w-11 h-11 rounded-xl degradado-marca"></div>
+      @include('parciales.marca-logo', ['clase' => 'w-11 h-11'])
       <div>
-        <p class="text-white font-bold text-lg leading-tight">LATAM Social</p>
-        <p class="text-slate-400 text-xs">Plataforma de Creator Marketing</p>
+        <p class="text-white font-bold text-lg leading-tight">{{ $marca['nombre'] }}</p>
+        @if ($marca['lema'])
+          <p class="text-slate-400 text-xs">{{ $marca['lema'] }}</p>
+        @endif
       </div>
     </div>
 
@@ -35,9 +34,12 @@
       @yield('contenido')
     </div>
 
-    <p class="mt-6 text-center text-xs text-slate-500">
-      Soluciones Tecnológicas a Medida S.A.C. · RUC 20603203896
-    </p>
+    {{-- 9.17: el pie legal venia escrito aqui con la razon social y el RUC.
+         Ahora sale de la marca, y si no hay ninguno no sale nada: inventar un
+         pie legal es peor que no ponerlo. La pantalla de la marca lo avisa. --}}
+    @if ($marca['pieLegal'])
+      <p class="mt-6 text-center text-xs text-slate-500">{{ $marca['pieLegal'] }}</p>
+    @endif
   </div>
 </div>
 </body>

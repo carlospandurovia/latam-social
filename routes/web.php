@@ -17,10 +17,13 @@ use App\Modules\Content\Http\Controllers\MisEntregasController;
 use App\Modules\Content\Http\Controllers\PermanenciaController;
 use App\Modules\Content\Http\Controllers\RevisionController;
 use App\Modules\Content\Http\Controllers\VerificacionController;
+use App\Modules\Core\Http\Controllers\ArchivosController;
 use App\Modules\Core\Http\Controllers\BitacoraController;
 use App\Modules\Core\Http\Controllers\CatalogosController;
 use App\Modules\Core\Http\Controllers\EntidadesLegalesController;
+use App\Modules\Core\Http\Controllers\MarcaController;
 use App\Modules\Core\Http\Controllers\PanelController;
+use App\Modules\Core\Http\Controllers\TerminosController;
 use App\Modules\Core\Http\Controllers\TiposDeCambioController;
 use App\Modules\Creator\Http\Controllers\ActivacionController;
 use App\Modules\Creator\Http\Controllers\CreadoresController;
@@ -83,6 +86,19 @@ Route::get('/contrasena/nueva', [RecuperacionController::class, 'formulario'])
 Route::post('/contrasena/nueva', [RecuperacionController::class, 'fijar'])
     ->middleware('throttle:10,1')
     ->name('recuperar.fijar');
+
+// ---- La marca, para quien todavia no ha entrado (`9.17`) --------------------
+//
+// Sin `auth` y sin `permiso:`, y no es un descuido: la pantalla de acceso la ve
+// quien NO ha entrado, y es donde mas se nota la marca. Ponerle `file.view`
+// dejaria el logotipo fuera de la unica pantalla que ve todo el mundo.
+//
+// Lo que las hace seguras no es un permiso: es que **no aceptan un
+// identificador**. Sirven el logotipo y el favicon de la marca por defecto y
+// nada mas; por aqui no se puede pedir otro archivo. Comparar con
+// `/archivos/{uuid}` de 9.15, que si lo acepta y por eso lleva dos cerraduras.
+Route::get('/marca/logo', [MarcaController::class, 'logo'])->name('marca.logo');
+Route::get('/marca/favicon', [MarcaController::class, 'favicon'])->name('marca.favicon');
 
 // ---- La invitacion del creador (`7.6`) --------------------------------------
 //
@@ -689,6 +705,63 @@ Route::middleware('auth')->group(function (): void {
         ->middleware('permiso:campaign.view_margin')
         ->whereUuid('uuid')
         ->name('rentabilidad.show');
+
+    // 9.15 -- La unica puerta por la que sale un archivo.
+    //
+    // Dos escalones. `file.view` deja pasar a quien tiene cuenta y rol interno o
+    // de creador --sin el, esta ruta se quedaria fuera del muro de `9.14b`-- y
+    // **de que archivo se trata lo decide el `Vigilante`**, con la regla que
+    // registro el modulo dueño de esa clase de archivo. Sin el segundo escalon,
+    // cualquier creador abriria el documento de identidad de otro.
+    Route::get('/archivos/{uuid}', ArchivosController::class)
+        ->middleware('permiso:file.view')
+        ->whereUuid('uuid')
+        ->name('archivos.ver');
+
+    // 9.16 -- Los terminos, desde el admin. `legal_entity.manage` es el
+    // permiso de quien configura la plataforma, que es exactamente esto.
+    //
+    // El texto NO se edita desde aqui cuando ya esta publicado: lo impide
+    // `tg_terms_inmutable` en la base, no la pantalla.
+    Route::get('/terminos', [TerminosController::class, 'index'])
+        ->middleware('permiso:legal_entity.manage')
+        ->name('terminos.index');
+
+    Route::post('/terminos', [TerminosController::class, 'store'])
+        ->middleware('permiso:legal_entity.manage')
+        ->name('terminos.store');
+
+    Route::get('/terminos/{uuid}', [TerminosController::class, 'show'])
+        ->middleware('permiso:legal_entity.manage')
+        ->whereUuid('uuid')
+        ->name('terminos.show');
+
+    Route::put('/terminos/{uuid}', [TerminosController::class, 'update'])
+        ->middleware('permiso:legal_entity.manage')
+        ->whereUuid('uuid')
+        ->name('terminos.update');
+
+    Route::post('/terminos/{uuid}/publicar', [TerminosController::class, 'publicar'])
+        ->middleware('permiso:legal_entity.manage')
+        ->whereUuid('uuid')
+        ->name('terminos.publicar');
+
+    Route::post('/terminos/{uuid}/revision', [TerminosController::class, 'revision'])
+        ->middleware('permiso:legal_entity.manage')
+        ->whereUuid('uuid')
+        ->name('terminos.revision');
+
+    // 9.17 -- La identidad de la plataforma. Permiso PROPIO y no
+    // `legal_entity.manage`: quien da de alta sociedades no tiene por que poder
+    // cambiar lo que ve todo el mundo en todas las pantallas, incluida la de
+    // acceso. Son dos trabajos distintos aunque hoy los haga la misma persona.
+    Route::get('/marca', [MarcaController::class, 'index'])
+        ->middleware('permiso:brand.manage')
+        ->name('marca.index');
+
+    Route::put('/marca', [MarcaController::class, 'update'])
+        ->middleware('permiso:brand.manage')
+        ->name('marca.update');
 
     // 9.10a -- El gasto de una campana. La pantalla cuelga de la campana pero el
     // controlador vive en Finance: `campaign_costs` es una tabla de finanzas y

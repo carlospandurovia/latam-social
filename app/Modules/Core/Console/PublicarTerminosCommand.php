@@ -41,7 +41,8 @@ final class PublicarTerminosCommand extends Command
         {--titulo= : Titulo legible}
         {--archivo= : Ruta al texto integro (md, txt o html)}
         {--publico=creator : creator o client}
-        {--desde= : Fecha de entrada en vigor (por defecto, hoy)}';
+        {--desde= : Fecha de entrada en vigor (por defecto, hoy)}
+        {--por= : Correo de quien publica (por defecto, el primer administrador)}';
 
     protected $description = 'Publica una version de los terminos y cierra la anterior.';
 
@@ -146,7 +147,23 @@ final class PublicarTerminosCommand extends Command
             return self::FAILURE;
         }
 
-        DB::transaction(function () use ($codigo, $version, $publico, $texto, $desde, $titulo, $vigente): void {
+        // Publicar es un acto con responsable (`ck_terms_publicada`, 9.16). En
+        // consola no hay sesion, asi que se dice quien o se toma el primer
+        // administrador --y si no hay ninguno, se dice, en vez de escribir una
+        // fila que la base va a rechazar con un 3819 que no explica nada--.
+        $responsable = self::responsable(self::texto($this->option('por')));
+
+        if ($responsable === null) {
+            $this->error('No se pudo determinar quien publica.');
+            $this->line('');
+            $this->line('  Use --por=correo@dominio, o cree antes el usuario administrador:');
+            $this->line('    php artisan usuarios:crear');
+
+            return self::FAILURE;
+        }
+
+        DB::transaction(function () use ($codigo, $version, $publico, $texto, $desde, $titulo,
+            $vigente, $responsable): void {
             if ($vigente !== null) {
                 // EL DIA ANTES, no el mismo dia.
                 //
@@ -180,7 +197,14 @@ final class PublicarTerminosCommand extends Command
                 'body' => $texto,
                 'content_sha256' => hash('sha256', $texto),
                 'effective_from' => $desde,
-                'published_by_user_id' => null,
+                // 9.16: `published_at` y el responsable. Sin ellos la fila seria
+                // un BORRADOR --y un borrador no es la version vigente-- asi que
+                // el comando habria dicho «publicada» sobre algo que no rige.
+                'published_at' => now(),
+                'published_by_user_id' => $responsable,
+                'review_status' => 'sin_revisar',
+                'change_type' => $vigente === null ? null : 'fondo',
+                'supersedes_version_id' => $vigente?->id,
                 'created_at' => now(),
                 'updated_at' => now(),
             ]);
@@ -195,6 +219,25 @@ final class PublicarTerminosCommand extends Command
     }
 
     /** Normaliza lo que devuelven `argument()` y `option()` a una cadena. */
+    /** Quien publica: el que se diga, o el primer administrador que haya. */
+    private static function responsable(string $correo): ?int
+    {
+        if ($correo !== '') {
+            $id = DB::table('users')->where('email', $correo)->value('id');
+
+            return $id === null ? null : (int) $id;
+        }
+
+        $admin = DB::table('users as u')
+            ->join('role_user as ru', 'ru.user_id', '=', 'u.id')
+            ->join('roles as r', 'r.id', '=', 'ru.role_id')
+            ->where('r.code', 'admin')
+            ->orderBy('u.id')
+            ->value('u.id');
+
+        return $admin === null ? null : (int) $admin;
+    }
+
     private static function texto(mixed $valor): string
     {
         return is_string($valor) ? trim($valor) : '';

@@ -56,6 +56,10 @@ final class MuroTest extends TestCase
     private const CREADOR_PUEDE = [
         'entregas.mias', 'entregas.ver', 'entregas.entregar', 'entregas.publicar',
         'ingresos.mios',
+        // 9.15: puede PEDIR un archivo. Que solo abra los suyos no lo prueba
+        // este barrido --aqui se mira quien entra por la puerta, no que hay
+        // detras-- sino `ArchivosTest`, que es donde vive esa frontera.
+        'archivos.ver',
     ];
 
     /** El portal del cliente no existe todavía: entra por enlace firmado. */
@@ -77,6 +81,11 @@ final class MuroTest extends TestCase
         'invitacion.preguntar', 'invitacion.gracias', 'invitacion.caducada',
         'aprobacion.ver', 'aprobacion.pieza', 'aprobacion.responder',
         'aprobacion.gracias', 'aprobacion.caducada',
+        // 9.17: el logotipo y el favicon de la plataforma. Sin permiso porque
+        // salen en la pantalla de acceso, que la ve quien no ha entrado. Lo que
+        // las protege es que NO aceptan identificador: sirven los dos archivos
+        // de la marca por defecto y nada mas.
+        'marca.logo', 'marca.favicon',
     ];
 
     protected function setUp(): void

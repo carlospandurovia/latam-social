@@ -9,19 +9,54 @@ CREATE TABLE platform_brands (
   uuid          CHAR(36)      NOT NULL,
   code          VARCHAR(30)   NOT NULL,
   name          VARCHAR(120)  NOT NULL,
+  -- 9.17: la frase corta bajo el nombre. La pantalla de acceso la tenia escrita.
+  tagline       VARCHAR(160)  NULL,
   legal_footer  VARCHAR(255)  NULL,
   logo_file_id  BIGINT UNSIGNED NULL,
+  -- 9.17: el icono de la pestana es 32x32 y el logotipo no lo es. Escalar un
+  -- logotipo apaisado a un cuadrado da un borron, asi que son dos archivos.
+  favicon_file_id BIGINT UNSIGNED NULL,
   primary_color CHAR(7)       NULL,
+  -- 9.17: el degradado de la marca usa dos colores y solo uno era configurable.
+  secondary_color CHAR(7)     NULL,
+  -- 9.17: el azul de la barra lateral es el color que mas superficie ocupa en
+  -- toda la aplicacion y no era configurable en absoluto.
+  sidebar_color CHAR(7)       NULL,
+  -- 9.17: la tipografia estaba escrita en la plantilla, con su enlace al
+  -- servidor de fuentes. Quien pone su marca pone su letra.
+  font_family   VARCHAR(80)   NULL,
   website       VARCHAR(255)  NULL,
   support_email VARCHAR(255)  NULL,
   is_active     TINYINT(1)    NOT NULL DEFAULT 1,
+  -- 9.17: cual es LA marca de la plataforma. Sin esto habia que adivinarla con
+  -- el id mas bajo, que es lo que hacia el alta de sociedades.
+  is_default    TINYINT(1)    NOT NULL DEFAULT 0,
   created_at    DATETIME(3)   NULL,
   updated_at    DATETIME(3)   NULL,
+  -- 9.17: la puerta. Vale 1 cuando es la de por defecto y NULL cuando no; el
+  -- unico de abajo deja pasar una sola. Dos marcas por defecto no es un estado
+  -- raro que se detecte tarde: es media aplicacion ensenando otro nombre.
+  default_gate  TINYINT UNSIGNED GENERATED ALWAYS AS (CASE WHEN is_default = 1 THEN 1 ELSE NULL END) STORED,
   UNIQUE KEY uq_pb_uuid (uuid),
   UNIQUE KEY uq_pb_code (code),
+  UNIQUE KEY uq_pb_default (default_gate),
   KEY ix_pb_logo (logo_file_id),
+  KEY ix_pb_favicon (favicon_file_id),
   CONSTRAINT fk_pb_logo FOREIGN KEY (logo_file_id) REFERENCES files(id) ON DELETE RESTRICT,
-  CONSTRAINT ck_pb_color CHECK (primary_color IS NULL OR primary_color REGEXP '^#[0-9A-Fa-f]{6}$')
+  CONSTRAINT fk_pb_favicon FOREIGN KEY (favicon_file_id) REFERENCES files(id) ON DELETE RESTRICT,
+  CONSTRAINT ck_pb_color CHECK (primary_color IS NULL OR primary_color REGEXP '^#[0-9A-Fa-f]{6}$'),
+  CONSTRAINT ck_pb_color2 CHECK (secondary_color IS NULL OR secondary_color REGEXP '^#[0-9A-Fa-f]{6}$'),
+  CONSTRAINT ck_pb_barra CHECK (sidebar_color IS NULL OR sidebar_color REGEXP '^#[0-9A-Fa-f]{6}$'),
+  -- La tipografia se convierte en una URL y en una regla CSS. Un nombre con
+  -- comillas o con `;` escribe CSS ajeno en TODAS las pantallas: es una
+  -- inyeccion, no una errata.
+  CONSTRAINT ck_pb_tipografia CHECK (font_family IS NULL OR font_family REGEXP '^[A-Za-z0-9 ]{2,80}$'),
+  CONSTRAINT ck_pb_nombre CHECK (TRIM(name) <> ''),
+  CONSTRAINT ck_pb_correo CHECK (support_email IS NULL OR support_email LIKE '%_@_%.__%'),
+  CONSTRAINT ck_pb_web CHECK (website IS NULL OR website LIKE 'http://%' OR website LIKE 'https://%'),
+  -- El unico de arriba impide DOS por defecto; esto impide que la unica este
+  -- desactivada, que es el mismo agujero por el otro lado.
+  CONSTRAINT ck_pb_defecto_activa CHECK (is_default = 0 OR is_active = 1)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ================================ D2 Core: la sociedad que factura
@@ -197,6 +232,21 @@ FOR EACH ROW
 BEGIN
   SIGNAL SQLSTATE '45000'
     SET MESSAGE_TEXT = 'legal_entity_countries no admite borrado: dice que sociedad facturo cada pais y desde cuando.';
+END//
+
+-- 9.17: el `code` es la llave con la que el sembrador encuentra la marca. Si
+-- cambia, el siguiente sembrado no la encuentra y crea otra: el sistema amanece
+-- con dos, `uq_pb_default` deja a la nueva sin ser la de por defecto, y las
+-- pantallas siguen ensenando la vieja mientras alguien edita la nueva. Un fallo
+-- silencioso perfecto. El nombre visible se cambia cuanto se quiera.
+CREATE TRIGGER `tg_pb_code`
+BEFORE UPDATE ON `platform_brands`
+FOR EACH ROW
+BEGIN
+    IF NOT (NEW.`code` <=> OLD.`code`) THEN
+        SIGNAL SQLSTATE '45000'
+          SET MESSAGE_TEXT = 'El codigo de la marca no se cambia: cambie el nombre.';
+    END IF;
 END//
 
 DELIMITER ;

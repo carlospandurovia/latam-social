@@ -1,5 +1,9 @@
 # Insumos para los términos del creador — para revisión jurídica
 
+> **Versión 0.2 — 2026-08-30.** Corregidos dos puntos del §6 que habían quedado
+> viejos: la notificación de `BR-CREATOR-007` **sí** existe desde la iteración
+> 4.13, y el creador ya entra al sistema aunque siga sin aceptar por sí mismo.
+
 > **Qué es este documento y qué no es.**
 >
 > **No son los términos.** No contiene lenguaje contractual y no debe copiarse a
@@ -58,6 +62,7 @@
 |---|---|---|
 | Ante una solicitud de eliminación, **elimina o anonimiza los datos personales pero conserva los registros financieros y fiscales** | `BR-CREATOR-009` | Hay que explicar por qué no se borra todo, y con qué base legal se conservan esos registros |
 | **La aceptación de términos no se borra ni se revoca**: queda con canal, fecha y evidencia | `BR-CREATOR-016` | Que el propio consentimiento es evidencia y sobrevive a la baja |
+| **Avisa al creador por correo** cuando alguien toca sus datos fiscales o su medio de pago, mientras el cambio todavía se puede parar | `BR-CREATOR-007` | Que ese aviso existe y por qué canal llega |
 | Desde `T-16`, **18 tablas rechazan el borrado físico**, incluidas las de aceptaciones, tutela y perfiles fiscales | migración `000650` | Plazos de conservación por tipo de dato |
 
 ## 5. Versionado de los términos — cómo funciona, para que el texto no lo contradiga
@@ -72,9 +77,9 @@
 
 Conviene que el texto no prometa nada de esto:
 
-- **No hay portal del creador todavía.** La aceptación se registra por un canal externo (correo, por ejemplo) con evidencia adjunta, y la captura un operador interno.
+- **El creador no acepta por sí mismo.** Desde `8.1` y `9.8` sí entra al sistema —ve lo que tiene que entregar y ve su dinero— pero la aceptación de términos se sigue registrando por un canal externo (correo, por ejemplo) con evidencia adjunta, y la captura un operador interno.
 - **No hay firma electrónica** con validez reforzada: hay registro de aceptación con evidencia archivada.
-- **No hay notificación automática al creador** de los cambios de sus datos fiscales o medios de pago: `BR-CREATOR-007` la exige y todavía no está construida.
+- **El texto aceptado se guarda pero ninguna pantalla lo muestra.** La de activación enseña el título y la versión vigente, no el articulado. Hay que resolverlo antes de que un creador acepte: aceptar algo que no se puede leer no es aceptar.
 - **No existe anular una aceptación.** Se puede publicar una versión nueva, no deshacer una aceptación.
 
 ## 7. Datos que el texto necesita y que no están en el código

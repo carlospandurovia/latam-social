@@ -264,6 +264,11 @@ final class CimientosSeeder extends Seeder
             // campanas, que son quienes hablan con el cliente y tienen el dato.
             ['client.tax.manage',      'Client',   'Registrar y editar la identidad fiscal del cliente'],
             ['finance.view',           'Finance',  'Ver el ledger y los saldos'],
+            ['file.view',              'Core',     'Pedir un archivo (que archivo, lo decide el Vigilante) (9.15)'],
+            // 9.17: PROPIO y no `legal_entity.manage`. Quien da de alta
+            // sociedades no tiene por que poder cambiar lo que ve todo el mundo
+            // en todas las pantallas, incluida la de acceso. Solo `admin`.
+            ['brand.manage',           'Core',     'Cambiar la identidad de la plataforma: nombre, logotipo y colores (9.17)'],
             ['finance.cost.manage',    'Finance',  'Anotar y anular gastos de campana (9.10a)'],
             ['finance.payout.create',  'Finance',  'Crear lotes de pago'],
             ['finance.payout.approve', 'Finance',  'Aprobar lotes de pago (BR-FIN-005: distinto del creador)'],
@@ -347,7 +352,7 @@ final class CimientosSeeder extends Seeder
                 // cliente empieza siempre por alguien que podia verlo sin
                 // necesitarlo.
                 'campaign.view', 'campaign.manage', 'campaign.invite',
-                'finance.cost.manage',
+                'finance.cost.manage', 'file.view',
                 'content.deliverable.view',
                 'creator.view', 'creator.manage', 'creator.approve',
                 // DEC-060: el mismo rol verifica y activa. El equipo de
@@ -383,7 +388,7 @@ final class CimientosSeeder extends Seeder
                 // de la que sale la tasa. No la credencial: eso es de `admin`.
                 'fx.manage',
                 'finance.view', 'finance.payout.create', 'finance.payout.approve',
-                'finance.invoice.issue', 'finance.cost.manage',
+                'finance.invoice.issue', 'finance.cost.manage', 'file.view',
                 'campaign.view', 'campaign.view_margin',
                 'campaign.approve',
                 // Para pagar hace falta ver la cuenta bancaria. Es el único rol
@@ -408,6 +413,7 @@ final class CimientosSeeder extends Seeder
             // margen-- y quien revisa contenido no tiene por que cargar con
             // ella. `campaign_manager` la tiene.
             'content_reviewer' => [
+                'file.view',
                 'content.review', 'content.approve', 'content.reopen', 'content.deliverable.view',
                 'content.publication.manage', 'content.verify',
                 'campaign.view', 'creator.view', 'catalog.view',
@@ -418,7 +424,10 @@ final class CimientosSeeder extends Seeder
             // 8.1: el rol `creator` deja de estar vacio. Lo unico que le abre es
             // SU pantalla: ver lo que le toca entregar y entregarlo. No hay
             // ningun permiso interno aqui (`BR-SEC-003`).
-            'creator' => ['creator.portal'],
+            // 9.15: el creador puede PEDIR un archivo. Cual --el suyo y solo
+            // el suyo-- lo decide la regla que registro cada modulo, no este
+            // permiso (`BR-SEC-003` sigue intacto: aqui no hay nada interno).
+            'creator' => ['creator.portal', 'file.view'],
         ];
 
         $idsPermiso = DB::table('permissions')->pluck('id', 'code')->all();
@@ -449,17 +458,41 @@ final class CimientosSeeder extends Seeder
         }
 
         // ---- Marca de plataforma y sociedades (iteración 2.10) ----
+        // 9.17: la marca ya no vive en las plantillas, asi que lo que se siembra
+        // aqui es lo que se ve. Son valores DE PARTIDA, no la marca definitiva:
+        // se cambian desde `/marca` sin desplegar nada (DEC-190). El codigo sale
+        // de la configuracion porque es la llave de este `updateOrInsert`, y una
+        // instalacion que quiera otra debe poder ponerla antes del primer
+        // arranque.
+        //
+        // `is_default` la deja marcada. `uq_pb_default` garantiza que solo una
+        // lo este; sin ninguna, `Marca::actual()` tendria que adivinar.
+        //
+        // El logotipo NO se siembra: no hay ningun archivo que subir desde un
+        // sembrador, y por eso la pantalla nace con un aviso rojo que dice
+        // exactamente eso. Es el criterio de DEC-190: falta configuracion, se
+        // avisa con prioridad, no se bloquea nada.
         DB::table('platform_brands')->updateOrInsert(
-            ['code' => 'latam_social'],
+            ['code' => (string) config('latam.marca.codigo', 'latam_social')],
             [
                 'uuid' => (string) Str::uuid(),
                 'name' => 'LATAM Social',
+                'tagline' => 'Plataforma de Creator Marketing',
+                // La linea que estaba escrita a mano al pie de la pantalla de
+                // acceso. Los datos completos de la sociedad estan en
+                // `legal_entities`; esto es solo lo que acompana a la marca.
+                'legal_footer' => 'Soluciones Tecnológicas a Medida S.A.C. · RUC 20603203896',
                 'primary_color' => '#7C3AED',
+                'secondary_color' => '#22D3EE',
+                'sidebar_color' => '#070A2B',
+                'font_family' => 'Plus Jakarta Sans',
                 'is_active' => true,
+                'is_default' => true,
                 'updated_at' => $ahora, 'created_at' => $ahora,
             ],
         );
-        $marcaId = DB::table('platform_brands')->where('code', 'latam_social')->value('id');
+        $marcaId = DB::table('platform_brands')
+            ->where('code', (string) config('latam.marca.codigo', 'latam_social'))->value('id');
 
         $sociedades = [
             [

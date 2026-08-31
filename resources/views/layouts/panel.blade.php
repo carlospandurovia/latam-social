@@ -3,11 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>@yield('titulo', 'Panel') · LATAM Social</title>
-  <link rel="icon" href="{{ asset('img/brand/favicon.svg') }}">
-  <link rel="preconnect" href="https://fonts.bunny.net">
-  <link href="https://fonts.bunny.net/css?family=plus-jakarta-sans:400,500,600,700" rel="stylesheet">
-  @vite('resources/css/app.css')
+  <title>@yield('titulo', 'Panel') · {{ $marca['nombre'] }}</title>
+  @include('parciales.marca')
 </head>
 <body class="h-full bg-slate-50 text-slate-800 font-sans antialiased">
 <div class="min-h-full flex">
@@ -15,8 +12,8 @@
   {{-- Barra lateral --}}
   <aside class="w-64 shrink-0 bg-navy text-slate-300 flex flex-col">
     <div class="h-16 flex items-center gap-3 px-5 border-b border-white/10">
-      <div class="w-8 h-8 rounded-lg degradado-marca"></div>
-      <span class="font-bold text-white tracking-tight">LATAM Social</span>
+      @include('parciales.marca-logo', ['clase' => 'w-8 h-8'])
+      <span class="font-bold text-white tracking-tight">{{ $marca['nombre'] }}</span>
     </div>
 
     <nav class="flex-1 px-3 py-4 space-y-1 text-sm">
@@ -40,9 +37,16 @@
           // 8.7: detrás de Revisión porque es el paso siguiente del mismo
           // trabajo, y con entrada propia porque también se abre para vaciarla.
           ['Verificación', 'verificacion.cola', 'verificacion', 'content.deliverable.view'],
+          // 9.17: la primera de las tres de configuracion, y delante de las
+          // otras dos porque es la que se toca el primer dia: sin marca, la
+          // plataforma se ensena con los valores de partida.
+          ['Marca', 'marca.index', 'marca.', 'brand.manage'],
           // 4.5: la pantalla a la que BR-LE-004 lleva mandando desde 4.1.
           // `legal_entity.manage` es solo de admin, asi que el resto no la ve.
           ['Entidades legales', 'entidades.index', 'entidades', 'legal_entity.manage'],
+          // 9.16: junto a Entidades legales porque las dos son configuracion de
+          // la plataforma y las dos las toca la misma persona.
+          ['Términos', 'terminos.index', 'terminos', 'legal_entity.manage'],
           // 9.2: junto a Entidades legales porque las dos contestan «por que no
           // puedo cobrarle a este» --una por sociedad, otra por moneda-- y las
           // dos se tocan pocas veces al ano.

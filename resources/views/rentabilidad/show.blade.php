@@ -71,6 +71,10 @@
               <p class="text-xs text-slate-500">
                 {{ $tipos[$g->cost_type] ?? $g->cost_type }} ·
                 {{ substr((string) $g->incurred_on, 0, 10) }}
+                @if ($g->file_id)
+                  · <a href="{{ route('archivos.ver', $g->archivo_uuid) }}" target="_blank"
+                       rel="noopener" class="text-marca-700 hover:underline">comprobante</a>
+                @endif
                 @if ($g->voided_at) · anulado: {{ $g->voided_reason }} @endif
               </p>
             </div>

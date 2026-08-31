@@ -299,6 +299,12 @@ trait ConFixturas
             'body' => 'Texto de prueba.',
             'content_sha256' => hash('sha256', 'Texto de prueba.'.$version),
             'effective_from' => $desde,
+            // 9.16: una version sembrada esta PUBLICADA. Sin `published_at` es
+            // un borrador, y un borrador ni rige ni se puede cerrar
+            // (`ck_terms_borrador_abierto`).
+            'published_at' => now(),
+            'published_by_user_id' => $this->usuarioCon('admin')->id,
+            'review_status' => 'revisado',
             'created_at' => now(),
             'updated_at' => now(),
         ]);

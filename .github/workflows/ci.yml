@@ -190,6 +190,12 @@ jobs:
       - name: Que regla de la base no ha contestado nunca a nadie
         run: python3 tools/verificar-cobertura-sql.py
 
+      # 9.14: 23 de las 145 rutas no exigen ningun permiso. Casi todas estan
+      # bien; lo que no habia era forma de distinguir «publica a proposito» de
+      # «se le olvido el middleware», que es literalmente lo que paso en `5.9`.
+      - name: Toda ruta sin permiso esta escrita y con su motivo
+        run: python3 tools/verificar-muro.py
+
       - name: La aritmetica de vigencias vive en un solo sitio
         run: php tools/verificar-vigencias.php
 

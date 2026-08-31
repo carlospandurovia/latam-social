@@ -56,26 +56,55 @@ CREATE TABLE terms_versions (
   effective_from     DATE          NOT NULL,
   -- NULL = es la vigente. Publicar la siguiente cierra esta.
   effective_to       DATE          NULL,
+  -- 9.16: NULL = borrador. Un borrador se edita libremente; una publicada se
+  -- congela porque hay aceptaciones que apuntan a ella con su huella.
+  published_at       DATETIME(3)   NULL,
   published_by_user_id BIGINT UNSIGNED NULL,
+  -- 9.16: si un abogado ha mirado este texto. Es un DATO, no una puerta: el
+  -- sistema arranca con un texto de partida que dice que no esta revisado.
+  review_status      VARCHAR(20)   NOT NULL DEFAULT 'sin_revisar',
+  review_note        VARCHAR(255)  NULL,
+  -- 9.16: 'fondo' obliga a todos a reaceptar; 'menor' --una errata, un
+  -- telefono-- deja valida la aceptacion anterior. Lo declara una persona al
+  -- publicar y queda escrito quien fue.
+  change_type        VARCHAR(10)   NULL,
+  supersedes_version_id BIGINT UNSIGNED NULL,
   created_at         DATETIME(3)   NULL,
   updated_at         DATETIME(3)   NULL,
   -- Una sola version vigente por documento. Misma tecnica que el resto del
   -- modelo: la puerta vale NULL cuando la fila deja de contar, y una fila con
   -- NULL no colisiona en un indice unico.
+  --
+  -- 9.16: y PUBLICADA. Antes «vigente» era `effective_to IS NULL`, y eso
+  -- incluia a los borradores: con una version publicada no se podia ni guardar
+  -- un borrador.
   current_gate TINYINT UNSIGNED
-    GENERATED ALWAYS AS (CASE WHEN effective_to IS NULL THEN 1 ELSE NULL END) STORED,
+    GENERATED ALWAYS AS (CASE WHEN effective_to IS NULL AND published_at IS NOT NULL
+                         THEN 1 ELSE NULL END) STORED,
   UNIQUE KEY uq_terms_versions_uuid (uuid),
   UNIQUE KEY uq_terms_versions_version (code, version),
   UNIQUE KEY uq_terms_versions_current (current_gate, code),
   KEY ix_terms_versions_audience (audience, effective_from),
   KEY ix_terms_versions_file (document_file_id),
   KEY ix_terms_versions_publisher (published_by_user_id),
+  KEY ix_terms_supersedes (supersedes_version_id),
   CONSTRAINT fk_terms_versions_file FOREIGN KEY (document_file_id) REFERENCES files(id) ON DELETE RESTRICT,
   CONSTRAINT fk_terms_versions_publisher FOREIGN KEY (published_by_user_id) REFERENCES users(id) ON DELETE RESTRICT,
+  -- Las foraneas van TODAS antes que los CHECK, y no es cosmetica: el generador
+  -- de `generado/*-sin-check.sql` quita las lineas `ck_` y arregla la coma de la
+  -- ultima que quede. Una foranea colocada DESPUES de un CHECK se queda sin la
+  -- coma que la precede y el archivo generado no compila.
+  CONSTRAINT fk_terms_supersedes FOREIGN KEY (supersedes_version_id) REFERENCES terms_versions(id) ON DELETE RESTRICT,
   CONSTRAINT ck_terms_versions_audience CHECK (audience IN ('creator','client')),
   CONSTRAINT ck_terms_versions_content CHECK (body IS NOT NULL OR document_file_id IS NOT NULL),
   CONSTRAINT ck_terms_versions_hash CHECK (CHAR_LENGTH(content_sha256) = 64),
-  CONSTRAINT ck_terms_versions_dates CHECK (effective_to IS NULL OR effective_to >= effective_from)
+  CONSTRAINT ck_terms_versions_dates CHECK (effective_to IS NULL OR effective_to >= effective_from),
+  CONSTRAINT ck_terms_review CHECK (review_status IN ('sin_revisar','en_revision','revisado')),
+  CONSTRAINT ck_terms_change_type CHECK (change_type IS NULL OR change_type IN ('fondo','menor')),
+  -- Publicar es un acto con responsable.
+  CONSTRAINT ck_terms_publicada CHECK (published_at IS NULL OR published_by_user_id IS NOT NULL),
+  -- Un borrador no se cierra: nunca llego a estar vigente.
+  CONSTRAINT ck_terms_borrador_abierto CHECK (published_at IS NOT NULL OR effective_to IS NULL)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ============================================== D3 Creator: la solicitud
@@ -524,15 +553,44 @@ DELIMITER ;
 
 DELIMITER //
 
+-- 9.16: una version publicada no se reescribe. Hay aceptaciones que apuntan a
+-- ella con su huella; cambiarle el texto por debajo dejaria esas firmas
+-- apuntando a algo que ya no dice lo que decia. Lo que SI se puede tocar es
+-- cerrarla y su estado de revision legal, que es informacion sobre el texto.
+CREATE TRIGGER `tg_terms_inmutable`
+BEFORE UPDATE ON `terms_versions`
+FOR EACH ROW
+BEGIN
+    IF OLD.`published_at` IS NOT NULL THEN
+        IF NOT (NEW.`body` <=> OLD.`body`)
+           OR NOT (NEW.`content_sha256` <=> OLD.`content_sha256`)
+           OR NOT (NEW.`code` <=> OLD.`code`)
+           OR NOT (NEW.`version` <=> OLD.`version`)
+           OR NOT (NEW.`audience` <=> OLD.`audience`)
+           OR NOT (NEW.`effective_from` <=> OLD.`effective_from`)
+           OR NOT (NEW.`change_type` <=> OLD.`change_type`) THEN
+            SIGNAL SQLSTATE '45000'
+              SET MESSAGE_TEXT = 'Una version publicada no se reescribe: cree la siguiente.';
+        END IF;
+
+        IF NEW.`published_at` IS NULL THEN
+            SIGNAL SQLSTATE '45000'
+              SET MESSAGE_TEXT = 'Una version publicada no vuelve a ser borrador.';
+        END IF;
+    END IF;
+END//
+
 CREATE TRIGGER `tg_tver_sin_solape_ins`
 BEFORE INSERT ON `terms_versions`
 FOR EACH ROW
 BEGIN
-    IF EXISTS (
+    IF (NEW.`published_at` IS NOT NULL)
+       AND EXISTS (
         SELECT 1 FROM `terms_versions`
          WHERE `code` <=> NEW.`code`
            AND NEW.`effective_from` <= IFNULL(`effective_to`, '9999-12-31')
            AND `effective_from` <= IFNULL(NEW.`effective_to`, '9999-12-31')
+           AND (published_at IS NOT NULL)
     ) THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Ya hay una version de esos terminos vigente en esas fechas: cierre la anterior el dia antes.';
     END IF;
@@ -542,12 +600,14 @@ CREATE TRIGGER `tg_tver_sin_solape_upd`
 BEFORE UPDATE ON `terms_versions`
 FOR EACH ROW
 BEGIN
-    IF EXISTS (
+    IF (NEW.`published_at` IS NOT NULL)
+       AND EXISTS (
         SELECT 1 FROM `terms_versions`
          WHERE `id` <> NEW.`id`
            AND `code` <=> NEW.`code`
            AND NEW.`effective_from` <= IFNULL(`effective_to`, '9999-12-31')
            AND `effective_from` <= IFNULL(NEW.`effective_to`, '9999-12-31')
+           AND (published_at IS NOT NULL)
     ) THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Ya hay una version de esos terminos vigente en esas fechas: cierre la anterior el dia antes.';
     END IF;

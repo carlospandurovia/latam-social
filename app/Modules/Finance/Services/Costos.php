@@ -156,11 +156,16 @@ final class Costos
         return DB::table('campaign_costs as cc')
             ->leftJoin('users as u', 'u.id', '=', 'cc.created_by_user_id')
             ->leftJoin('users as v', 'v.id', '=', 'cc.voided_by_user_id')
+            // 9.15: el uuid del comprobante, para poder enlazarlo. La ruta va
+            // por uuid y no por id: un id correlativo en una URL invita a probar
+            // el siguiente, y aunque el `Vigilante` lo pararia, la mejor puerta
+            // es la que ni siquiera se puede enumerar.
+            ->leftJoin('files as f', 'f.id', '=', 'cc.file_id')
             ->where('cc.campaign_id', $campanaId)
             ->orderByDesc('cc.incurred_on')->orderByDesc('cc.id')
             ->get(['cc.id', 'cc.cost_type', 'cc.description', 'cc.amount', 'cc.currency_code',
                 'cc.incurred_on', 'cc.file_id', 'cc.voided_at', 'cc.voided_reason',
-                'u.name as autor', 'v.name as anulador']);
+                'u.name as autor', 'v.name as anulador', 'f.uuid as archivo_uuid']);
     }
 
     /**

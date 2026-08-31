@@ -37,9 +37,13 @@ INSERT INTO files (uuid,disk,path,original_name,mime_type,size_bytes,checksum_sh
 
 -- 3.5 / DEC-059: los terminos vigentes. `effective_to IS NULL` es lo que los
 -- hace los vigentes; publicar los siguientes cierra estos.
-INSERT INTO terms_versions (uuid,audience,code,version,title,body,content_sha256,effective_from,created_at)
+-- 9.16: PUBLICADA, con su responsable. Una fila sin `published_at` es un
+-- borrador: no rige, no solapa con nada y no se puede cerrar.
+INSERT INTO terms_versions (uuid,audience,code,version,title,body,content_sha256,effective_from,
+   published_at,published_by_user_id,review_status,created_at)
  VALUES (UUID(),'creator','creator_terms','2026.1','Terminos del creador',
-   'Texto de prueba de los terminos del creador.',REPEAT('d',64),'2026-01-01',NOW(3));
+   'Texto de prueba de los terminos del creador.',REPEAT('d',64),'2026-01-01',
+   NOW(3),(SELECT id FROM (SELECT id FROM users ORDER BY id LIMIT 1) u),'revisado',NOW(3));
 
 INSERT INTO platform_brands (uuid,code,name,is_active,created_at) VALUES
  (UUID(),'LATAM','LATAM Social',1,NOW(3));

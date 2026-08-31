@@ -1,5 +1,12 @@
 # 09 — Estado del proyecto y siguiente iteración
 
+> **Versión 5.0 — 2026-08-30.** Cambia el criterio, no sólo el estado. `DEC-190`
+> fija que **la plataforma es white label y todo se configura desde el admin**: lo
+> que el código aporta es la regla, el valor sale de la configuración. Con eso,
+> `9.16` deja los términos editables y el sistema **arranca operable**. Y 21
+> preguntas de negocio quedaron respondidas: de 38 abiertas a 17, y de 4 bloqueos
+> a 1.
+>
 > **Versión 4.2 — 2026-08-30.** Actualizado al cerrar `9.14b`, la auditoría de
 > seguridad. **Las 145 rutas, pedidas por tres roles de fuera: el muro aguanta.**
 > Las 23 que no exigen permiso quedan escritas con su motivo. Y salió `T-67`: los
@@ -132,11 +139,11 @@
 |---|---|
 | Tablas | 74 · **27 columnas puerta**, contadas y no heredadas (`T-57`) |
 | Migraciones | 64, verdes desde cero en MySQL 8 y con vuelta atrás completa |
-| Pruebas de PHPUnit | **835**, 3.041 aserciones |
-| Aserciones de restricción (SQL) | **1.868** en MariaDB, **1.858** en MySQL 8 · 37 suites |
+| Pruebas de PHPUnit | **853**, 3.096 aserciones |
+| Aserciones de restricción (SQL) | **1.900** en MariaDB, **1.890** en MySQL 8 · 38 suites |
 | Puertas de calidad | **7**: formato, análisis estático, fronteras, pruebas, vigencias, nombres entre capas y **las suites** (8.11) |
 | Verificadores fuera de PHPUnit | 6: fixturas, periodos, nombres entre capas, mensajes de la base, reglas que nadie ha preguntado y **el muro de rutas** (nuevos en 9.14 y 9.14b) |
-| Decisiones registradas | hasta `DEC-189` |
+| Decisiones registradas | hasta `DEC-195` · 196 en total, 37 sin firma formal |
 
 ### Lo que se puede hacer hoy por pantalla
 
@@ -349,25 +356,24 @@ Ninguna bloquea código hoy; todas bloquean una iteración futura concreta.
 
 ## 4. Lo que propongo como siguiente iteración
 
-**`T-67` — que los archivos se puedan ver.** Es lo que dejó la auditoría, y es
-la más urgente de las que quedan: `Almacen` guarda documentos de identidad,
-evidencias de publicación, comprobantes de pago y de gasto, y **no hay ni una
-ruta que devuelva un archivo**. La pantalla de conciliación acepta el comprobante
-y la de gastos dice «con comprobante», y no se puede abrir desde ningún sitio.
-Una evidencia que nadie puede mirar no es una evidencia — y la primera vez que
-haga falta será justo cuando alguien discuta un pago.
+**`9.17` — la identidad de la plataforma, configurable.** Es lo que pide
+`DEC-190` y lo que hoy sigue quemado: razón social, RUC, representante legal,
+dirección, ubigeo, y las credenciales de cada API. Con ello viene **el panel
+general de configuración con badges de prioridad**, que es la forma de no volver
+a llamar «bloqueo» a una configuración vacía.
 
-Antes de construirlo hay una pregunta tuya: **quién puede ver qué archivo**. El
-creador el suyo y finanzas los comprobantes de pago parece claro; el documento de
-identidad de un creador, no tanto.
+Detrás, y ya sin nadie bloqueando:
 
-Alternativas, las dos medibles y sin bloqueo:
+| | Qué | Por qué ahora |
+|---|---|---|
+| `9.18` | Retención sobre el neto pactado y umbral de rentabilidad | `Q-40` respondida: 29,5% configurable (`DEC-191`) |
+| `9.19` | Reaceptación de términos con plazo y solo lectura | `Q-46` respondida (`DEC-193`) |
+| `9.9` | Facturación electrónica **directa con SUNAT** y monitor de documentos | `Q-03`/`Q-44` respondidas (`DEC-192`) |
+| `T-67` | Que los archivos se puedan ver | Lo dejó la auditoría de `9.14b` |
 
-- **`T-65`**: las 147 reglas que siguen sin que nadie les pregunte nada. La
-  concentración está en `invoices` (12), `creator_tax_profiles` (9) y
-  `creator_payment_methods` (7).
-- **`T-66`**: los mensajes genéricos de la Fase 2. En Percona, «Restriccion
-  ck_ledger_sign incumplida» es literalmente lo que ve el usuario.
+**Lo que sigue esperando a alguien** ya no es un bloqueo del sistema, sino
+calidad del texto: `T-09` — que un abogado revise los términos base. La pantalla
+lo marca en rojo mientras tanto y el sistema funciona igual.
 
 ## 5. Deuda de documentación reconocida
 

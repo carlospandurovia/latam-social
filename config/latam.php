@@ -75,6 +75,22 @@ return [
         'ventana_dias' => (int) env('LATAM_SALTO_VENTANA_DIAS', 30),
     ],
 
+    /*
+     * La marca de la plataforma (iteración 9.17).
+     *
+     * Aquí SOLO va el código con el que se busca la fila, no lo que se enseña.
+     * El nombre, el logotipo y los colores viven en `platform_brands` y se
+     * cambian desde el admin: ponerlos aquí sería volver a exigir un despliegue
+     * para cambiar un nombre, que es justo lo que 9.17 quita.
+     *
+     * El código está aquí y no escrito en el servicio porque es la llave del
+     * sembrador, y una instalación que quiera llamarla de otra forma debe poder
+     * hacerlo antes del primer arranque sin tocar código.
+     */
+    'marca' => [
+        'codigo' => env('LATAM_MARCA_CODIGO', 'latam_social'),
+    ],
+
     'terminos' => [
         'creador' => env('LATAM_TERMS_CREATOR_CODE', 'creator_terms'),
     ],

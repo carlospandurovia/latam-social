@@ -3,14 +3,15 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Sin permiso · LATAM Social</title>
-  <link rel="icon" href="{{ asset('img/brand/favicon.svg') }}">
-  @vite('resources/css/app.css')
+  <title>Sin permiso · {{ $marca['nombre'] }}</title>
+  @include('parciales.marca')
 </head>
 <body class="h-full bg-slate-50 font-sans antialiased">
 <div class="min-h-full flex items-center justify-center p-6">
   <div class="w-full max-w-md bg-white rounded-2xl p-8 shadow-xl text-center">
-    <div class="w-12 h-12 rounded-xl degradado-marca mx-auto mb-5"></div>
+    <div class="mx-auto mb-5 w-12 h-12">
+      @include('parciales.marca-logo', ['clase' => 'w-12 h-12'])
+    </div>
 
     <h1 class="text-xl font-semibold text-slate-900 mb-2">No tienes permiso</h1>
 

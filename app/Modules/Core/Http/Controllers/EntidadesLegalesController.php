@@ -6,6 +6,7 @@ namespace App\Modules\Core\Http\Controllers;
 
 use App\Modules\Core\Http\Requests\GuardarEntidadLegalRequest;
 use App\Modules\Core\Services\Cobertura;
+use App\Modules\Core\Services\Marca;
 use App\Shared\Audit\Bitacora;
 use App\Shared\Database\Vigencia;
 use Illuminate\Http\RedirectResponse;
@@ -105,9 +106,12 @@ final class EntidadesLegalesController
 
         DB::table('legal_entities')->insert([
             'uuid' => $uuid,
-            // MVP: una sola marca de plataforma. Cuando haya dos, esto es un
-            // campo del formulario, no un `first()`.
-            'platform_brand_id' => (int) DB::table('platform_brands')->orderBy('id')->value('id'),
+            // 9.17: la marca POR DEFECTO, no «la del id mas bajo». Con una sola
+            // marca daban lo mismo; con dos, el `orderBy('id')` habria colgado
+            // la sociedad nueva de la marca vieja sin que nadie lo pidiera, y
+            // eso sale en el emisor de una factura. Cuando haya dos de verdad,
+            // esto es un campo del formulario.
+            'platform_brand_id' => (int) (Marca::actual()->id ?? 0),
             'code' => $datos['code'],
             'legal_name' => $datos['legal_name'],
             'trade_name' => $datos['trade_name'] ?? null,
