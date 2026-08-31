@@ -6,9 +6,17 @@ namespace App\Modules\Core\Providers;
 
 use App\Modules\Core\Console\PublicarTerminosCommand;
 use App\Modules\Core\Console\TraerTiposDeCambioCommand;
+use App\Modules\Core\Services\Cobertura;
+use App\Modules\Core\Services\CredencialFuente;
+use App\Modules\Core\Services\Decolecta;
 use App\Modules\Core\Services\Marca;
+use App\Modules\Core\Services\Terminos;
+use App\Modules\Core\Services\TraidaDeCambio;
+use App\Shared\Config\Aviso;
+use App\Shared\Config\Preparacion;
 use App\Shared\Files\Vigilante;
 use Illuminate\Console\Scheduling\Schedule;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
 
@@ -68,6 +76,8 @@ final class CoreServiceProvider extends ServiceProvider
         // logotipo es anotar cada carga de cada pantalla.
         Vigilante::regla(Marca::PROPOSITO, static fn (object $archivo, int $usuarioId): bool => $usuarioId > 0);
 
+        $this->registrarPreparacion();
+
         if (!$this->app->runningInConsole()) {
             return;
         }
@@ -91,5 +101,89 @@ final class CoreServiceProvider extends ServiceProvider
                 // en `fx_fetch_runs`, que es lo que la pantalla ensena.
                 ->appendOutputTo(storage_path('logs/planificador.log'));
         });
+    }
+
+    /**
+     * Las cuatro áreas de configuración que son de Core (9.17b).
+     *
+     * Cada una declara **el permiso con el que se arregla**, no el que hace
+     * falta para abrir el panel: si no puedes arreglarlo, no lo ves, y así
+     * ningún aviso lleva a un 403.
+     *
+     * El orden es el del primer día de una instalación: sin marca la
+     * plataforma se enseña con los valores de partida, sin términos no se activa
+     * un creador, sin cobertura no se le puede facturar a un cliente, y los
+     * tipos de cambio se tocan dos veces al año.
+     */
+    private function registrarPreparacion(): void
+    {
+        Preparacion::area('Marca', 'brand.manage', 'marca.index',
+            static fn (): array => Aviso::desdeArrays(Marca::avisos()), orden: 10);
+
+        Preparacion::area('Términos', 'legal_entity.manage', 'terminos.index',
+            static fn (): array => Aviso::desdeArrays(Terminos::avisos()), orden: 20);
+
+        // `BR-LE-004`: un pais con clientes que no puede facturar nadie no es un
+        // detalle de configuracion, es una factura que no se puede emitir. Rojo.
+        //
+        // Y las sociedades sin representante legal en ambar: hoy no rompe nada,
+        // pero es un dato que el comprobante electronico va a pedir (`9.9`), y
+        // enterarse el dia de la primera factura es tarde.
+        Preparacion::area('Entidades legales', 'legal_entity.manage', 'entidades.index',
+            static function (): array {
+                $avisos = [];
+                $descubiertos = Cobertura::paisesDescubiertos(now()->toDateString());
+
+                if ($descubiertos->isNotEmpty()) {
+                    $avisos[] = Aviso::rojo(sprintf(
+                        'Hay %d %s con clientes que hoy no puede facturar ninguna sociedad: %s. '
+                        .'Mientras siga así, a esos clientes no se les puede emitir un comprobante.',
+                        $descubiertos->count(),
+                        $descubiertos->count() === 1 ? 'país' : 'países',
+                        $descubiertos->pluck('name')->implode(', '),
+                    ));
+                }
+
+                $sinRepresentante = DB::table('legal_entities')
+                    ->where('status', 'active')
+                    ->where(fn ($q) => $q->whereNull('legal_representative')
+                        ->orWhere('legal_representative', ''))
+                    ->pluck('code');
+
+                if ($sinRepresentante->isNotEmpty()) {
+                    $avisos[] = Aviso::ambar(sprintf(
+                        'Sin representante legal: %s. Hoy no impide nada; el comprobante '
+                        .'electrónico lo va a pedir.',
+                        $sinRepresentante->implode(', '),
+                    ));
+                }
+
+                return $avisos;
+            }, orden: 30);
+
+        // Las dos preguntas de esta area son distintas y las dos importan: si
+        // HAY credencial --sin ella el cron no trae nada-- y si la ultima
+        // traida hizo algo --con credencial y sin cron, tampoco entra nada--.
+        // `loQueHayQueMirar()` ya contesta la segunda y devuelve `null` cuando
+        // no hay nada que mirar, que es como debe ser: una pantalla que siempre
+        // tiene un aviso es una pantalla cuyos avisos nadie lee.
+        Preparacion::area('Tipos de cambio', 'fx.manage', 'cambio.index',
+            static function (): array {
+                $avisos = [];
+                $fuente = Decolecta::FUENTE;
+
+                if (CredencialFuente::estado($fuente)['origen'] === CredencialFuente::NINGUNA) {
+                    $avisos[] = Aviso::rojo(
+                        'No hay credencial para la fuente oficial de tipos de cambio. Sin ella no '
+                        .'entra ninguna tasa nueva, y convertir con una tasa vieja es convertir mal.',
+                    );
+                }
+
+                if (($mirar = TraidaDeCambio::loQueHayQueMirar($fuente)) !== null) {
+                    $avisos[] = Aviso::ambar($mirar);
+                }
+
+                return $avisos;
+            }, orden: 40);
     }
 }

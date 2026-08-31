@@ -158,6 +158,30 @@ final class Cobertura
     }
 
     /**
+     * Países con clientes que hoy **no puede facturar nadie**.
+     *
+     * Vivía dentro de `EntidadesLegalesController` como método privado, y en
+     * `9.17b` hizo falta desde el panel de configuración. Se sube aquí, que es
+     * donde ya está el resto de esta pregunta: la cabecera de esta clase avisa
+     * de que dos implementaciones de *«¿quién emite esta factura?»* terminan
+     * divergiendo, y una copia en un panel que se mira una vez al mes es
+     * justamente la que nadie corregiría.
+     *
+     * @return Collection<int, \stdClass>
+     */
+    public static function paisesDescubiertos(string $fecha): Collection
+    {
+        return DB::table('countries as c')
+            ->join('client_organizations as co', 'co.country_id', '=', 'c.id')
+            ->whereNotIn('co.status', ['inactive', 'blacklisted'])
+            ->groupBy('c.id', 'c.name')
+            ->orderBy('c.name')
+            ->get(['c.id', 'c.name', DB::raw('COUNT(*) as clientes')])
+            ->filter(fn (object $p): bool => self::quienCubre((int) $p->id, $fecha)->isEmpty())
+            ->values();
+    }
+
+    /**
      * Coberturas abiertas que NO se pueden cerrar en `$hasta` porque empiezan
      * después.
      *

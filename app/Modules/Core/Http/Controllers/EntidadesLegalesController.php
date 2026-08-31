@@ -11,7 +11,6 @@ use App\Shared\Audit\Bitacora;
 use App\Shared\Database\Vigencia;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
@@ -62,7 +61,7 @@ final class EntidadesLegalesController
             // Los países que hoy no puede facturar nadie. Es la pregunta por la
             // que se entra a esta pantalla, así que se contesta en el listado y
             // no escondida en una ficha.
-            'descubiertos' => $this->paisesDescubiertos($hoy),
+            'descubiertos' => Cobertura::paisesDescubiertos($hoy),
             'hoy' => $hoy,
         ]);
     }
@@ -370,23 +369,6 @@ final class EntidadesLegalesController
             $entidad->code,
             $entidad->status,
         );
-    }
-
-    /**
-     * Países con clientes que hoy no puede facturar nadie.
-     *
-     * @return Collection<int, \stdClass>
-     */
-    private function paisesDescubiertos(string $fecha): Collection
-    {
-        return DB::table('countries as c')
-            ->join('client_organizations as co', 'co.country_id', '=', 'c.id')
-            ->whereNotIn('co.status', ['inactive', 'blacklisted'])
-            ->groupBy('c.id', 'c.name')
-            ->orderBy('c.name')
-            ->get(['c.id', 'c.name', DB::raw('COUNT(*) as clientes')])
-            ->filter(fn (object $p): bool => Cobertura::quienCubre((int) $p->id, $fecha)->isEmpty())
-            ->values();
     }
 
     /** @return array<int, object> */

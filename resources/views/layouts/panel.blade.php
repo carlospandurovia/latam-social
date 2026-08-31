@@ -37,6 +37,10 @@
           // 8.7: detrás de Revisión porque es el paso siguiente del mismo
           // trabajo, y con entrada propia porque también se abre para vaciarla.
           ['Verificación', 'verificacion.cola', 'verificacion', 'content.deliverable.view'],
+          // 9.17b: la portada de la configuracion. Delante de las cuatro
+          // pantallas que resume porque contesta «que me falta» sin tener que
+          // entrar en las cuatro acordandose de las cuatro.
+          ['Configuración', 'configuracion', 'configuracion', 'config.view'],
           // 9.17: la primera de las tres de configuracion, y delante de las
           // otras dos porque es la que se toca el primer dia: sin marca, la
           // plataforma se ensena con los valores de partida.

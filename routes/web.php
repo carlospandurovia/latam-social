@@ -20,6 +20,7 @@ use App\Modules\Content\Http\Controllers\VerificacionController;
 use App\Modules\Core\Http\Controllers\ArchivosController;
 use App\Modules\Core\Http\Controllers\BitacoraController;
 use App\Modules\Core\Http\Controllers\CatalogosController;
+use App\Modules\Core\Http\Controllers\ConfiguracionController;
 use App\Modules\Core\Http\Controllers\EntidadesLegalesController;
 use App\Modules\Core\Http\Controllers\MarcaController;
 use App\Modules\Core\Http\Controllers\PanelController;
@@ -750,6 +751,13 @@ Route::middleware('auth')->group(function (): void {
         ->middleware('permiso:legal_entity.manage')
         ->whereUuid('uuid')
         ->name('terminos.revision');
+
+    // 9.17b -- Que falta por configurar, en una sola pantalla. Permiso propio
+    // `config.view` para poder ABRIRLA; QUE se ve dentro lo decide el permiso
+    // que declaro cada area, asi que ampliar este permiso no ensena de mas.
+    Route::get('/configuracion', ConfiguracionController::class)
+        ->middleware('permiso:config.view')
+        ->name('configuracion');
 
     // 9.17 -- La identidad de la plataforma. Permiso PROPIO y no
     // `legal_entity.manage`: quien da de alta sociedades no tiene por que poder

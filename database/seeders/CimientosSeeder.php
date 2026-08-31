@@ -269,6 +269,10 @@ final class CimientosSeeder extends Seeder
             // sociedades no tiene por que poder cambiar lo que ve todo el mundo
             // en todas las pantallas, incluida la de acceso. Solo `admin`.
             ['brand.manage',           'Core',     'Cambiar la identidad de la plataforma: nombre, logotipo y colores (9.17)'],
+            // 9.17b: abrir el panel de «que falta por configurar». QUE se ve
+            // dentro lo decide el permiso de cada area, asi que darlo de mas no
+            // ensena de mas: quien no puede arreglar un area no la ve.
+            ['config.view',            'Core',     'Abrir el panel de configuracion pendiente (9.17b)'],
             ['finance.cost.manage',    'Finance',  'Anotar y anular gastos de campana (9.10a)'],
             ['finance.payout.create',  'Finance',  'Crear lotes de pago'],
             ['finance.payout.approve', 'Finance',  'Aprobar lotes de pago (BR-FIN-005: distinto del creador)'],
@@ -387,6 +391,11 @@ final class CimientosSeeder extends Seeder
                 // 9.2: quien convierte dinero necesita poder arreglar la tabla
                 // de la que sale la tasa. No la credencial: eso es de `admin`.
                 'fx.manage',
+                // 9.17b: el panel de configuracion. Finanzas tiene `fx.manage`,
+                // asi que le sale el area de tipos de cambio --y solo esa-- y
+                // se entera de que el cron lleva dias sin traer nada sin tener
+                // que entrar a mirarlo.
+                'config.view',
                 'finance.view', 'finance.payout.create', 'finance.payout.approve',
                 'finance.invoice.issue', 'finance.cost.manage', 'file.view',
                 'campaign.view', 'campaign.view_margin',
