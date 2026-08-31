@@ -6,12 +6,16 @@ namespace Tests\Feature;
 
 use App\Models\User;
 use App\Modules\Core\Services\Terminos;
+use App\Modules\Creator\Services\Reaceptacion;
 use App\Shared\Auth\Permisos;
 use App\Shared\Database\Vigencia;
+use App\Shared\Eventos\CorreoPedido;
 use Database\Seeders\CimientosSeeder;
+use Database\Seeders\PlantillasDeCorreoSeeder;
 use Database\Seeders\TerminosBaseSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Queue;
 use Tests\Apoyo\ConFixturas;
 use Tests\TestCase;
@@ -73,7 +77,7 @@ final class ReaceptacionTest extends TestCase
     {
         $this->aceptarLaVigente();
 
-        $this->assertSame(Terminos::AL_DIA, Terminos::estadoDe($this->creadorId)['estado']);
+        $this->assertSame(Terminos::AL_DIA, Reaceptacion::de($this->creadorId)['estado']);
     }
 
     /**
@@ -88,7 +92,7 @@ final class ReaceptacionTest extends TestCase
         $this->aceptarLaVigente();
         $desde = $this->publicarDeFondo(dias: 15, lectura: 30);
 
-        $estado = Terminos::estadoDe($this->creadorId, Vigencia::masDias($desde, 5));
+        $estado = Reaceptacion::de($this->creadorId, Vigencia::masDias($desde, 5));
 
         $this->assertSame(Terminos::PENDIENTE, $estado['estado']);
         $this->assertSame(Vigencia::masDias($desde, 15), $estado['limite']);
@@ -99,7 +103,7 @@ final class ReaceptacionTest extends TestCase
     {
         $desde = $this->publicarDeFondo(dias: 15, lectura: 30);
 
-        $estado = Terminos::estadoDe($this->creadorId, Vigencia::masDias($desde, 20));
+        $estado = Reaceptacion::de($this->creadorId, Vigencia::masDias($desde, 20));
 
         $this->assertSame(Terminos::SOLO_LECTURA, $estado['estado']);
         $this->assertSame(Vigencia::masDias($desde, 45), $estado['finLectura']);
@@ -111,7 +115,7 @@ final class ReaceptacionTest extends TestCase
         $desde = $this->publicarDeFondo(dias: 15, lectura: 30);
 
         $this->assertSame(Terminos::BLOQUEADO,
-            Terminos::estadoDe($this->creadorId, Vigencia::masDias($desde, 60))['estado']);
+            Reaceptacion::de($this->creadorId, Vigencia::masDias($desde, 60))['estado']);
     }
 
     /**
@@ -130,7 +134,7 @@ final class ReaceptacionTest extends TestCase
         DB::table('creators')->where('id', $this->creadorId)
             ->update(['activated_at' => $activacion.' 10:00:00']);
 
-        $estado = Terminos::estadoDe($this->creadorId, Vigencia::masDias($activacion, 1));
+        $estado = Reaceptacion::de($this->creadorId, Vigencia::masDias($activacion, 1));
 
         $this->assertSame(Terminos::PENDIENTE, $estado['estado']);
         $this->assertSame($activacion, $estado['desde']);
@@ -155,7 +159,7 @@ final class ReaceptacionTest extends TestCase
         ]);
 
         $this->assertNull(Terminos::vigente(Terminos::codigo()));
-        $this->assertSame(Terminos::AL_DIA, Terminos::estadoDe($this->creadorId)['estado']);
+        $this->assertSame(Terminos::AL_DIA, Reaceptacion::de($this->creadorId)['estado']);
     }
 
     // ------------------------------------------------------------------ el muro
@@ -260,7 +264,7 @@ final class ReaceptacionTest extends TestCase
         $this->actingAs($this->usuario)->post(route('terminos.aceptar'))
             ->assertRedirect(route('panel'));
 
-        $this->assertSame(Terminos::AL_DIA, Terminos::estadoDe($this->creadorId)['estado']);
+        $this->assertSame(Terminos::AL_DIA, Reaceptacion::de($this->creadorId)['estado']);
         $this->actingAs($this->usuario)->get(route('panel'))->assertOk();
 
         $fila = DB::table('terms_acceptances')
@@ -294,6 +298,80 @@ final class ReaceptacionTest extends TestCase
         $this->actingAs($this->usuarioCon('admin'))->get(route('configuracion'))
             ->assertOk()
             ->assertSee('hasta que acepten los términos vigentes');
+    }
+
+    // ------------------------------------------------- el correo (9.19b)
+
+    /**
+     * **La de `Q-46`.** Publicar una versión de fondo pide un correo por creador.
+     *
+     * Se afirma sobre el `CorreoPedido` y no sobre el correo enviado: lo que
+     * hace `9.19b` es **pedirlo**; enviarlo es de Communication y ya tiene sus
+     * propias pruebas desde `4.9`. Afirmar dos cosas en una prueba es no saber
+     * cuál de las dos se rompió.
+     */
+    public function test_publicar_una_version_de_fondo_pide_un_correo_a_cada_creador(): void
+    {
+        Event::fake([CorreoPedido::class]);
+
+        $this->publicarDeFondo(dias: 15, lectura: 30);
+
+        Event::assertDispatched(CorreoPedido::class, function (CorreoPedido $c): bool {
+            return $c->codigo === 'creator.terms_reacceptance'
+                && $c->destinatario === $this->usuario->email
+                && $c->variables['dias'] === 15;
+        });
+    }
+
+    /**
+     * Un cambio MENOR no manda nada.
+     *
+     * La aceptación anterior sigue valiendo (`9.16`), así que avisar sería
+     * molestar a todo el mundo por una errata — y el aviso que llega por todo
+     * deja de leerse.
+     */
+    public function test_un_cambio_menor_no_manda_ningun_correo(): void
+    {
+        Event::fake([CorreoPedido::class]);
+
+        $admin = $this->usuarioCon('admin');
+        $uuid = Terminos::crearBorrador(Terminos::codigo(), '2031.1', 'Corrección de una errata',
+            'Texto con la errata corregida.', 'creator', (int) $admin->id);
+        Terminos::publicar($uuid, 'menor', Vigencia::elDiaDespuesDe(now()->toDateString()),
+            (int) $admin->id);
+
+        Event::assertNotDispatched(CorreoPedido::class);
+    }
+
+    /** Y la plantilla que el correo pide existe de verdad. */
+    public function test_la_plantilla_del_aviso_esta_sembrada(): void
+    {
+        $this->seed(PlantillasDeCorreoSeeder::class);
+
+        $this->assertTrue(DB::table('email_templates')
+            ->where('code', 'creator.terms_reacceptance')->exists(),
+            'sin plantilla, `Correo::enviar()` lanza una excepcion a proposito (4.13)');
+    }
+
+    /**
+     * **`T-74`.** `Terminos` no sabe qué es un creador.
+     *
+     * En `9.19` leía `creators.activated_at` desde Core, que es una frontera
+     * rota que `deptrac` no ve —no hay clase importada, sólo una consulta a una
+     * tabla ajena—. La prueba mira el código fuente porque no hay otra forma de
+     * fijarlo: es exactamente el caso que las herramientas no cazan.
+     */
+    public function test_core_no_consulta_la_tabla_de_creadores(): void
+    {
+        $fuente = (string) file_get_contents(app_path('Modules/Core/Services/Terminos.php'));
+
+        // Se quitan los comentarios antes de mirar: la cabecera EXPLICA el
+        // defecto y nombra la tabla, y una prueba que se rompe por su propia
+        // documentacion es una prueba que alguien acabara borrando.
+        $codigo = (string) preg_replace('!(//[^\n]*|/\*.*?\*/)!s', '', $fuente);
+
+        $this->assertStringNotContainsString("'creators'", $codigo);
+        $this->assertStringNotContainsString('creators.', $codigo);
     }
 
     // ------------------------------------------------------------------ apoyo

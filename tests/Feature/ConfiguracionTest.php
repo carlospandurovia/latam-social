@@ -213,12 +213,12 @@ final class ConfiguracionTest extends TestCase
     public function test_las_areas_que_existen_estan_registradas(): void
     {
         $this->assertSame(
-            // 9.18 anadio «Politica de precios» y esta prueba se puso roja, que
-            // es exactamente para lo que esta: la lista se actualiza a mano y a
-            // proposito, para que anadir un area sea una decision y no un
-            // descuido.
-            ['Correo', 'Entidades legales', 'Marca', 'Política de precios',
-                'Tipos de cambio', 'Términos'],
+            // 9.18 anadio «Politica de precios» y 9.19b «Creadores», y las dos
+            // veces esta prueba se puso roja: es exactamente para lo que esta.
+            // La lista se actualiza a mano y a proposito, para que anadir un
+            // area sea una decision y no un descuido.
+            ['Correo', 'Creadores', 'Entidades legales', 'Marca',
+                'Política de precios', 'Tipos de cambio', 'Términos'],
             Preparacion::areasRegistradas(),
         );
     }

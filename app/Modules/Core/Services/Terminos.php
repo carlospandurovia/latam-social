@@ -6,8 +6,10 @@ namespace App\Modules\Core\Services;
 
 use App\Shared\Audit\Bitacora;
 use App\Shared\Database\Vigencia;
+use App\Shared\Eventos\TerminosPublicados;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Str;
 use RuntimeException;
 
@@ -288,6 +290,20 @@ final class Terminos
                 'cambio' => ['antes' => null, 'despues' => $vigente === null ? 'primera' : $cambio],
             ],
         );
+
+        // 9.19b: quien tenga que avisar a alguien, que escuche. Core no puede
+        // llamar a Creator --`Core: [Framework, Shared]`-- ni leer su tabla:
+        // eso ya fue `T-74`. Y ademas, con un evento, **si el correo falla la
+        // publicacion ya esta hecha**: un SMTP caido no tumba unos terminos.
+        Event::dispatch(new TerminosPublicados(
+            versionId: (int) $version->id,
+            codigo: (string) $version->code,
+            version: (string) $version->version,
+            titulo: (string) $version->title,
+            cambio: $vigente === null ? null : $cambio,
+            audiencia: (string) $version->audience,
+            diasParaAceptar: $diasParaAceptar ?? (int) $version->acceptance_days,
+        ));
     }
 
     /** El estado de revisión legal. Es un dato sobre el texto, no el texto. */
@@ -327,29 +343,34 @@ final class Terminos
     public const BLOQUEADO = 'bloqueado';
 
     /**
-     * Qué le pasa a este creador con los términos vigentes (9.19).
+     * Qué le pasa a un sujeto con los términos vigentes (9.19).
+     *
+     * ### Esta función NO sabe qué es un creador (`T-74`)
+     *
+     * La primera versión recibía un `creatorId` y leía `creators.activated_at`.
+     * Funcionaba, y estaba mal: `deptrac.yaml` dice `Core: [Framework, Shared]`,
+     * y una consulta a una tabla de otro módulo es una frontera rota que
+     * **`deptrac` no ve**, porque no hay ninguna clase importada. Es exactamente
+     * la trampa contra la que avisa la cabecera del `Vigilante` de `9.15`, y la
+     * cometí aquí una iteración después de escribirla.
+     *
+     * Ahora recibe **desde cuándo le aplica** y si **ya aceptó**, que son los dos
+     * únicos datos de los que depende la respuesta. Quién es ese sujeto y de
+     * dónde sale esa fecha lo sabe `Creator\Services\Reaceptacion`, que sí puede
+     * saberlo.
      *
      * ### El reloj no empieza cuando se publica: empieza cuando le toca a él
      *
-     * Un creador que se activó **ayer** no puede aparecer bloqueado por una
-     * versión de hace tres meses. Su plazo cuenta desde el día en que se activó,
-     * o desde la fecha de la versión si ésta es posterior — lo que llegue más
-     * tarde.
+     * Quien llama pasa **la más tardía** de las dos fechas: la de la versión y
+     * la de su propia alta. Un creador activado ayer no puede aparecer bloqueado
+     * por una versión de hace tres meses — entraría directamente al muro sin
+     * haber tenido un solo día.
      *
-     * Sin esto, el primer creador que se diera de alta después de un cambio de
-     * fondo entraría **directamente al muro**, sin haber tenido un solo día. Es
-     * la clase de fallo que no se ve hasta que le pasa a una persona de verdad.
-     *
-     * ### Y si no hay términos publicados, no hay nada que aceptar
-     *
-     * `DEC-190`: una configuración que falta no bloquea a nadie. Un sistema sin
-     * términos deja a todo el mundo `al_dia`, y el panel de configuración lo
-     * dice en rojo, que es donde tiene que decirse.
-     *
+     * @param string $desdeQueLeAplica `Y-m-d`; ya resuelto por quien llama.
      * @return array{estado: string, version: ?object, desde: ?string, limite: ?string,
      *               finLectura: ?string, dias: int}
      */
-    public static function estadoDe(int $creadorId, ?string $hoy = null): array
+    public static function estadoSegun(bool $aceptada, string $desdeQueLeAplica, ?string $hoy = null): array
     {
         $hoy ??= now()->toDateString();
         $sinNada = ['estado' => self::AL_DIA, 'version' => null, 'desde' => null,
@@ -357,33 +378,19 @@ final class Terminos
 
         $vigente = self::vigente(self::codigo());
 
-        if ($vigente === null) {
+        // `DEC-190`: una configuracion que falta no bloquea a nadie. Un sistema
+        // sin terminos deja a todo el mundo al dia, y el panel lo dice en rojo.
+        if ($vigente === null || $aceptada) {
             return $sinNada;
         }
 
-        $aceptada = DB::table('terms_acceptances')
-            ->where('subject_type', 'creator')
-            ->where('subject_id', $creadorId)
-            ->whereIn('terms_version_id', self::versionesQueValen(self::codigo()))
-            ->exists();
-
-        if ($aceptada) {
-            return $sinNada;
-        }
-
-        $creador = DB::table('creators')->where('id', $creadorId)
-            ->first(['activated_at', 'created_at']);
-
-        // El mas TARDE de los dos. `activated_at` puede ser nulo --un creador
-        // que no llego a activarse-- y entonces vale su fecha de alta.
-        $suyo = (string) ($creador->activated_at ?? $creador->created_at ?? $hoy);
         // Todo el calculo de dias pasa por `Vigencia`. La primera version lo
         // hizo con `CarbonImmutable` aqui mismo y la puerta de vigencias lo
         // caza: seria el noveno sitio del proyecto donde el error de un dia
         // puede volver a aparecer.
         $desde = max(
             Vigencia::fecha((string) $vigente->effective_from),
-            Vigencia::fecha(mb_substr($suyo, 0, 10)),
+            Vigencia::fecha($desdeQueLeAplica),
         );
 
         $limite = Vigencia::masDias($desde, (int) $vigente->acceptance_days);
@@ -403,6 +410,21 @@ final class Terminos
 
         return ['estado' => $estado, 'version' => $vigente, 'desde' => $desde,
             'limite' => $limite, 'finLectura' => $finLectura, 'dias' => $dias];
+    }
+
+    /**
+     * ¿Este sujeto tiene aceptada alguna versión de las que cuentan hoy?
+     *
+     * `terms_acceptances` es la tabla de los términos y por eso se consulta
+     * desde aquí; `creators` no lo es, y por eso ya no.
+     */
+    public static function aceptadaPor(string $tipo, int $sujetoId): bool
+    {
+        return DB::table('terms_acceptances')
+            ->where('subject_type', $tipo)
+            ->where('subject_id', $sujetoId)
+            ->whereIn('terms_version_id', self::versionesQueValen(self::codigo()))
+            ->exists();
     }
 
     /**
@@ -452,31 +474,6 @@ final class Terminos
     }
 
     /**
-     * Cuántos creadores activos están en cada estado, para el panel.
-     *
-     * @return array{pendientes: int, solo_lectura: int, bloqueados: int}
-     */
-    public static function recuentoDeReaceptacion(): array
-    {
-        $recuento = ['pendientes' => 0, 'solo_lectura' => 0, 'bloqueados' => 0];
-
-        if (self::vigente(self::codigo()) === null) {
-            return $recuento;
-        }
-
-        foreach (DB::table('creators')->where('status', 'active')->pluck('id') as $id) {
-            match (self::estadoDe((int) $id)['estado']) {
-                self::PENDIENTE => $recuento['pendientes']++,
-                self::SOLO_LECTURA => $recuento['solo_lectura']++,
-                self::BLOQUEADO => $recuento['bloqueados']++,
-                default => null,
-            };
-        }
-
-        return $recuento;
-    }
-
-    /**
      * Lo que hay que mirar de los términos, con su prioridad.
      *
      * **No bloquea nada**: informa. Es la pieza que alimenta el badge del menú,
@@ -518,31 +515,11 @@ final class Terminos
                 'texto' => "El texto vigente tiene {$pendientes} marcas «[REVISAR]» sin resolver."];
         }
 
-        // 9.19: quien todavia no ha aceptado. Es lo que convierte «se publico
-        // una version de fondo» en un dato accionable: sin esto, nadie sabe
-        // cuanta gente esta a punto de quedarse en solo lectura.
-        $recuento = self::recuentoDeReaceptacion();
-
-        if ($recuento['bloqueados'] > 0) {
-            $avisos[] = ['nivel' => 'rojo',
-                'texto' => $recuento['bloqueados'].' '
-                    .($recuento['bloqueados'] === 1 ? 'creador no puede' : 'creadores no pueden')
-                    .' entrar hasta que acepten los términos vigentes.'];
-        }
-
-        if ($recuento['solo_lectura'] > 0) {
-            $avisos[] = ['nivel' => 'rojo',
-                'texto' => $recuento['solo_lectura'].' '
-                    .($recuento['solo_lectura'] === 1 ? 'creador está' : 'creadores están')
-                    .' en sólo lectura por no haber aceptado a tiempo.'];
-        }
-
-        if ($recuento['pendientes'] > 0) {
-            $avisos[] = ['nivel' => 'ambar',
-                'texto' => $recuento['pendientes'].' '
-                    .($recuento['pendientes'] === 1 ? 'creador todavía no ha aceptado' : 'creadores todavía no han aceptado')
-                    .' la versión vigente, y siguen dentro de plazo.'];
-        }
+        // 9.19b (`T-74`): el recuento de creadores que faltan por aceptar
+        // NO esta aqui. Contarlos exige leer `creators`, que es de otro
+        // modulo, y Core no puede saber de el. Lo registra Creator como su
+        // propia area del panel de configuracion, con el mismo `Preparacion`
+        // de `9.17b`: para eso es un registro y no un `switch` central.
 
         return $avisos;
     }

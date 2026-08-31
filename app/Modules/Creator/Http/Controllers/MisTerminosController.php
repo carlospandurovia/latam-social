@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Creator\Http\Controllers;
 
 use App\Modules\Core\Services\Terminos;
+use App\Modules\Creator\Services\Reaceptacion;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -32,7 +33,7 @@ final class MisTerminosController
     public function index(): View
     {
         $creadorId = $this->creador();
-        $estado = Terminos::estadoDe($creadorId);
+        $estado = Reaceptacion::de($creadorId);
 
         return view('terminos.mios', [
             'estado' => $estado,

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Creator\Http\Middleware;
 
 use App\Modules\Core\Services\Terminos;
+use App\Modules\Creator\Services\Reaceptacion;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -87,7 +88,7 @@ final class ExigirTerminos
             return $next($request);
         }
 
-        $estado = Terminos::estadoDe((int) $creadorId);
+        $estado = Reaceptacion::de((int) $creadorId);
 
         if (in_array($estado['estado'], [Terminos::AL_DIA, Terminos::PENDIENTE], true)) {
             // Dentro del plazo se pasa. El aviso lo pinta la plantilla: un muro

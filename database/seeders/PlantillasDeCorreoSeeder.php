@@ -75,6 +75,27 @@ final class PlantillasDeCorreoSeeder extends Seeder
                 ."Todavia esta pendiente de aprobacion interna: no surtira efecto hasta que\n"
                 .'otra persona de nuestro equipo lo revise.'.$pie,
             ],
+            // ---- `9.19b`: hay terminos nuevos que aceptar --------------------
+            //
+            // Sale SOLO cuando el cambio es de fondo (`9.16`): avisar de una
+            // errata corregida molestaria a todo el mundo, y el aviso que llega
+            // por todo deja de leerse.
+            //
+            // Dice el plazo y **que pasa despues**, que es lo que de verdad
+            // hace que alguien entre a leerlos. «Hay terminos nuevos» a secas
+            // se pospone; «el dia X dejas de poder trabajar» no.
+            [
+                'creator.terms_reacceptance',
+                'Hay una version nueva de los terminos que tienes que aceptar',
+                "Hola {{ nombre }}:\n\n"
+                ."Hemos publicado una version nueva de los terminos ({{ titulo }},\n"
+                ."version {{ version }}) y hace falta que la aceptes.\n\n"
+                ."Tienes {{ dias }} dias desde hoy. Puedes leerla y aceptarla aqui:\n\n"
+                ."{{ enlace }}\n\n"
+                ."Si pasa ese plazo sin que la aceptes podras seguir viendo tus campanas y\n"
+                ."tus ingresos, pero no cambiar nada, hasta que la aceptes.\n\n"
+                .'LATAM Social',
+            ],
             // ---- `5.9` y `4.1`: los enlaces de contrasena --------------------
             //
             // Ninguno de los dos dice por que se aprobo, quien lo pidio ni desde
