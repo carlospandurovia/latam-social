@@ -2,6 +2,36 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 
+## [9.20 · Cada cosa en su sitio] — 2026-08-31
+
+Reportado así: *«me voy a configuración y cuando le doy clic en alguna me manda a
+uno de los menús»*. El desorden no era el orden: **nueve pantallas estaban dos
+veces**, sueltas en el menú y dentro de `/configuracion`.
+
+### Cambiado
+- **El menú lateral, en tres grupos** — Operación, Finanzas, Registros — más
+  «Ajustes: Configuración», que es la **única** puerta a la configuración. De 25
+  entradas planas a 13 agrupadas. Un grupo del que no se puede ver nada
+  desaparece entero.
+- **La portada de configuración, por bloques**: Identidad y textos · Fiscal y
+  facturación · Conexiones · Catálogos. El orden lo decide el registro, no la
+  plantilla: ordenado por urgencia cambiaría de forma cada día.
+- **Miga de pan** en cada pantalla de configuración (`Configuración › Series y
+  correlativos`), y «Configuración» se queda encendida en el menú mientras se
+  está dentro. Qué rutas son configuración sale de `Preparacion::rutas()`.
+
+### Añadido
+- **Portada de catálogos** (`/catalogos`): cuántas filas tiene cada uno y cuántas
+  están activas. Con su aviso: una lista sin ninguna fila activa sale en rojo.
+- `NavegacionTest` — 10 pruebas. La principal recorta el HTML al `<nav>` y exige
+  que no haya atajos a configuración.
+
+### Sabido y dicho
+- Ninguna ruta se movió: `/marca`, `/series`, `/catalogos/countries` siguen donde
+  estaban, así que ningún enlace guardado se rompe.
+- `marca.*` con el punto y no `marca*`: sin él encendería también `marcas.index`,
+  que son las marcas de los **clientes**.
+
 ## [9.12 · Un número sale una sola vez] — 2026-08-31
 
 Cierra `BR-LE-007` (🔴) y `DEC-021`. `document_series` existía desde la Fase 2 y

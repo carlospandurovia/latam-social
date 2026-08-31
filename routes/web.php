@@ -179,6 +179,13 @@ Route::middleware('auth')->group(function (): void {
         ->middleware('permiso:audit.view')
         ->name('bitacora');
 
+    // 9.20: los catalogos dejan de colgar sueltos del menu y pasan a ser un
+    // area de la configuracion. Esta es su portada; la de cada uno sigue donde
+    // estaba, asi que ningun enlace guardado se rompe.
+    Route::get('/catalogos', [CatalogosController::class, 'index'])
+        ->middleware('permiso:catalog.view')
+        ->name('catalogos.index');
+
     Route::get('/catalogos/{catalogo}', [CatalogosController::class, 'show'])
         ->middleware('permiso:catalog.view')
         ->name('catalogos.show');

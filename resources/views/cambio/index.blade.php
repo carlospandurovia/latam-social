@@ -3,6 +3,8 @@
 @section('subtitulo', 'Quién publica cada par, qué tasas tenemos, y si el cron sigue vivo')
 
 @section('contenido')
+  @include('parciales.miga', ['aqui' => 'Tipos de cambio'])
+
   {{-- Lo que hay que mirar, arriba del todo y SOLO si lo hay. Una pantalla que
        siempre tiene un aviso es una pantalla cuyos avisos nadie lee. --}}
   @if ($aviso)

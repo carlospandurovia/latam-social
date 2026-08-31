@@ -104,6 +104,6 @@ final class CommunicationServiceProvider extends ServiceProvider
             }
 
             return $avisos;
-        }, orden: 5);
+        }, orden: 5, grupo: Preparacion::CONEXIONES);
     }
 }

@@ -48,6 +48,9 @@ final class ConfiguracionController
 
         return view('configuracion.index', [
             'revision' => $revision,
+            // 9.20: la pantalla se pinta por grupos. El reparto y su orden salen
+            // del registro, no de la plantilla.
+            'grupos' => Preparacion::porGrupos($revision),
             'recuento' => Preparacion::recuento($revision),
             // Cuantas areas existen en total, para poder decir «hay N que no ves
             // porque no son tuyas» en vez de dejar que alguien crea que el

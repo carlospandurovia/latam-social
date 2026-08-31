@@ -3,6 +3,8 @@
 @section('subtitulo', 'Versionadas y con vigencia, como los términos')
 
 @section('contenido')
+  @include('parciales.miga', ['aqui' => 'Correo'])
+
   <div class="space-y-5">
     <a href="{{ route('correos.index') }}" class="text-sm text-marca-600 hover:underline">← Volver al registro</a>
 

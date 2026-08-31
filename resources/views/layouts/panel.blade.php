@@ -22,90 +22,98 @@
         // devuelven 403 enseña al usuario a desconfiar de lo que ve; y ocultar
         // sin comprobar en la ruta sería seguridad de decorado. Se hacen las dos
         // cosas: la ruta manda, el menú acompaña.
-        $secciones = [
-          ['Panel', 'panel', 'panel', null],
-          ['Solicitudes', 'solicitudes.index', 'solicitudes', 'creator.approve'],
-          ['Creadores', 'creadores.index', 'creadores', 'creator.view'],
-          ['Clientes', 'clientes.index', 'clientes', 'client.view'],
-          // 7.1: va detras de Clientes porque una campana se hace PARA un
-          // cliente y su marca; sin cliente dado de alta no hay nada que ver aqui.
-          ['Campañas', 'campanas.index', 'campanas', 'campaign.view'],
-          // 8.3: detrás de Campañas porque es lo que llega DE ellas, y con
-          // entrada propia porque es la pantalla de un turno de trabajo: se
-          // abre para vaciarla, no para consultar algo.
-          ['Revisión', 'revision.cola', 'revision', 'content.review'],
-          // 8.7: detrás de Revisión porque es el paso siguiente del mismo
-          // trabajo, y con entrada propia porque también se abre para vaciarla.
-          ['Verificación', 'verificacion.cola', 'verificacion', 'content.deliverable.view'],
-          // 9.17b: la portada de la configuracion. Delante de las cuatro
-          // pantallas que resume porque contesta «que me falta» sin tener que
-          // entrar en las cuatro acordandose de las cuatro.
-          ['Configuración', 'configuracion', 'configuracion', 'config.view'],
-          // 9.17: la primera de las tres de configuracion, y delante de las
-          // otras dos porque es la que se toca el primer dia: sin marca, la
-          // plataforma se ensena con los valores de partida.
-          ['Marca', 'marca.index', 'marca.', 'brand.manage'],
-          // 9.18: con Marca y Terminos porque es configuracion de plataforma,
-          // aunque quien la toca es finanzas y no quien pone el logotipo.
-          ['Política de precios', 'politica.index', 'politica', 'pricing.manage'],
-          // 9.17d: con las otras de configuracion. `integration.manage` ya
-          // existia desde 9.2 y solo lo tiene admin.
-          ['Integraciones', 'integraciones.index', 'integraciones', 'integration.manage'],
-          // 4.5: la pantalla a la que BR-LE-004 lleva mandando desde 4.1.
-          // `legal_entity.manage` es solo de admin, asi que el resto no la ve.
-          ['Entidades legales', 'entidades.index', 'entidades', 'legal_entity.manage'],
-          // 9.12: pegada a Entidades legales porque una serie pertenece a la
-          // sociedad que emite (`BR-LE-008`) y la toca la misma persona.
-          ['Series y correlativos', 'series.index', 'series', 'legal_entity.manage'],
-          // 9.16: junto a Entidades legales porque las dos son configuracion de
-          // la plataforma y las dos las toca la misma persona.
-          ['Términos', 'terminos.index', 'terminos', 'legal_entity.manage'],
-          // 9.2: junto a Entidades legales porque las dos contestan «por que no
-          // puedo cobrarle a este» --una por sociedad, otra por moneda-- y las
-          // dos se tocan pocas veces al ano.
-          ['Tipos de cambio', 'cambio.index', 'tipos-de-cambio', 'fx.manage'],
-          // 9.6: delante de Tipos de cambio porque es trabajo de todos los meses
-          // y aquello se toca dos veces al ano.
-          ['Lotes de pago', 'lotes.index', 'lotes', 'finance.view'],
-          // 9.7: detras de Lotes porque es el paso siguiente del mismo trabajo,
-          // y con entrada propia porque se abre para vaciarla.
-          ['Conciliación', 'pagos.conciliar', 'pagos', 'finance.view'],
-          // 9.10: con permiso PROPIO y distinto de los tres de arriba. Quien
-          // concilia pagos no tiene por que ver cuanto gana la empresa por
-          // campana, y una entrada de menu que aparece o no es la forma mas
-          // barata de que eso se note (BR-SEC-001).
-          ['Rentabilidad', 'rentabilidad.index', 'rentabilidad', 'campaign.view_margin'],
-          // 4.9: junto a la bitacora porque responde a la misma clase de
-          // pregunta --que paso y cuando-- y porque el modo de fallo que importa
-          // («al creador no le llego su enlace») lo descubre operaciones, no un
-          // desarrollador leyendo storage/logs.
-          ['Correos', 'correos.index', 'correos', 'comms.view'],
-          ['Bitácora', 'bitacora', 'bitacora', 'audit.view'],
+        //
+        // 9.20 -- POR QUE ESTO ESTA AGRUPADO Y POR QUE HAY UNA SOLA
+        // «CONFIGURACION»
+        //
+        // Hasta hoy eran veinticinco entradas en una lista plana, y nueve de
+        // ellas --Marca, Terminos, Series, Integraciones, Tipos de cambio,
+        // Politica de precios, Entidades legales, Correo y los seis catalogos--
+        // estaban DOS VECES: aqui sueltas y dentro de `/configuracion`. Entrar
+        // desde el panel de configuracion dejaba al usuario en una pantalla que
+        // se veia igual que Campanas, con el menu marcando otra entrada. Se
+        // perdia el sitio.
+        //
+        // Ahora el menu solo lleva lo que se usa PARA TRABAJAR, en tres grupos
+        // por la clase de trabajo que es, y la configuracion tiene UNA puerta.
+        // Lo que hay detras de esa puerta lo decide `Preparacion`, no esta
+        // plantilla: por eso anadir un area nueva ya no exige acordarse de dos
+        // sitios.
+        $grupos = [
+          ['Operación', [
+            ['Panel', 'panel', 'panel', null],
+            ['Solicitudes', 'solicitudes.index', 'solicitudes', 'creator.approve'],
+            ['Creadores', 'creadores.index', 'creadores', 'creator.view'],
+            ['Clientes', 'clientes.index', 'clientes', 'client.view'],
+            // 7.1: detras de Clientes porque una campana se hace PARA un cliente
+            // y su marca; sin cliente dado de alta no hay nada que ver aqui.
+            ['Campañas', 'campanas.index', 'campanas', 'campaign.view'],
+            // 8.3 y 8.7: las dos son la pantalla de un turno de trabajo --se
+            // abren para vaciarlas-- y van seguidas porque son el mismo trabajo.
+            ['Revisión', 'revision.cola', 'revision', 'content.review'],
+            ['Verificación', 'verificacion.cola', 'verificacion', 'content.deliverable.view'],
+          ]],
+          ['Finanzas', [
+            ['Lotes de pago', 'lotes.index', 'lotes', 'finance.view'],
+            ['Conciliación', 'pagos.conciliar', 'pagos', 'finance.view'],
+            // 9.10: permiso PROPIO y distinto de los otros dos. Quien concilia
+            // pagos no tiene por que ver cuanto gana la empresa por campana, y
+            // una entrada que aparece o no es la forma mas barata de que eso se
+            // note (`BR-SEC-001`).
+            ['Rentabilidad', 'rentabilidad.index', 'rentabilidad', 'campaign.view_margin'],
+          ]],
+          ['Registros', [
+            // 4.9: las dos contestan la misma clase de pregunta --que paso y
+            // cuando--, y el modo de fallo que importa («al creador no le llego
+            // su enlace») lo descubre operaciones, no un desarrollador leyendo
+            // `storage/logs`.
+            ['Correos', 'correos.index', 'correos', 'comms.view'],
+            ['Bitácora', 'bitacora', 'bitacora', 'audit.view'],
+          ]],
         ];
-        $catalogos = [
-          ['Países', 'countries'], ['Monedas', 'currencies'], ['Categorías', 'categories'],
-          ['Redes sociales', 'platforms'], ['Formatos', 'content_formats'], ['Idiomas', 'languages'],
-        ];
+
+        // La entrada de Configuracion se queda encendida en CUALQUIER pantalla
+        // que cuelgue de ella. La lista de rutas sale del registro de areas
+        // --`Preparacion::rutas()`-- y no de aqui: escribirla otra vez seria
+        // volver a tenerla en dos sitios, que es lo que 9.20 vino a quitar.
+        //
+        // De `marca.index` se queda `marca.` y se pregunta por `marca.*`, para
+        // que las rutas hermanas de una pantalla --`marca.logo`, `series.anular`--
+        // tambien la enciendan. Con el punto, y no sin el: `marca*` encenderia
+        // tambien `marcas.index`, que son las marcas de los CLIENTES y no tiene
+        // nada que ver.
+        $enConfiguracion = request()->routeIs('configuracion');
+        foreach (\App\Shared\Config\Preparacion::rutas() as $rutaDeArea) {
+          $familia = str_contains($rutaDeArea, '.') ? explode('.', $rutaDeArea)[0].'.*' : $rutaDeArea;
+          $enConfiguracion = $enConfiguracion || request()->routeIs($familia);
+        }
       @endphp
 
-      @foreach ($secciones as [$texto, $ruta, $activo, $permiso])
-        @continue($permiso !== null && ! auth()->user()->can($permiso))
-        <a href="{{ route($ruta) }}"
-           class="block px-3 py-2 rounded-lg transition
-                  {{ request()->routeIs($activo.'*') ? 'bg-marca-500 text-white font-medium' : 'hover:bg-white/5 hover:text-white' }}">
-          {{ $texto }}
-        </a>
+      @foreach ($grupos as [$titulo, $entradas])
+        @php
+          $visibles = array_filter($entradas, fn ($e) => $e[3] === null || auth()->user()->can($e[3]));
+        @endphp
+        @continue($visibles === [])
+
+        <p class="px-3 pt-4 first:pt-0 pb-1 text-[11px] uppercase tracking-wider text-slate-500">
+          {{ $titulo }}
+        </p>
+        @foreach ($visibles as [$texto, $ruta, $activo, $permiso])
+          <a href="{{ route($ruta) }}"
+             class="block px-3 py-2 rounded-lg transition
+                    {{ request()->routeIs($activo.'*') ? 'bg-marca-500 text-white font-medium' : 'hover:bg-white/5 hover:text-white' }}">
+            {{ $texto }}
+          </a>
+        @endforeach
       @endforeach
 
-      @can('catalog.view')
-      <p class="px-3 pt-5 pb-1 text-[11px] uppercase tracking-wider text-slate-500">Catálogos</p>
-      @foreach ($catalogos as [$texto, $tabla])
-        <a href="{{ route('catalogos.show', $tabla) }}"
+      @can('config.view')
+        <p class="px-3 pt-4 pb-1 text-[11px] uppercase tracking-wider text-slate-500">Ajustes</p>
+        <a href="{{ route('configuracion') }}"
            class="block px-3 py-2 rounded-lg transition
-                  {{ request()->route('catalogo') === $tabla ? 'bg-marca-500 text-white font-medium' : 'hover:bg-white/5 hover:text-white' }}">
-          {{ $texto }}
+                  {{ $enConfiguracion ? 'bg-marca-500 text-white font-medium' : 'hover:bg-white/5 hover:text-white' }}">
+          Configuración
         </a>
-      @endforeach
       @endcan
     </nav>
 

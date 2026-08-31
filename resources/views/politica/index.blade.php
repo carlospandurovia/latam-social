@@ -3,6 +3,8 @@
 @section('subtitulo', 'La retención y el umbral de rentabilidad')
 
 @section('contenido')
+  @include('parciales.miga', ['aqui' => 'Política de precios'])
+
   @foreach ($avisos as $aviso)
     <div class="mb-3 rounded-lg border px-4 py-3 text-sm
       {{ $aviso->nivel === 'rojo' ? 'bg-rose-50 border-rose-200 text-rose-900'

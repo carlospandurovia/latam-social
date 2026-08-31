@@ -3,6 +3,8 @@
 @section('subtitulo', 'El texto que acepta el creador, y sus versiones')
 
 @section('contenido')
+  @include('parciales.miga', ['aqui' => 'Términos'])
+
   {{-- Los avisos NO bloquean: informan y se ordenan por prioridad. Es el
        criterio de 9.16 — una configuración se rellena con un valor de partida y
        se avisa de que conviene revisarlo, no se convierte en una puerta. --}}

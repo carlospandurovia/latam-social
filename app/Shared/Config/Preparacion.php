@@ -54,7 +54,41 @@ use Throwable;
 final class Preparacion
 {
     /**
-     * @var array<string, array{permiso: ?string, ruta: ?string, orden: int, revisor: Closure(): list<Aviso>}>
+     * Los grupos en que se reparte la configuración (9.20).
+     *
+     * Hasta `9.20` esto era una lista plana de nueve áreas, y el menú lateral
+     * llevaba **las mismas nueve** sueltas entre las pantallas del día a día.
+     * Estaban dos veces, y entrar desde aquí a una de ellas dejaba al usuario en
+     * una pantalla que no decía de dónde venía. Ahora la configuración tiene
+     * **una sola puerta** y por dentro está agrupada por la clase de pregunta
+     * que contesta cada bloque.
+     *
+     * Son constantes y no una tabla a propósito: un grupo no es un dato de la
+     * instalación, es cómo está organizado este programa. Añadir uno es escribir
+     * una línea aquí, y así el orden en que salen no depende de que nadie
+     * recuerde numerarlos.
+     */
+    public const IDENTIDAD = 'Identidad y textos';
+
+    public const FISCAL = 'Fiscal y facturación';
+
+    public const CONEXIONES = 'Conexiones';
+
+    public const CATALOGOS = 'Catálogos';
+
+    public const OTROS = 'Otros';
+
+    /** En qué orden salen los grupos. Lo que se toca el primer día, arriba. */
+    private const ORDEN_GRUPOS = [
+        self::IDENTIDAD => 10,
+        self::FISCAL => 20,
+        self::CONEXIONES => 30,
+        self::CATALOGOS => 40,
+        self::OTROS => 90,
+    ];
+
+    /**
+     * @var array<string, array{permiso: ?string, ruta: ?string, orden: int, grupo: string, revisor: Closure(): list<Aviso>}>
      */
     private static array $areas = [];
 
@@ -67,6 +101,10 @@ final class Preparacion
      * @param ?string $ruta Nombre de la ruta donde se arregla. Un aviso sin
      *                      sitio al que ir es media ayuda.
      * @param int $orden Para empatar dentro del mismo nivel. Más bajo, antes.
+     * @param string $grupo Una de las constantes de esta clase. Un grupo que no
+     *                      existe se queda en «Otros» en vez de desaparecer: un
+     *                      área invisible por una errata sería peor que una mal
+     *                      colocada.
      * @param Closure(): list<Aviso> $revisor
      */
     public static function area(
@@ -75,11 +113,13 @@ final class Preparacion
         ?string $ruta,
         Closure $revisor,
         int $orden = 50,
+        string $grupo = self::OTROS,
     ): void {
         self::$areas[$area] = [
             'permiso' => $permiso,
             'ruta' => $ruta,
             'orden' => $orden,
+            'grupo' => array_key_exists($grupo, self::ORDEN_GRUPOS) ? $grupo : self::OTROS,
             'revisor' => $revisor,
         ];
     }
@@ -96,7 +136,7 @@ final class Preparacion
      *                                     consulta aquí: `Shared` no conoce a
      *                                     `Permisos`, que vive en `Shared\Auth`
      *                                     pero depende de la base de roles.
-     * @return list<array{area: string, ruta: ?string, nivel: string, avisos: list<Aviso>}>
+     * @return list<array{area: string, ruta: ?string, grupo: string, nivel: string, avisos: list<Aviso>}>
      */
     public static function revision(Closure $puede): array
     {
@@ -111,6 +151,7 @@ final class Preparacion
                 'area' => $area,
                 'ruta' => $definicion['ruta'],
                 'orden' => $definicion['orden'],
+                'grupo' => $definicion['grupo'],
                 'avisos' => self::pasarRevista($area, $definicion['revisor']),
             ];
         }
@@ -132,6 +173,7 @@ final class Preparacion
             static fn (array $fila): array => [
                 'area' => $fila['area'],
                 'ruta' => $fila['ruta'],
+                'grupo' => $fila['grupo'],
                 'nivel' => $fila['nivel'],
                 'avisos' => $fila['avisos'],
             ],
@@ -142,7 +184,7 @@ final class Preparacion
     /**
      * Cuántos avisos hay de cada nivel, para el encabezado.
      *
-     * @param list<array{area: string, ruta: ?string, nivel: string, avisos: list<Aviso>}> $revision
+     * @param list<array{area: string, ruta: ?string, grupo: string, nivel: string, avisos: list<Aviso>}> $revision
      * @return array{rojo: int, ambar: int, areas: int, listas: int}
      */
     public static function recuento(array $revision): array
@@ -162,6 +204,63 @@ final class Preparacion
         }
 
         return ['rojo' => $rojo, 'ambar' => $ambar, 'areas' => count($revision), 'listas' => $listas];
+    }
+
+    /**
+     * La misma revisión, repartida en grupos y en su orden (9.20).
+     *
+     * Se calcula aquí y no en la plantilla porque el orden de los grupos es una
+     * decisión, no una presentación: la plantilla lo pintaría en el orden en que
+     * le llegaran las áreas, que es el de la urgencia, y entonces «Fiscal»
+     * saldría antes o después según qué falte hoy. Un sitio que cambia de forma
+     * según el día no se aprende.
+     *
+     * Un grupo sin áreas visibles NO sale: quien no puede tocar nada de
+     * «Fiscal y facturación» tampoco necesita ver el título.
+     *
+     * @param list<array{area: string, ruta: ?string, grupo: string, nivel: string, avisos: list<Aviso>}> $revision
+     * @return list<array{grupo: string, areas: list<array{area: string, ruta: ?string, grupo: string, nivel: string, avisos: list<Aviso>}>}>
+     */
+    public static function porGrupos(array $revision): array
+    {
+        $grupos = [];
+
+        foreach ($revision as $fila) {
+            $grupos[$fila['grupo']][] = $fila;
+        }
+
+        uksort($grupos, static fn (string $a, string $b): int => (self::ORDEN_GRUPOS[$a] ?? 99) <=> (self::ORDEN_GRUPOS[$b] ?? 99));
+
+        return array_map(
+            static fn (string $grupo): array => ['grupo' => $grupo, 'areas' => $grupos[$grupo]],
+            array_keys($grupos),
+        );
+    }
+
+    /**
+     * Las rutas de todo lo que es configuración.
+     *
+     * El menú lateral la usa para saber si la pantalla en la que estás cuelga de
+     * Configuración —y dejar esa entrada encendida— sin tener que repetir la
+     * lista. Repetirla es como estaban las cosas antes de `9.20`: nueve entradas
+     * escritas dos veces, y añadir una décima exigía acordarse de los dos sitios.
+     *
+     * @return list<string>
+     */
+    public static function rutas(): array
+    {
+        $rutas = [];
+
+        foreach (self::$areas as $definicion) {
+            if ($definicion['ruta'] !== null) {
+                $rutas[] = $definicion['ruta'];
+            }
+        }
+
+        sort($rutas);
+
+        /** @var list<string> $rutas */
+        return $rutas;
     }
 
     /** @return list<string> */

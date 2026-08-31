@@ -3,6 +3,8 @@
 @section('subtitulo', 'Las sociedades del grupo y qué países factura cada una')
 
 @section('contenido')
+  @include('parciales.miga', ['aqui' => 'Entidades legales'])
+
   <div class="flex items-start justify-between mb-5">
     <p class="max-w-2xl text-sm text-slate-500">
       De la sociedad emisora salen la numeración de comprobantes (<code>BR-LE-007</code>),

@@ -39,8 +39,17 @@
     </p>
   </div>
 
+  {{-- 9.20: por grupos. El orden de los grupos lo decide `Preparacion` y no
+       esta plantilla, porque es una decision y no una presentacion: aqui las
+       areas llegan ordenadas por urgencia, asi que «Fiscal» saldria antes o
+       despues segun que falte hoy. Un sitio que cambia de forma segun el dia no
+       se aprende. --}}
+  @foreach ($grupos as $bloque)
+  <p class="mt-6 first:mt-0 mb-2 text-[11px] uppercase tracking-wider text-slate-500">
+    {{ $bloque['grupo'] }}
+  </p>
   <div class="space-y-4">
-    @foreach ($revision as $area)
+    @foreach ($bloque['areas'] as $area)
       <div class="bg-white rounded-xl border overflow-hidden
         {{ $area['nivel'] === 'rojo' ? 'border-rose-200'
            : ($area['nivel'] === 'ambar' ? 'border-amber-200' : 'border-slate-200') }}">
@@ -84,6 +93,7 @@
       </div>
     @endforeach
   </div>
+  @endforeach
 
   @if (count($revision) < $totalAreas)
     {{-- Se dice que hay más y no se dice cuáles: quien no puede arreglar un

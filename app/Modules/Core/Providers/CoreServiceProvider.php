@@ -20,6 +20,7 @@ use App\Shared\Config\Preparacion;
 use App\Shared\Files\Vigilante;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
 
@@ -121,16 +122,19 @@ final class CoreServiceProvider extends ServiceProvider
     private function registrarPreparacion(): void
     {
         Preparacion::area('Marca', 'brand.manage', 'marca.index',
-            static fn (): array => Aviso::desdeArrays(Marca::avisos()), orden: 10);
+            static fn (): array => Aviso::desdeArrays(Marca::avisos()), orden: 10,
+            grupo: Preparacion::IDENTIDAD);
 
         // 9.18: delante de los terminos porque de estos dos numeros sale el
         // costo de TODO lo que se pacte, y una instalacion sin ellos pacta
         // netos que no retienen nada.
         Preparacion::area('Política de precios', 'pricing.manage', 'politica.index',
-            static fn (): array => Politica::avisos(), orden: 15);
+            static fn (): array => Politica::avisos(), orden: 15,
+            grupo: Preparacion::FISCAL);
 
         Preparacion::area('Términos', 'legal_entity.manage', 'terminos.index',
-            static fn (): array => Aviso::desdeArrays(Terminos::avisos()), orden: 20);
+            static fn (): array => Aviso::desdeArrays(Terminos::avisos()), orden: 20,
+            grupo: Preparacion::IDENTIDAD);
 
         // `BR-LE-004`: un pais con clientes que no puede facturar nadie no es un
         // detalle de configuracion, es una factura que no se puede emitir. Rojo.
@@ -206,7 +210,7 @@ final class CoreServiceProvider extends ServiceProvider
                 }
 
                 return $avisos;
-            }, orden: 30);
+            }, orden: 30, grupo: Preparacion::FISCAL);
 
         // Las dos preguntas de esta area son distintas y las dos importan: si
         // HAY credencial --sin ella el cron no trae nada-- y si la ultima
@@ -217,7 +221,8 @@ final class CoreServiceProvider extends ServiceProvider
         // 9.17d: delante de los tipos de cambio porque de aqui depende poder
         // facturar, y aquello se toca dos veces al ano.
         Preparacion::area('Integraciones', 'integration.manage', 'integraciones.index',
-            static fn (): array => Integraciones::avisos(), orden: 35);
+            static fn (): array => Integraciones::avisos(), orden: 35,
+            grupo: Preparacion::CONEXIONES);
 
         // 9.12: detras de Integraciones y delante de los tipos de cambio. Sin
         // serie no se emite nada, y esa es la unica configuracion del sistema
@@ -225,7 +230,36 @@ final class CoreServiceProvider extends ServiceProvider
         // administracion tributaria y una inventada produce comprobantes
         // invalidos. Por eso avisa en rojo en vez de sembrarse (`DEC-190`).
         Preparacion::area('Series y correlativos', 'legal_entity.manage', 'series.index',
-            static fn (): array => Correlativos::avisos(), orden: 36);
+            static fn (): array => Correlativos::avisos(), orden: 36,
+            grupo: Preparacion::FISCAL);
+
+        // 9.20: los catalogos eran seis entradas sueltas debajo de un titulo del
+        // menu lateral, que es una etiqueta y no un sitio. Ahora son un area de
+        // la configuracion --se tocan pocas veces y no son trabajo del dia-- con
+        // su portada y su miga de pan.
+        //
+        // Lo que comprueba: que ninguna lista de la que tira el sistema se haya
+        // quedado sin NADA activo. Un catalogo vacio no da error: da un
+        // desplegable vacio, y eso se descubre cuando alguien no puede terminar
+        // lo que estaba haciendo.
+        Preparacion::area('Catálogos', 'catalog.view', 'catalogos.index',
+            static function (): array {
+                $vacios = [];
+
+                foreach (['countries' => 'Países', 'currencies' => 'Monedas',
+                    'platforms' => 'Redes sociales', 'content_formats' => 'Formatos',
+                    'languages' => 'Idiomas', 'categories' => 'Categorías'] as $tabla => $nombre) {
+                    if (Schema::hasTable($tabla) && DB::table($tabla)->where('is_active', 1)->doesntExist()) {
+                        $vacios[] = $nombre;
+                    }
+                }
+
+                return $vacios === [] ? [] : [Aviso::rojo(sprintf(
+                    'Sin ninguna fila activa: %s. No da error: deja un desplegable vacío, y eso se '
+                    .'descubre cuando alguien no puede terminar lo que estaba haciendo.',
+                    implode(', ', $vacios),
+                ))];
+            }, orden: 60, grupo: Preparacion::CATALOGOS);
 
         Preparacion::area('Tipos de cambio', 'fx.manage', 'cambio.index',
             static function (): array {
@@ -244,6 +278,6 @@ final class CoreServiceProvider extends ServiceProvider
                 }
 
                 return $avisos;
-            }, orden: 40);
+            }, orden: 40, grupo: Preparacion::FISCAL);
     }
 }

@@ -60,7 +60,8 @@ final class CreatorServiceProvider extends ServiceProvider
         // puede hacer algo con esto --escribirles, llamarles--; quien lleva los
         // documentos legales ya tiene el area de Terminos.
         Preparacion::area('Creadores', 'creator.view', 'creadores.index',
-            static fn (): array => Reaceptacion::avisos(), orden: 25);
+            static fn (): array => Reaceptacion::avisos(), orden: 25,
+            grupo: Preparacion::IDENTIDAD);
 
         View::composer('layouts.panel', static function (\Illuminate\View\View $vista): void {
             $usuario = Auth::user();

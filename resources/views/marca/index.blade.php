@@ -3,6 +3,8 @@
 @section('subtitulo', 'El nombre, el logotipo y los colores de esta plataforma')
 
 @section('contenido')
+  @include('parciales.miga', ['aqui' => 'Marca'])
+
   {{-- Los avisos NO bloquean: informan y se ordenan por prioridad. Es el
        criterio de DEC-190 — «no me digas que algo es un stopper; ponme
        prioridades y un badge en rojo o amarillo según la importancia». Rojo es

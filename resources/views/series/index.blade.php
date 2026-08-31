@@ -3,6 +3,8 @@
 @section('subtitulo', 'Un número sale una sola vez, y lo que sale queda escrito')
 
 @section('contenido')
+  @include('parciales.miga', ['aqui' => 'Series y correlativos'])
+
   @if (session('exito'))
     <div class="mb-4 rounded-lg bg-emerald-50 border border-emerald-200 px-4 py-3 text-sm text-emerald-800">
       {{ session('exito') }}

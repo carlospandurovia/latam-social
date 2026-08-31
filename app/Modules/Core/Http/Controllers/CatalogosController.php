@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Core\Http\Controllers;
 
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
@@ -49,6 +50,35 @@ final class CatalogosController
             'orden' => 'code',
         ],
     ];
+
+    /**
+     * La portada de los catálogos (9.20).
+     *
+     * Antes los seis colgaban sueltos del menú lateral, debajo de un título
+     * «CATÁLOGOS» que no era un sitio: era una etiqueta. Ahora **son un área de
+     * la configuración** —se tocan pocas veces y no son trabajo del día— y ésta
+     * es su puerta, con cuántas filas tiene cada uno y cuántas están activas,
+     * que es lo que de verdad se viene a mirar.
+     */
+    public function index(): View
+    {
+        $catalogos = [];
+
+        foreach (self::CATALOGOS as $clave => $config) {
+            $catalogos[] = [
+                'clave' => $clave,
+                'titulo' => $config['titulo'],
+                'filas' => (int) DB::table($clave)->count(),
+                // `is_active` lo tienen los seis, pero preguntarlo sin mirar
+                // seria construir sobre una casualidad.
+                'activas' => Schema::hasColumn($clave, 'is_active')
+                    ? (int) DB::table($clave)->where('is_active', 1)->count()
+                    : null,
+            ];
+        }
+
+        return view('catalogos.portada', ['catalogos' => $catalogos]);
+    }
 
     public function show(string $catalogo): View
     {
