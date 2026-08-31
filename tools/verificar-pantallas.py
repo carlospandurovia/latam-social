@@ -328,7 +328,13 @@ def reglas_declaradas(archivo):
     en falso, que es peor.
     """
     texto = leer(archivo)
-    claves = set(re.findall(r"'([A-Za-z_][\w.]*)'\s*=>\s*\[", texto))
+    # `'clave' => [ ... ]` --lo normal-- y tambien `'clave' => $this->metodo()`
+    # o `'clave' => $variable`: una regla puede COMPONERSE. En 9.17c
+    # `tax_location_code` la compone `reglaDeLocalidad()`, porque el patron sale
+    # del pais y no del codigo; con el patron viejo esa clave no se veia y el
+    # verificador acusaba al controlador de leer algo que si esta declarado.
+    # Sigue siendo un superconjunto, que es lo que este verificador quiere ser.
+    claves = set(re.findall(r"'([A-Za-z_][\w.]*)'\s*=>\s*[\[$]", texto))
     claves |= set(re.findall(r"\$reglas\['([A-Za-z_][\w.]*)'\]", texto))
     # `campo.*` valida el contenido de `campo`; el controlador lee `campo`.
     return {c.split('.')[0] for c in claves}

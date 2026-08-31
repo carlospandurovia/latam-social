@@ -16,7 +16,15 @@
           @foreach ([
             'Documento' => $entidad->tax_id_type.' '.$entidad->tax_id_number,
             'Nombre comercial' => $entidad->trade_name ?: '—',
-            'Domicilio' => $entidad->address_line1.', '.$entidad->city,
+            'Domicilio' => implode(', ', array_filter([
+              $entidad->address_line1, $entidad->district, $entidad->city, $entidad->region,
+            ])),
+            // 9.17c: se llama como lo llame el pais de esta sociedad --«Ubigeo»
+            // en Peru, «Codigo DANE» en Colombia--. La etiqueta sale del
+            // catalogo, no del codigo.
+            ($pais->tax_location_label ?: 'Código de localidad')
+              => $entidad->tax_location_code ?: '— sin poner',
+            'Establecimiento' => $entidad->establishment_code,
             'Moneda' => $entidad->default_currency_code,
             'Zona horaria' => $entidad->timezone,
             'Representante' => $entidad->legal_representative ?: '—',

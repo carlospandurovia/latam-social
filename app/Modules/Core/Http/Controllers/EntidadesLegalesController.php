@@ -72,6 +72,9 @@ final class EntidadesLegalesController
 
         return view('entidades.show', [
             'entidad' => $entidad,
+            // Como se llama el codigo de localidad en el pais de ESTA sociedad.
+            'pais' => DB::table('countries')->where('id', $entidad->country_id)
+                ->first(['name', 'tax_location_label', 'requires_tax_location']),
             'coberturas' => DB::table('legal_entity_countries as lec')
                 ->join('countries as c', 'c.id', '=', 'lec.country_id')
                 ->where('lec.legal_entity_id', $entidad->id)
@@ -122,6 +125,13 @@ final class EntidadesLegalesController
             'city' => $datos['city'],
             'region' => $datos['region'] ?? null,
             'postal_code' => $datos['postal_code'] ?? null,
+            'district' => $datos['district'] ?? null,
+            'tax_location_code' => $datos['tax_location_code'] ?? null,
+            // Sin valor, «0000»: el domicilio fiscal. La columna no admite nulo
+            // --un comprobante siempre lleva uno-- y el formulario puede venir
+            // en blanco.
+            'establishment_code' => ($datos['establishment_code'] ?? '') !== ''
+                ? $datos['establishment_code'] : '0000',
             'default_currency_code' => $datos['default_currency_code'],
             'timezone' => $datos['timezone'],
             'legal_representative' => $datos['legal_representative'] ?? null,
@@ -151,6 +161,13 @@ final class EntidadesLegalesController
 
         /** @var array<string, mixed> $datos */
         $datos = $request->validated();
+
+        // Igual que en el alta: la columna no admite nulo. Sin esto, vaciar el
+        // campo en la ficha metia una cadena vacia, que `ck_le_establecimiento`
+        // rechaza con un 45000 sin explicar nada.
+        if (($datos['establishment_code'] ?? '') === '') {
+            $datos['establishment_code'] = '0000';
+        }
 
         $cambios = [];
         foreach (array_keys($datos) as $campo) {
@@ -402,7 +419,12 @@ final class EntidadesLegalesController
     private function opciones(): array
     {
         return [
-            'paises' => DB::table('countries')->orderBy('name')->get(['id', 'name', 'iso2']),
+            // 9.17c: la etiqueta y el patron viajan con cada pais para que el
+            // formulario pida «Ubigeo» a una sociedad peruana y «Codigo DANE» a
+            // una colombiana sin una sola linea de codigo por pais.
+            'paises' => DB::table('countries')->orderBy('name')
+                ->get(['id', 'name', 'iso2', 'tax_location_label',
+                    'tax_location_pattern', 'requires_tax_location']),
             'monedas' => DB::table('currencies')->where('is_active', 1)->orderBy('code')->get(['code', 'name']),
         ];
     }

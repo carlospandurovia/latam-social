@@ -94,3 +94,8 @@
 # la marca por defecto que hubiera y la restituye al final, asi que puede
 # correr contra la base sembrada sin dejarla distinta.
 9.17-marca
+# 9.17c crea sus propios paises (`ZP`, `ZQ`, `ZR`) y sus sociedades (`E917C*`) y
+# los borra: ni `countries` ni `legal_entities` son evidencia mientras nada
+# cuelgue de ellas. Necesita monedas y una marca sembradas, y lo comprueba antes
+# de usarlas en vez de suponerlo.
+9.17c-domicilio

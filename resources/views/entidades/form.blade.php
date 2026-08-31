@@ -85,16 +85,24 @@
                value="{{ old('address_line2', $entidad->address_line2 ?? '') }}"
                class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
       </div>
-      <div class="grid grid-cols-3 gap-4">
+      <div class="grid grid-cols-4 gap-4">
         <div>
-          <label for="city" class="block text-sm font-medium text-slate-700 mb-1">Ciudad</label>
+          <label for="city" class="block text-sm font-medium text-slate-700 mb-1">Ciudad / provincia</label>
           <input id="city" name="city" maxlength="100"
                  value="{{ old('city', $entidad->city ?? '') }}"
                  class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
           @error('city') <p class="mt-1 text-xs text-rose-600">{{ $message }}</p> @enderror
         </div>
         <div>
-          <label for="region" class="block text-sm font-medium text-slate-700 mb-1">Región</label>
+          {{-- 9.17c: el comprobante electrónico peruano lo lleva, y no estaba. --}}
+          <label for="district" class="block text-sm font-medium text-slate-700 mb-1">Distrito</label>
+          <input id="district" name="district" maxlength="100"
+                 value="{{ old('district', $entidad->district ?? '') }}"
+                 class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+          @error('district') <p class="mt-1 text-xs text-rose-600">{{ $message }}</p> @enderror
+        </div>
+        <div>
+          <label for="region" class="block text-sm font-medium text-slate-700 mb-1">Región / departamento</label>
           <input id="region" name="region" maxlength="100"
                  value="{{ old('region', $entidad->region ?? '') }}"
                  class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
@@ -104,6 +112,49 @@
           <input id="postal_code" name="postal_code" maxlength="20"
                  value="{{ old('postal_code', $entidad->postal_code ?? '') }}"
                  class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+        </div>
+      </div>
+
+      {{-- 9.17c: el código de localidad se llama distinto en cada país —ubigeo
+           en Perú, código DANE en Colombia— y esta etiqueta sale del catálogo de
+           países, no del código. Si el país no declara ninguno, el campo se
+           sigue pudiendo rellenar: no se le impide a nadie guardar un dato que
+           su administración tributaria sí le pide y nosotros no conocemos. --}}
+      @php
+        $paisActual = $entidad === null
+          ? null
+          : $paises->firstWhere('id', $entidad->country_id);
+        $etiquetaLocalidad = $paisActual?->tax_location_label ?: 'Código de localidad';
+      @endphp
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label for="tax_location_code" class="block text-sm font-medium text-slate-700 mb-1">
+            {{ $etiquetaLocalidad }}
+            @if ($paisActual?->requires_tax_location)
+              <span class="ml-1 rounded bg-rose-100 px-1.5 py-0.5 text-[11px] text-rose-800">Lo exige el comprobante</span>
+            @endif
+          </label>
+          <input id="tax_location_code" name="tax_location_code" maxlength="12"
+                 value="{{ old('tax_location_code', $entidad->tax_location_code ?? '') }}"
+                 class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-mono">
+          @error('tax_location_code') <p class="mt-1 text-xs text-rose-600">{{ $message }}</p> @enderror
+          @if ($entidad === null)
+            <p class="mt-1 text-xs text-slate-400">
+              Depende del país: se comprueba con la forma que ese país tenga declarada en el catálogo.
+            </p>
+          @endif
+        </div>
+        <div>
+          <label for="establishment_code" class="block text-sm font-medium text-slate-700 mb-1">
+            Código de establecimiento
+          </label>
+          <input id="establishment_code" name="establishment_code" maxlength="10" placeholder="0000"
+                 value="{{ old('establishment_code', $entidad->establishment_code ?? '') }}"
+                 class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-mono">
+          @error('establishment_code') <p class="mt-1 text-xs text-rose-600">{{ $message }}</p> @enderror
+          <p class="mt-1 text-xs text-slate-400">
+            En blanco es «0000»: el domicilio fiscal. Otro valor, un local anexo declarado.
+          </p>
         </div>
       </div>
     </div>

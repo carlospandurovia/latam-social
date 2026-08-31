@@ -79,8 +79,18 @@ CREATE TABLE legal_entities (
   address_line1     VARCHAR(180)  NOT NULL,
   address_line2     VARCHAR(180)  NULL,
   city              VARCHAR(100)  NOT NULL,
+  -- 9.17c: el comprobante electronico peruano lo lleva, y no estaba.
+  district          VARCHAR(100)  NULL,
   region            VARCHAR(100)  NULL,
   postal_code       VARCHAR(20)   NULL,
+  -- 9.17c: el ubigeo en Peru, el codigo DANE en Colombia. La FORMA la declara
+  -- el pais (`countries.tax_location_pattern`) y la impone `tg_le_localidad_*`;
+  -- aqui solo esta la forma general que vale en todos.
+  tax_location_code VARCHAR(12)   NULL,
+  -- 9.17c: «0000» es el domicilio fiscal en SUNAT. Con valor por defecto y no
+  -- nulo: un comprobante SIEMPRE lleva uno, y dejarlo nulo obligaria a
+  -- decidirlo al emitir, que es tarde.
+  establishment_code VARCHAR(10)  NOT NULL DEFAULT '0000',
   default_currency_code CHAR(3)   NOT NULL,
   -- Convierte un instante UTC en "el dia" que exige el comprobante (2.3 §8).
   timezone          VARCHAR(64)   NOT NULL,
@@ -103,7 +113,15 @@ CREATE TABLE legal_entities (
   CONSTRAINT ck_le_dates CHECK (dissolved_on IS NULL OR incorporated_on IS NULL OR dissolved_on >= incorporated_on),
   -- Una sociedad disuelta tiene que decir cuando. Sigue existiendo en el
   -- historico: BR-LE-011 prohibe borrarla mientras tenga comprobantes emitidos.
-  CONSTRAINT ck_le_dissolved CHECK (status <> 'dissolved' OR dissolved_on IS NOT NULL)
+  CONSTRAINT ck_le_dissolved CHECK (status <> 'dissolved' OR dissolved_on IS NOT NULL),
+  -- 9.17c: la forma GENERAL, la que vale en todos los paises. La de CADA pais
+  -- la impone `tg_le_localidad_*` leyendo el patron de `countries`: es cruzada
+  -- y por eso no cabe en un CHECK.
+  CONSTRAINT ck_le_localidad CHECK (tax_location_code IS NULL OR tax_location_code REGEXP '^[0-9A-Za-z]{2,12}$'),
+  CONSTRAINT ck_le_establecimiento CHECK (establishment_code REGEXP '^[0-9A-Za-z]{1,10}$'),
+  -- Un distrito en blanco no es «sin distrito»: es un comprobante con el campo
+  -- vacio. Sin distrito se deja NULL, que si significa eso.
+  CONSTRAINT ck_le_distrito CHECK (district IS NULL OR TRIM(district) <> '')
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ==================== D2 Core: que sociedad factura en que pais (docs/11)
@@ -239,6 +257,50 @@ END//
 -- con dos, `uq_pb_default` deja a la nueva sin ser la de por defecto, y las
 -- pantallas siguen ensenando la vieja mientras alguien edita la nueva. Un fallo
 -- silencioso perfecto. El nombre visible se cambia cuanto se quiera.
+-- 9.17c: la FORMA del codigo de localidad la declara el pais, y comprobarla es
+-- leer otra tabla: eso no cabe en un CHECK. Si el pais no declara patron no se
+-- comprueba nada --un pais sin configurar no puede impedir dar de alta una
+-- sociedad (DEC-190)--.
+CREATE TRIGGER `tg_le_localidad_ins`
+BEFORE INSERT ON `legal_entities`
+FOR EACH ROW
+BEGIN
+    -- CON COLACION EXPLICITA: sin ella la variable toma la del servidor y la
+    -- columna la de la tabla, y el REGEXP entre las dos da «Illegal mix of
+    -- collations», un 1267 en CADA alta de sociedad que traiga codigo.
+    DECLARE v_patron VARCHAR(80) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+    IF NEW.`tax_location_code` IS NOT NULL THEN
+        SELECT `tax_location_pattern` INTO v_patron
+          FROM `countries` WHERE `id` = NEW.`country_id`;
+
+        IF v_patron IS NOT NULL AND NEW.`tax_location_code` NOT REGEXP v_patron THEN
+            SIGNAL SQLSTATE '45000'
+              SET MESSAGE_TEXT = 'El codigo de localidad no tiene la forma que exige ese pais.';
+        END IF;
+    END IF;
+END//
+
+CREATE TRIGGER `tg_le_localidad_upd`
+BEFORE UPDATE ON `legal_entities`
+FOR EACH ROW
+BEGIN
+    -- CON COLACION EXPLICITA: sin ella la variable toma la del servidor y la
+    -- columna la de la tabla, y el REGEXP entre las dos da «Illegal mix of
+    -- collations», un 1267 en CADA alta de sociedad que traiga codigo.
+    DECLARE v_patron VARCHAR(80) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+    IF NEW.`tax_location_code` IS NOT NULL THEN
+        SELECT `tax_location_pattern` INTO v_patron
+          FROM `countries` WHERE `id` = NEW.`country_id`;
+
+        IF v_patron IS NOT NULL AND NEW.`tax_location_code` NOT REGEXP v_patron THEN
+            SIGNAL SQLSTATE '45000'
+              SET MESSAGE_TEXT = 'El codigo de localidad no tiene la forma que exige ese pais.';
+        END IF;
+    END IF;
+END//
+
 CREATE TRIGGER `tg_pb_code`
 BEFORE UPDATE ON `platform_brands`
 FOR EACH ROW

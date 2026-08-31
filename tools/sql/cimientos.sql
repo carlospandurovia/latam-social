@@ -14,12 +14,25 @@ CREATE TABLE countries (
   phone_code            VARCHAR(8)   NOT NULL,
   default_currency_code CHAR(3)      NOT NULL,
   timezone              VARCHAR(64)  NOT NULL,
+  -- 9.17c: como se llama y que forma tiene el codigo de localidad que exige la
+  -- administracion tributaria de este pais. En Peru es el ubigeo del INEI, seis
+  -- digitos; en Colombia el codigo DANE, cinco. No se llama `ubigeo` a
+  -- proposito: eso seria la regla de un pais escrita en el codigo de todos.
+  tax_location_label    VARCHAR(40)  NULL,
+  tax_location_pattern  VARCHAR(80)  NULL,
+  requires_tax_location TINYINT(1)   NOT NULL DEFAULT 0,
   is_active             TINYINT(1)   NOT NULL DEFAULT 1,
   created_at            DATETIME(3)  NULL,
   updated_at            DATETIME(3)  NULL,
   UNIQUE KEY uq_countries_iso2 (iso2),
   UNIQUE KEY uq_countries_iso3 (iso3),
-  KEY ix_countries_active (is_active, name)
+  KEY ix_countries_active (is_active, name),
+  -- Media configuracion es peor que ninguna: un patron sin etiqueta deja al
+  -- formulario pidiendo «codigo de localidad» sin decir cual.
+  CONSTRAINT ck_countries_localidad CHECK (tax_location_pattern IS NULL OR tax_location_label IS NOT NULL),
+  -- Y exigirlo sin decir que forma tiene es pedir algo que no se puede
+  -- comprobar: el aviso saldria en rojo para siempre.
+  CONSTRAINT ck_countries_localidad_exigida CHECK (requires_tax_location = 0 OR tax_location_pattern IS NOT NULL)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE currencies (

@@ -144,6 +144,44 @@ final class CoreServiceProvider extends ServiceProvider
                     ));
                 }
 
+                // 9.17c: lo que el comprobante electronico va a pedir y hoy
+                // no esta. `requires_tax_location` lo declara el PAIS: rojo si
+                // ese pais lo exige, y ni se pregunta si no lo declara.
+                $sinLocalidad = DB::table('legal_entities as le')
+                    ->join('countries as c', 'c.id', '=', 'le.country_id')
+                    ->where('le.status', 'active')
+                    ->where('c.requires_tax_location', 1)
+                    ->whereNull('le.tax_location_code')
+                    ->get(['le.code', 'c.tax_location_label']);
+
+                if ($sinLocalidad->isNotEmpty()) {
+                    $avisos[] = Aviso::rojo(sprintf(
+                        'Sin %s: %s. Es un campo obligatorio del comprobante electrónico, así que '
+                        .'ese dato falta antes de poder emitir la primera factura.',
+                        mb_strtolower((string) $sinLocalidad->first()->tax_location_label),
+                        $sinLocalidad->pluck('code')->implode(', '),
+                    ));
+                }
+
+                // El sembrador escribe «Por completar» en la direccion y en la
+                // ciudad porque las dos columnas son NOT NULL y no hay nada
+                // verdadero que poner. Hasta hoy eso no lo decia nadie: la
+                // sociedad parecia completa y el texto habria salido impreso en
+                // una factura.
+                $sinDireccion = DB::table('legal_entities')
+                    ->where('status', 'active')
+                    ->where(fn ($q) => $q->where('address_line1', 'Por completar')
+                        ->orWhere('city', 'Por completar'))
+                    ->pluck('code');
+
+                if ($sinDireccion->isNotEmpty()) {
+                    $avisos[] = Aviso::rojo(sprintf(
+                        'El domicilio de %s todavía dice «Por completar»: es lo que sembró la '
+                        .'instalación, y saldría impreso tal cual en el comprobante.',
+                        $sinDireccion->implode(', '),
+                    ));
+                }
+
                 $sinRepresentante = DB::table('legal_entities')
                     ->where('status', 'active')
                     ->where(fn ($q) => $q->whereNull('legal_representative')

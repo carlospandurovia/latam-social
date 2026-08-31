@@ -75,9 +75,21 @@ final class CimientosSeeder extends Seeder
         );
 
         // is_active marca dónde se opera hoy, no dónde existe el país.
+        // 9.17c: `tax_location_*` es como se llama y que forma tiene el codigo de
+        // localidad que exige la administracion tributaria de cada pais --el
+        // ubigeo del INEI en Peru, el codigo DANE en Colombia--. Son VALORES DE
+        // PARTIDA y se cambian desde el catalogo de paises: la regla («valida
+        // contra el patron del pais») esta en el codigo, el patron no (DEC-190).
+        //
+        // Solo se declara donde se sabe. Mexico no tiene equivalente y usa el
+        // codigo postal; Ecuador, Chile y EEUU no lo piden en el comprobante que
+        // emitimos. Declarar un patron inventado seria peor que no declararlo:
+        // rechazaria codigos buenos.
         $paises = [
-            ['iso2' => 'PE', 'iso3' => 'PER', 'numeric_code' => '604', 'name' => 'Perú',      'phone_code' => '+51',  'default_currency_code' => 'PEN', 'timezone' => 'America/Lima',        'is_active' => true],
-            ['iso2' => 'CO', 'iso3' => 'COL', 'numeric_code' => '170', 'name' => 'Colombia',  'phone_code' => '+57',  'default_currency_code' => 'COP', 'timezone' => 'America/Bogota',      'is_active' => true],
+            ['iso2' => 'PE', 'iso3' => 'PER', 'numeric_code' => '604', 'name' => 'Perú',      'phone_code' => '+51',  'default_currency_code' => 'PEN', 'timezone' => 'America/Lima',        'is_active' => true,
+                'tax_location_label' => 'Ubigeo', 'tax_location_pattern' => '^[0-9]{6}$', 'requires_tax_location' => true],
+            ['iso2' => 'CO', 'iso3' => 'COL', 'numeric_code' => '170', 'name' => 'Colombia',  'phone_code' => '+57',  'default_currency_code' => 'COP', 'timezone' => 'America/Bogota',      'is_active' => true,
+                'tax_location_label' => 'Código DANE', 'tax_location_pattern' => '^[0-9]{5}$', 'requires_tax_location' => false],
             ['iso2' => 'MX', 'iso3' => 'MEX', 'numeric_code' => '484', 'name' => 'México',    'phone_code' => '+52',  'default_currency_code' => 'MXN', 'timezone' => 'America/Mexico_City', 'is_active' => true],
             ['iso2' => 'EC', 'iso3' => 'ECU', 'numeric_code' => '218', 'name' => 'Ecuador',   'phone_code' => '+593', 'default_currency_code' => 'USD', 'timezone' => 'America/Guayaquil',   'is_active' => true],
             ['iso2' => 'CL', 'iso3' => 'CHL', 'numeric_code' => '152', 'name' => 'Chile',     'phone_code' => '+56',  'default_currency_code' => 'CLP', 'timezone' => 'America/Santiago',    'is_active' => true],
