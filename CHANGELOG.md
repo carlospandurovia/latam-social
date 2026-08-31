@@ -50,6 +50,21 @@ nunca la escribió nadie: tenía la forma correcta y ninguna mecánica.
 - Las series reales **hay que darlas de alta a mano** tras desplegar, con el
   correlativo por el que vayan hoy.
 
+### Corregido también — `T-77` (hotfix del mismo día, reportado desde la instalación)
+- **El sembrador reescribía lo que ya estaba configurado.** `updateOrInsert` no
+  duplica, pero **reescribe**: cada `db:seed` —lo que el runbook manda tras cada
+  migración— devolvía a fábrica el nombre, el lema, los colores y la tipografía de
+  la marca y la dirección de la sociedad, **regeneraba sus `uuid`** y reactivaba
+  fuentes y proveedores apagados a propósito.
+- **Y se paraba en seco**: con un periodo de tipo de cambio cerrado a mano, mover
+  el `valid_from` del abierto lo solapaba con el cerrado (`45000`). El sembrador
+  moría en la línea 71, así que los proveedores de `9.17d` y los tipos de
+  comprobante de `9.12` **no llegaban a entrar**.
+- Ahora: `sembrarSiFalta()` para todo lo que configura una persona, y
+  `desdeCuandoSePuede()` donde hay vigencia — un periodo nuevo empieza el día
+  siguiente al último cierre. `SembradoTest`, 5 pruebas verificadas en rojo sin
+  el arreglo.
+
 ## [9.17d · Las credenciales de cada API, en un solo sitio] — 2026-08-31
 
 Prerrequisito de `9.9`. Sin un sitio donde poner la URL y las claves secundarias

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Database\Seeders;
 
+use App\Shared\Database\Vigencia;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -14,9 +15,37 @@ use Illuminate\Support\Str;
  * Los países son los que el negocio confirmó: PE, EC, CL, MX y US los factura
  * CTS Perú; CO la factura CTS Colombia (docs/16). ES y AR entran como destino
  * previsto, marcados inactivos: existir en el catálogo no es lo mismo que operar.
+ *
+ * ### Idempotente no era lo mismo que inofensivo (`T-77`)
+ *
+ * Todo esto se escribía con `updateOrInsert`, que **no duplica** —de ahí la
+ * palabra «idempotente» de arriba— pero **sí reescribe**. Y lo que reescribía no
+ * eran catálogos: era la marca de plataforma, el domicilio de la sociedad y la
+ * fuente oficial de tipos de cambio, o sea justo lo que `DEC-190` dice que una
+ * persona configura desde el admin.
+ *
+ * Volver a ejecutar el sembrador después de una migración —que es lo que dice el
+ * runbook, y lo que hay que hacer para que entren los catálogos nuevos— dejaba
+ * el nombre de la marca, sus colores, su tipografía y la dirección de la
+ * sociedad **como el primer día**, y de paso **regeneraba sus `uuid`**, que son
+ * los que viajan en las URLs.
+ *
+ * Se descubrió porque además **reventó**: con un periodo de tipo de cambio ya
+ * cerrado a mano, reescribir el `valid_from` del abierto lo hacía solaparse con
+ * el cerrado, y `tg_fos_sin_solape_upd` paraba el sembrador entero —así que los
+ * catálogos que venían después, los proveedores de integración de `9.17d` y los
+ * tipos de comprobante de `9.12`, no llegaban a entrar—.
+ *
+ * La regla desde aquí: **lo que una persona puede cambiar se siembra si falta y
+ * no se toca si está**. Eso es `sembrarSiFalta()`. Los catálogos respaldados por
+ * código —monedas, países, permisos, roles, plataformas— siguen con
+ * `updateOrInsert`, porque ahí actualizar ES cómo se despliega una versión nueva.
  */
 final class CimientosSeeder extends Seeder
 {
+    /** El día desde el que valen los valores de partida de esta instalación. */
+    private const ARRANQUE = '2026-01-01';
+
     public function run(): void
     {
         $ahora = now();
@@ -51,10 +80,11 @@ final class CimientosSeeder extends Seeder
         ];
 
         foreach ($fuentes as $f) {
-            DB::table('fx_sources')->updateOrInsert(
-                ['code' => $f['code']],
-                $f + ['is_active' => true, 'updated_at' => $ahora, 'created_at' => $ahora],
-            );
+            // `sembrarSiFalta` y no `updateOrInsert`: `is_active` es de quien
+            // administra. Con `updateOrInsert`, volver a sembrar REACTIVABA una
+            // fuente que alguien habia apagado a proposito (`T-77`).
+            self::sembrarSiFalta('fx_sources', ['code' => $f['code']],
+                $f + ['is_active' => true, 'updated_at' => $ahora, 'created_at' => $ahora]);
         }
 
         // 9.2: quién publica el tipo de cambio de USD a PEN. Va en el
@@ -65,13 +95,25 @@ final class CimientosSeeder extends Seeder
         // los publica, y declarar una fuente que no publica es peor que no
         // tener ninguna (ver `Q-64`).
         //
-        // `updateOrInsert` sobre el par, no sobre el id: correr el seeder dos
-        // veces no puede abrir dos periodos, que es lo que `uq_fos_current`
-        // rechazaría con un 1062 en mitad de una instalación.
-        DB::table('fx_official_sources')->updateOrInsert(
+        // Se siembra si NO hay ninguna abierta para el par, y empezando el dia
+        // siguiente al ultimo cierre.
+        //
+        // Antes esto era un `updateOrInsert` sobre el par, y ahi estaba `T-77`:
+        // reescribia el `valid_from` de la fila ABIERTA y la hacia solaparse con
+        // el periodo que alguien habia cerrado a mano. `tg_fos_sin_solape_upd`
+        // paraba el sembrador entero con un 45000 --y con el, todos los
+        // catalogos que vienen despues--. El defecto es el de `T-73` visto desde
+        // el sembrador: el historico tambien ocupa fechas.
+        self::sembrarSiFalta(
+            'fx_official_sources',
             ['base_currency_code' => 'USD', 'quote_currency_code' => 'PEN', 'valid_to' => null],
-            ['source_code' => 'sunat', 'valid_from' => '2026-01-01',
-                'updated_at' => $ahora, 'created_at' => $ahora],
+            [
+                'source_code' => 'sunat',
+                'valid_from' => self::desdeCuandoSePuede('fx_official_sources', [
+                    'base_currency_code' => 'USD', 'quote_currency_code' => 'PEN',
+                ]),
+                'updated_at' => $ahora, 'created_at' => $ahora,
+            ],
         );
 
         // is_active marca dónde se opera hoy, no dónde existe el país.
@@ -501,7 +543,13 @@ final class CimientosSeeder extends Seeder
         // sembrador, y por eso la pantalla nace con un aviso rojo que dice
         // exactamente eso. Es el criterio de DEC-190: falta configuracion, se
         // avisa con prioridad, no se bloquea nada.
-        DB::table('platform_brands')->updateOrInsert(
+        // `sembrarSiFalta` desde `T-77`. Con `updateOrInsert`, cada vez que se
+        // volvia a sembrar --lo que el runbook manda hacer tras cada migracion--
+        // la marca volvia al primer dia: nombre, lema, colores y tipografia
+        // pisados, y **el `uuid` regenerado**. Los valores de partida se ponen
+        // una vez; a partir de ahi manda `/marca` (`DEC-190`).
+        self::sembrarSiFalta(
+            'platform_brands',
             ['code' => (string) config('latam.marca.codigo', 'latam_social')],
             [
                 'uuid' => (string) Str::uuid(),
@@ -520,6 +568,7 @@ final class CimientosSeeder extends Seeder
                 'updated_at' => $ahora, 'created_at' => $ahora,
             ],
         );
+
         // 9.17d: el catalogo de proveedores de integracion. Es una tabla y no
         // una constante porque el dia que entre uno nuevo --otro emisor
         // electronico, una pasarela-- eso es una fila y no un despliegue
@@ -536,10 +585,11 @@ final class CimientosSeeder extends Seeder
         ];
 
         foreach ($proveedores as $p) {
-            DB::table('integration_providers')->updateOrInsert(
-                ['code' => $p['code']],
-                $p + ['is_active' => true, 'updated_at' => $ahora, 'created_at' => $ahora],
-            );
+            // Si falta, no si cambia (`T-77`): `is_active` y el nombre son de
+            // quien administra, y `updateOrInsert` reactivaba un proveedor
+            // apagado a proposito cada vez que se volvia a sembrar.
+            self::sembrarSiFalta('integration_providers', ['code' => $p['code']],
+                $p + ['is_active' => true, 'updated_at' => $ahora, 'created_at' => $ahora]);
         }
 
         // 9.12: los tipos de comprobante de Peru. Son DATOS, no un enum: hasta
@@ -574,11 +624,13 @@ final class CimientosSeeder extends Seeder
             ];
 
             foreach ($tipos as $t) {
-                DB::table('document_types')->updateOrInsert(
+                // Si falta, no si cambia (`T-77`): la forma de la serie y los
+                // digitos del correlativo se pueden ajustar desde `/series`, y
+                // volver a sembrar no puede devolverlos a los de fabrica.
+                self::sembrarSiFalta('document_types',
                     ['country_id' => $paisPeru, 'code' => $t['code']],
-                    $t + ['country_id' => $paisPeru, 'number_length' => 8, 'is_active' => true,
-                        'updated_at' => $ahora, 'created_at' => $ahora],
-                );
+                    $t + ['number_length' => 8, 'is_active' => true,
+                        'updated_at' => $ahora, 'created_at' => $ahora]);
             }
         }
 
@@ -626,7 +678,14 @@ final class CimientosSeeder extends Seeder
 
         foreach ($sociedades as $e) {
             $paisId = DB::table('countries')->where('iso2', $e['iso2'])->value('id');
-            DB::table('legal_entities')->updateOrInsert(
+            // `sembrarSiFalta` desde `T-77`, y aqui es lo mas grave que hacia el
+            // `updateOrInsert`: la razon social, la direccion, la ciudad y el
+            // ESTADO de la sociedad volvian a los valores de fabrica --con la
+            // direccion en «Por completar»-- cada vez que se sembraba, y el
+            // `uuid` se regeneraba, que es el que viaja en las URLs. Justo lo
+            // que `9.17c` acababa de dejar configurable desde el admin.
+            self::sembrarSiFalta(
+                'legal_entities',
                 ['code' => $e['code']],
                 [
                     'uuid' => (string) Str::uuid(),
@@ -656,11 +715,18 @@ final class CimientosSeeder extends Seeder
                     ->whereNull('valid_to')
                     ->exists();
                 if (!$existe) {
+                    // No desde el arranque a secas: desde el dia siguiente al
+                    // ultimo cierre. Desactivar una sociedad cierra sus
+                    // coberturas (`DEC-081`), y volver a sembrar con la fecha de
+                    // fabrica se solapaba con lo cerrado --el `45000` de `T-73`,
+                    // esta vez disparado por el sembrador--.
                     DB::table('legal_entity_countries')->insert([
                         'legal_entity_id' => $entidadId,
                         'country_id' => $cubreId,
                         'coverage_basis' => $motivo,
-                        'valid_from' => '2026-01-01',
+                        'valid_from' => self::desdeCuandoSePuede('legal_entity_countries', [
+                            'legal_entity_id' => $entidadId, 'country_id' => $cubreId,
+                        ]),
                         'updated_at' => $ahora, 'created_at' => $ahora,
                     ]);
                 }
@@ -674,5 +740,69 @@ final class CimientosSeeder extends Seeder
                 ['role_id' => $adminId, 'permission_id' => $permisoId], [],
             );
         }
+    }
+
+    /**
+     * Siembra una fila **sólo si no existe**. Nunca reescribe lo que ya hay.
+     *
+     * Es la mitad de `updateOrInsert` que hace falta para un valor de partida
+     * (`DEC-190`): el sistema arranca configurado, y a partir de ahí manda quien
+     * lo configura. Volver a sembrar no puede deshacer su trabajo.
+     *
+     * Un `NULL` en la llave se busca con `whereNull` y no con `=`: en SQL
+     * `columna = NULL` no es falso, es **desconocido**, así que nunca encuentra
+     * nada y la fila se insertaría siempre —que es el duplicado que se quería
+     * evitar—.
+     *
+     * @param array<string, mixed> $llave Cómo se reconoce esta fila.
+     * @param array<string, mixed> $valores Lo demás, sólo para el alta.
+     * @return bool `true` si la sembró; `false` si ya estaba.
+     */
+    private static function sembrarSiFalta(string $tabla, array $llave, array $valores): bool
+    {
+        $consulta = DB::table($tabla);
+
+        foreach ($llave as $columna => $valor) {
+            $valor === null ? $consulta->whereNull($columna) : $consulta->where($columna, $valor);
+        }
+
+        if ($consulta->exists()) {
+            return false;
+        }
+
+        DB::table($tabla)->insert($llave + $valores);
+
+        return true;
+    }
+
+    /**
+     * Desde cuándo puede empezar un periodo nuevo sin pisar al anterior.
+     *
+     * El día siguiente al último cierre, o el arranque de la instalación si no
+     * hay historia. Sin esto, sembrar una cobertura o una fuente oficial después
+     * de haber cerrado la anterior produce el `45000` de solape —que es el mismo
+     * defecto de `T-73`, esta vez por el lado del sembrador—.
+     *
+     * @param array<string, mixed> $filtro
+     */
+    private static function desdeCuandoSePuede(string $tabla, array $filtro, string $columna = 'valid_to'): string
+    {
+        $consulta = DB::table($tabla);
+
+        foreach ($filtro as $col => $valor) {
+            $consulta->where($col, $valor);
+        }
+
+        $ultimoCierre = $consulta->max($columna);
+
+        if ($ultimoCierre === null) {
+            return self::ARRANQUE;
+        }
+
+        $siguiente = Vigencia::elDiaDespuesDe((string) $ultimoCierre);
+
+        return Vigencia::fecha($siguiente) > Vigencia::fecha(self::ARRANQUE)
+            ? $siguiente
+            : self::ARRANQUE;
     }
 }
