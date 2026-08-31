@@ -68,16 +68,16 @@ final class PerfilComercialTest extends TestCase
         // La tarifa es el COSTO del creador, no el margen: mirarla basta con
         // `creator.view`. Fijarla pide `creator.rate.manage` (DEC-069).
         $this->actingAs($this->usuarioCon('content_reviewer'))
-            ->get("/creadores/{$this->uuid}/comercial")->assertOk();
+            ->get("/backoffice/creadores/{$this->uuid}/comercial")->assertOk();
 
         $this->actingAs($this->usuarioCon('content_reviewer'))
-            ->post("/creadores/{$this->uuid}/comercial/tarifa", $this->tarifa())
+            ->post("/backoffice/creadores/{$this->uuid}/comercial/tarifa", $this->tarifa())
             ->assertForbidden();
 
         $this->assertDatabaseCount('creator_rates', 0);
 
         $this->actingAs($this->usuarioCon('campaign_manager'))
-            ->post("/creadores/{$this->uuid}/comercial/tarifa", $this->tarifa())
+            ->post("/backoffice/creadores/{$this->uuid}/comercial/tarifa", $this->tarifa())
             ->assertRedirect(route('creadores.comercial', $this->uuid));
 
         $this->assertDatabaseCount('creator_rates', 1);
@@ -88,7 +88,7 @@ final class PerfilComercialTest extends TestCase
     public function test_la_tarifa_dice_quien_la_puso_y_de_donde_sale(): void
     {
         $quien = $this->usuarioCon('campaign_manager');
-        $this->actingAs($quien)->post("/creadores/{$this->uuid}/comercial/tarifa", $this->tarifa());
+        $this->actingAs($quien)->post("/backoffice/creadores/{$this->uuid}/comercial/tarifa", $this->tarifa());
 
         $t = DB::table('creator_rates')->first();
 
@@ -102,7 +102,7 @@ final class PerfilComercialTest extends TestCase
     public function test_sin_decir_de_donde_sale_el_precio_no_se_guarda(): void
     {
         $this->actingAs($this->usuarioCon('campaign_manager'))
-            ->post("/creadores/{$this->uuid}/comercial/tarifa", $this->tarifa(['source' => null]))
+            ->post("/backoffice/creadores/{$this->uuid}/comercial/tarifa", $this->tarifa(['source' => null]))
             ->assertSessionHasErrors('source');
 
         $this->assertDatabaseCount('creator_rates', 0);
@@ -119,8 +119,8 @@ final class PerfilComercialTest extends TestCase
     {
         $quien = $this->usuarioCon('campaign_manager');
 
-        $this->actingAs($quien)->post("/creadores/{$this->uuid}/comercial/tarifa", $this->tarifa());
-        $this->actingAs($quien)->post("/creadores/{$this->uuid}/comercial/tarifa",
+        $this->actingAs($quien)->post("/backoffice/creadores/{$this->uuid}/comercial/tarifa", $this->tarifa());
+        $this->actingAs($quien)->post("/backoffice/creadores/{$this->uuid}/comercial/tarifa",
             $this->tarifa(['amount' => '2500', 'source' => 'negotiated', 'valid_from' => '2026-03-01']));
 
         $anterior = DB::table('creator_rates')->where('amount', 1000)->first();
@@ -142,12 +142,12 @@ final class PerfilComercialTest extends TestCase
     public function test_una_tarifa_que_empieza_antes_que_la_vigente_se_rechaza_con_palabras(): void
     {
         $quien = $this->usuarioCon('campaign_manager');
-        $this->actingAs($quien)->post("/creadores/{$this->uuid}/comercial/tarifa",
+        $this->actingAs($quien)->post("/backoffice/creadores/{$this->uuid}/comercial/tarifa",
             $this->tarifa(['valid_from' => '2026-06-01']));
 
         // Cerrarla el dia antes la dejaria terminando antes de empezar. La base
         // lo rechaza igual; el controlador lo dice con palabras.
-        $this->actingAs($quien)->post("/creadores/{$this->uuid}/comercial/tarifa",
+        $this->actingAs($quien)->post("/backoffice/creadores/{$this->uuid}/comercial/tarifa",
             $this->tarifa(['amount' => '2000', 'valid_from' => '2026-01-01']))
             ->assertSessionHas('aviso');
 
@@ -159,11 +159,11 @@ final class PerfilComercialTest extends TestCase
         $quien = $this->usuarioCon('campaign_manager');
 
         // Cero a secas: lo rechaza la validacion antes de llegar a la base.
-        $this->actingAs($quien)->post("/creadores/{$this->uuid}/comercial/tarifa",
+        $this->actingAs($quien)->post("/backoffice/creadores/{$this->uuid}/comercial/tarifa",
             $this->tarifa(['amount' => '0']))->assertSessionHasErrors('amount');
 
         // Declarada gratuita: entra, y el importe queda en cero.
-        $this->actingAs($quien)->post("/creadores/{$this->uuid}/comercial/tarifa",
+        $this->actingAs($quien)->post("/backoffice/creadores/{$this->uuid}/comercial/tarifa",
             $this->tarifa(['is_gratis' => '1', 'amount' => null]))
             ->assertRedirect(route('creadores.comercial', $this->uuid));
 
@@ -175,7 +175,7 @@ final class PerfilComercialTest extends TestCase
     public function test_dos_tarifas_solapadas_la_base_lo_impide(): void
     {
         $quien = $this->usuarioCon('campaign_manager');
-        $this->actingAs($quien)->post("/creadores/{$this->uuid}/comercial/tarifa", $this->tarifa());
+        $this->actingAs($quien)->post("/backoffice/creadores/{$this->uuid}/comercial/tarifa", $this->tarifa());
 
         // Sin pasar por el controlador, que es quien cierra la anterior.
         $this->expectException(QueryException::class);
@@ -198,8 +198,8 @@ final class PerfilComercialTest extends TestCase
         $quien = $this->usuarioCon('campaign_manager');
         $base = ['min_lead_time_days' => 3, 'valid_from' => '2026-01-01'];
 
-        $this->actingAs($quien)->post("/creadores/{$this->uuid}/comercial/disponibilidad", $base);
-        $this->actingAs($quien)->post("/creadores/{$this->uuid}/comercial/disponibilidad",
+        $this->actingAs($quien)->post("/backoffice/creadores/{$this->uuid}/comercial/disponibilidad", $base);
+        $this->actingAs($quien)->post("/backoffice/creadores/{$this->uuid}/comercial/disponibilidad",
             ['min_lead_time_days' => 10, 'valid_from' => '2026-03-01']);
 
         $this->assertSame('2026-02-28',
@@ -211,7 +211,7 @@ final class PerfilComercialTest extends TestCase
     public function test_si_dice_que_viaja_tiene_que_decir_hasta_donde(): void
     {
         $this->actingAs($this->usuarioCon('campaign_manager'))
-            ->post("/creadores/{$this->uuid}/comercial/disponibilidad", [
+            ->post("/backoffice/creadores/{$this->uuid}/comercial/disponibilidad", [
                 'accepts_travel' => '1', 'min_lead_time_days' => 3, 'valid_from' => '2026-01-01',
             ])
             ->assertSessionHasErrors('travel_scope');
@@ -224,7 +224,7 @@ final class PerfilComercialTest extends TestCase
     public function test_un_bloqueo_no_puede_terminar_antes_de_empezar(): void
     {
         $this->actingAs($this->usuarioCon('campaign_manager'))
-            ->post("/creadores/{$this->uuid}/comercial/bloqueo",
+            ->post("/backoffice/creadores/{$this->uuid}/comercial/bloqueo",
                 ['starts_on' => '2026-08-15', 'ends_on' => '2026-08-01'])
             ->assertSessionHasErrors('ends_on');
     }
@@ -238,7 +238,7 @@ final class PerfilComercialTest extends TestCase
         $this->campana('CMP-0001', 'Campaña de julio', '2026-07-01', '2026-07-31', 'accepted');
 
         $this->actingAs($this->usuarioCon('campaign_manager'))
-            ->post("/creadores/{$this->uuid}/comercial/bloqueo",
+            ->post("/backoffice/creadores/{$this->uuid}/comercial/bloqueo",
                 ['starts_on' => '2026-07-10', 'ends_on' => '2026-07-20', 'reason' => 'Cirugía'])
             ->assertSessionHas('aviso');
 
@@ -253,7 +253,7 @@ final class PerfilComercialTest extends TestCase
         $this->campana('CMP-0002', 'Campaña sin aceptar', '2026-07-01', '2026-07-31', 'invited');
 
         $this->actingAs($this->usuarioCon('campaign_manager'))
-            ->post("/creadores/{$this->uuid}/comercial/bloqueo",
+            ->post("/backoffice/creadores/{$this->uuid}/comercial/bloqueo",
                 ['starts_on' => '2026-07-10', 'ends_on' => '2026-07-20'])
             ->assertSessionHas('exito');
 
@@ -265,7 +265,7 @@ final class PerfilComercialTest extends TestCase
         $this->campana('CMP-0003', 'Campaña de septiembre', '2026-09-01', '2026-09-30', 'accepted');
 
         $this->actingAs($this->usuarioCon('campaign_manager'))
-            ->post("/creadores/{$this->uuid}/comercial/bloqueo",
+            ->post("/backoffice/creadores/{$this->uuid}/comercial/bloqueo",
                 ['starts_on' => '2026-07-10', 'ends_on' => '2026-07-20'])
             ->assertSessionHas('exito');
     }
@@ -273,13 +273,13 @@ final class PerfilComercialTest extends TestCase
     public function test_un_bloqueo_registrado_por_error_se_borra(): void
     {
         $quien = $this->usuarioCon('campaign_manager');
-        $this->actingAs($quien)->post("/creadores/{$this->uuid}/comercial/bloqueo",
+        $this->actingAs($quien)->post("/backoffice/creadores/{$this->uuid}/comercial/bloqueo",
             ['starts_on' => '2026-07-10', 'ends_on' => '2026-07-20']);
 
         $id = (int) DB::table('creator_blackouts')->value('id');
 
         $this->actingAs($quien)
-            ->delete("/creadores/{$this->uuid}/comercial/bloqueo/{$id}")
+            ->delete("/backoffice/creadores/{$this->uuid}/comercial/bloqueo/{$id}")
             ->assertRedirect(route('creadores.comercial', $this->uuid));
 
         $this->assertDatabaseCount('creator_blackouts', 0);

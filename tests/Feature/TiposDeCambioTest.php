@@ -102,7 +102,7 @@ final class TiposDeCambioTest extends TestCase
     public function test_la_bitacora_no_guarda_la_clave(): void
     {
         $this->actingAs($this->usuarioCon('admin'))
-            ->post('/tipos-de-cambio/credencial', ['api_key' => 'clave-secreta-8f2a'])
+            ->post('/backoffice/tipos-de-cambio/credencial', ['api_key' => 'clave-secreta-8f2a'])
             ->assertSessionHas('exito');
 
         $fila = DB::table('audit_logs')->where('action', 'fx.credential.set')->first();
@@ -117,16 +117,16 @@ final class TiposDeCambioTest extends TestCase
     {
         $finanzas = $this->usuarioCon('finance');
 
-        $this->actingAs($finanzas)->get('/tipos-de-cambio')->assertOk();
+        $this->actingAs($finanzas)->get('/backoffice/tipos-de-cambio')->assertOk();
         $this->actingAs($finanzas)
-            ->post('/tipos-de-cambio/credencial', ['api_key' => 'clave-secreta-8f2a'])
+            ->post('/backoffice/tipos-de-cambio/credencial', ['api_key' => 'clave-secreta-8f2a'])
             ->assertForbidden();
     }
 
     public function test_sin_permiso_no_se_ve_la_pantalla(): void
     {
         $this->actingAs($this->usuarioCon('content_reviewer'))
-            ->get('/tipos-de-cambio')->assertForbidden();
+            ->get('/backoffice/tipos-de-cambio')->assertForbidden();
     }
 
     // --------------------------------------------------------------- traida
@@ -330,7 +330,7 @@ final class TiposDeCambioTest extends TestCase
 
     public function test_la_pantalla_dice_que_decolecta_solo_trae_dolares(): void
     {
-        $respuesta = $this->actingAs($this->usuarioCon('finance'))->get('/tipos-de-cambio');
+        $respuesta = $this->actingAs($this->usuarioCon('finance'))->get('/backoffice/tipos-de-cambio');
 
         $respuesta->assertOk();
         $respuesta->assertSee('sólo trae USD', false);
@@ -339,7 +339,7 @@ final class TiposDeCambioTest extends TestCase
     /** Declarar una fuente nueva releva a la anterior el día antes. */
     public function test_declarar_otra_fuente_desde_la_pantalla_cierra_la_anterior(): void
     {
-        $this->actingAs($this->usuarioCon('finance'))->post('/tipos-de-cambio/oficial', [
+        $this->actingAs($this->usuarioCon('finance'))->post('/backoffice/tipos-de-cambio/oficial', [
             'base_currency_code' => 'USD', 'quote_currency_code' => 'PEN',
             'source_code' => 'manual', 'valid_from' => '2026-06-01',
         ])->assertSessionHas('exito');
@@ -353,7 +353,7 @@ final class TiposDeCambioTest extends TestCase
     /** Una tasa a mano se guarda con la fuente `manual`, no disfrazada de SUNAT. */
     public function test_una_tasa_a_mano_no_se_disfraza_de_sunat(): void
     {
-        $this->actingAs($this->usuarioCon('finance'))->post('/tipos-de-cambio/anotar', [
+        $this->actingAs($this->usuarioCon('finance'))->post('/backoffice/tipos-de-cambio/anotar', [
             'base_currency_code' => 'USD', 'quote_currency_code' => 'PEN',
             'rate_date' => '2026-08-14', 'rate' => '3.742', 'side' => Cambio::VENTA,
         ])->assertSessionHas('exito');

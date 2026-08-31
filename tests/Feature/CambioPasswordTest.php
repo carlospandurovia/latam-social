@@ -49,7 +49,7 @@ final class CambioPasswordTest extends TestCase
     public function test_con_la_marca_puesta_no_se_llega_a_ningun_otro_sitio(): void
     {
         $this->actingAs($this->conMarca())
-            ->get('/panel')
+            ->get('/backoffice/panel')
             ->assertRedirect(route('contrasena'));
     }
 
@@ -62,8 +62,8 @@ final class CambioPasswordTest extends TestCase
     {
         $usuario = $this->conMarca();
 
-        $this->actingAs($usuario)->get('/contrasena')->assertOk();
-        $this->actingAs($usuario)->post('/salir')->assertRedirect(route('acceso'));
+        $this->actingAs($usuario)->get('/backoffice/contrasena')->assertOk();
+        $this->actingAs($usuario)->post('/backoffice/salir')->assertRedirect(route('acceso'));
     }
 
     public function test_cambiarla_limpia_la_marca_y_deja_pasar(): void
@@ -71,7 +71,7 @@ final class CambioPasswordTest extends TestCase
         $usuario = $this->conMarca();
 
         $this->actingAs($usuario)
-            ->put('/contrasena', [
+            ->put('/backoffice/contrasena', [
                 'actual' => self::TEMPORAL,
                 'password' => self::NUEVA,
                 'password_confirmation' => self::NUEVA,
@@ -85,7 +85,7 @@ final class CambioPasswordTest extends TestCase
         $this->assertFalse(Hash::check(self::TEMPORAL, $fresco->password), 'la temporal tiene que dejar de valer');
 
         // Y ahora sí se llega al resto del sistema.
-        $this->actingAs($fresco)->get('/panel')->assertOk();
+        $this->actingAs($fresco)->get('/backoffice/panel')->assertOk();
     }
 
     /**
@@ -100,7 +100,7 @@ final class CambioPasswordTest extends TestCase
         $usuario = $this->conMarca();
 
         $this->actingAs($usuario)
-            ->put('/contrasena', [
+            ->put('/backoffice/contrasena', [
                 'actual' => self::TEMPORAL,
                 'password' => self::TEMPORAL,
                 'password_confirmation' => self::TEMPORAL,
@@ -122,7 +122,7 @@ final class CambioPasswordTest extends TestCase
         $usuario = $this->conMarca();
 
         $this->actingAs($usuario)
-            ->put('/contrasena', [
+            ->put('/backoffice/contrasena', [
                 'actual' => 'esta-no-es',
                 'password' => self::NUEVA,
                 'password_confirmation' => self::NUEVA,
@@ -137,7 +137,7 @@ final class CambioPasswordTest extends TestCase
         $usuario = $this->conMarca();
 
         $this->actingAs($usuario)
-            ->put('/contrasena', [
+            ->put('/backoffice/contrasena', [
                 'actual' => self::TEMPORAL,
                 'password' => 'corta1!',
                 'password_confirmation' => 'corta1!',
@@ -155,11 +155,11 @@ final class CambioPasswordTest extends TestCase
     {
         $usuario = $this->conMarca(marcado: false);
 
-        $this->actingAs($usuario)->get('/panel')->assertOk();
-        $this->actingAs($usuario)->get('/contrasena')->assertOk();
+        $this->actingAs($usuario)->get('/backoffice/panel')->assertOk();
+        $this->actingAs($usuario)->get('/backoffice/contrasena')->assertOk();
 
         $this->actingAs($usuario)
-            ->put('/contrasena', [
+            ->put('/backoffice/contrasena', [
                 'actual' => self::TEMPORAL,
                 'password' => self::NUEVA,
                 'password_confirmation' => self::NUEVA,
@@ -172,7 +172,7 @@ final class CambioPasswordTest extends TestCase
     {
         $usuario = $this->conMarca();
 
-        $this->actingAs($usuario)->put('/contrasena', [
+        $this->actingAs($usuario)->put('/backoffice/contrasena', [
             'actual' => self::TEMPORAL,
             'password' => self::NUEVA,
             'password_confirmation' => self::NUEVA,

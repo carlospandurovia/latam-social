@@ -453,7 +453,7 @@ final class LedgerTest extends TestCase
         [, $asientoId] = $this->devengoCompleto();
         $creadorId = (int) DB::table('ledger_entries')->where('id', $asientoId)->value('creator_id');
 
-        $respuesta = $this->actingAs($this->usuarioDelCreador($creadorId))->get('/mis-ingresos');
+        $respuesta = $this->actingAs($this->usuarioDelCreador($creadorId))->get('/backoffice/mis-ingresos');
 
         $respuesta->assertOk();
         $respuesta->assertSee('Se te debe', false);
@@ -476,7 +476,7 @@ final class LedgerTest extends TestCase
         Ledger::retener($asientoId, 'Parece que lo borro a proposito; hablar con Luis.',
             (int) $this->usuarioCon('finance')->id);
 
-        $respuesta = $this->actingAs($this->usuarioDelCreador($creadorId))->get('/mis-ingresos');
+        $respuesta = $this->actingAs($this->usuarioDelCreador($creadorId))->get('/backoffice/mis-ingresos');
 
         $respuesta->assertOk();
         $respuesta->assertDontSee('a proposito', false);
@@ -493,7 +493,7 @@ final class LedgerTest extends TestCase
 
         $otro = $this->creadorActivo();
 
-        $respuesta = $this->actingAs($this->usuarioDelCreador($otro))->get('/mis-ingresos');
+        $respuesta = $this->actingAs($this->usuarioDelCreador($otro))->get('/backoffice/mis-ingresos');
 
         $respuesta->assertOk();
         $respuesta->assertDontSee('500.00', false);
@@ -503,7 +503,7 @@ final class LedgerTest extends TestCase
     /** Y sin el permiso del portal, ni se entra. */
     public function test_sin_el_permiso_del_portal_no_se_entra(): void
     {
-        $this->actingAs($this->usuarioCon('campaign_manager'))->get('/mis-ingresos')->assertForbidden();
+        $this->actingAs($this->usuarioCon('campaign_manager'))->get('/backoffice/mis-ingresos')->assertForbidden();
     }
 
     /**
@@ -518,11 +518,11 @@ final class LedgerTest extends TestCase
         $creadorId = (int) DB::table('ledger_entries')->where('id', $asientoId)->value('creator_id');
         $usuario = $this->usuarioDelCreador($creadorId);
 
-        $this->actingAs($usuario)->get('/mis-ingresos')->assertDontSee('Previsto para el', false);
+        $this->actingAs($usuario)->get('/backoffice/mis-ingresos')->assertDontSee('Previsto para el', false);
 
         Ledger::revisarPagable($asientoId);
 
-        $respuesta = $this->actingAs($usuario)->get('/mis-ingresos');
+        $respuesta = $this->actingAs($usuario)->get('/backoffice/mis-ingresos');
         $respuesta->assertSee('Previsto para el', false);
         $respuesta->assertSee((string) Ledger::fechaEstimadaDePago($id), false);
     }
@@ -535,7 +535,7 @@ final class LedgerTest extends TestCase
 
         Ledger::anular($asientoId, 'Devengo por error.', (int) $this->usuarioCon('finance')->id);
 
-        $this->actingAs($this->usuarioDelCreador($creadorId))->get('/mis-ingresos')
+        $this->actingAs($this->usuarioDelCreador($creadorId))->get('/backoffice/mis-ingresos')
             ->assertDontSee('500.00', false);
     }
 

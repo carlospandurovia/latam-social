@@ -49,7 +49,7 @@ final class BitacoraTest extends TestCase
         $this->entrada(['categorias' => ['antes' => [1, 2], 'despues' => [3]]]);
 
         $this->actingAs($this->usuarioCon('admin'))
-            ->get('/bitacora')
+            ->get('/backoffice/bitacora')
             ->assertOk()
             ->assertSee('1, 2')
             ->assertSee('categorias');
@@ -61,7 +61,7 @@ final class BitacoraTest extends TestCase
         $this->entrada(['origen' => 'importacion masiva']);
 
         $this->actingAs($this->usuarioCon('admin'))
-            ->get('/bitacora')
+            ->get('/backoffice/bitacora')
             ->assertOk()
             ->assertSee('importacion masiva');
     }
@@ -71,7 +71,7 @@ final class BitacoraTest extends TestCase
         $this->entrada(['categorias' => ['antes' => [], 'despues' => [7]]]);
 
         $this->actingAs($this->usuarioCon('admin'))
-            ->get('/bitacora')
+            ->get('/backoffice/bitacora')
             ->assertOk()
             ->assertDontSee('[]');
     }
@@ -102,9 +102,9 @@ final class BitacoraTest extends TestCase
 
     public function test_la_bitacora_es_solo_para_quien_puede_auditar(): void
     {
-        $this->actingAs($this->usuarioCon('finance'))->get('/bitacora')->assertForbidden();
-        $this->actingAs($this->usuarioCon('campaign_manager'))->get('/bitacora')->assertForbidden();
-        $this->actingAs($this->usuarioCon('admin'))->get('/bitacora')->assertOk();
+        $this->actingAs($this->usuarioCon('finance'))->get('/backoffice/bitacora')->assertForbidden();
+        $this->actingAs($this->usuarioCon('campaign_manager'))->get('/backoffice/bitacora')->assertForbidden();
+        $this->actingAs($this->usuarioCon('admin'))->get('/backoffice/bitacora')->assertOk();
     }
 
     // -------------------------------------------------------------- el listado
@@ -116,7 +116,7 @@ final class BitacoraTest extends TestCase
             'city' => ['antes' => 'Lima', 'despues' => 'Cusco'],
         ]);
 
-        $this->get('/bitacora')
+        $this->get('/backoffice/bitacora')
             ->assertOk()
             ->assertSee('creator.updated')
             ->assertSee('Cusco')
@@ -129,7 +129,7 @@ final class BitacoraTest extends TestCase
         Bitacora::registrar('creator.updated', 'creator', 1, ['a' => ['antes' => 1, 'despues' => 2]]);
         Bitacora::registrar('client.updated', 'client', 1, ['b' => ['antes' => 3, 'despues' => 4]]);
 
-        $this->get('/bitacora?tipo=creator')->assertOk()->assertSee('creator.updated')->assertDontSee('client.updated');
+        $this->get('/backoffice/bitacora?tipo=creator')->assertOk()->assertSee('creator.updated')->assertDontSee('client.updated');
     }
 
     /** Prefijo y no contención: `like '%x%'` no usa índice. */
@@ -139,7 +139,7 @@ final class BitacoraTest extends TestCase
         Bitacora::registrar('creator.updated', 'creator', 1);
         Bitacora::registrar('client.updated', 'client', 1);
 
-        $this->get('/bitacora?accion=creator.')->assertOk()
+        $this->get('/backoffice/bitacora?accion=creator.')->assertOk()
             ->assertSee('creator.updated')->assertDontSee('client.updated');
     }
 

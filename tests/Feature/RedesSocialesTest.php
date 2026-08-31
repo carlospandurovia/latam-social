@@ -73,7 +73,7 @@ final class RedesSocialesTest extends TestCase
     public function test_una_cuenta_nace_sin_verificar(): void
     {
         $this->actingAs($this->usuarioCon('campaign_manager'))
-            ->post("/creadores/{$this->uuid}/redes", $this->alta())
+            ->post("/backoffice/creadores/{$this->uuid}/redes", $this->alta())
             ->assertRedirect(route('creadores.redes', $this->uuid));
 
         $cuenta = DB::table('social_accounts')->where('creator_id', $this->creadorId)->first();
@@ -85,7 +85,7 @@ final class RedesSocialesTest extends TestCase
     public function test_el_identificador_va_sin_arroba(): void
     {
         $this->actingAs($this->usuarioCon('campaign_manager'))
-            ->post("/creadores/{$this->uuid}/redes", $this->alta(['handle' => '@anatorres']))
+            ->post("/backoffice/creadores/{$this->uuid}/redes", $this->alta(['handle' => '@anatorres']))
             ->assertSessionHasErrors('handle');
     }
 
@@ -106,7 +106,7 @@ final class RedesSocialesTest extends TestCase
         ]);
 
         $this->actingAs($this->usuarioCon('campaign_manager'))
-            ->post("/creadores/{$this->uuid}/redes", $this->alta())
+            ->post("/backoffice/creadores/{$this->uuid}/redes", $this->alta())
             ->assertSessionHas('aviso');
 
         $this->assertSame(1, DB::table('social_accounts')->count());
@@ -120,7 +120,7 @@ final class RedesSocialesTest extends TestCase
         $revisor = $this->usuarioCon('admin');
 
         $this->actingAs($revisor)
-            ->post("/creadores/{$this->uuid}/redes/{$id}/verificar", [
+            ->post("/backoffice/creadores/{$this->uuid}/redes/{$id}/verificar", [
                 'verification_method' => 'bio_code',
                 'nota' => 'Codigo LS-4471 visible en la biografia',
                 'confirma_comprobacion' => '1',
@@ -140,7 +140,7 @@ final class RedesSocialesTest extends TestCase
         $id = $this->cuenta();
 
         $this->actingAs($this->usuarioCon('admin'))
-            ->post("/creadores/{$this->uuid}/redes/{$id}/verificar", ['confirma_comprobacion' => '1'])
+            ->post("/backoffice/creadores/{$this->uuid}/redes/{$id}/verificar", ['confirma_comprobacion' => '1'])
             ->assertSessionHasErrors('verification_method');
 
         $this->assertSame('unverified', DB::table('social_accounts')->where('id', $id)->value('verification_status'));
@@ -152,7 +152,7 @@ final class RedesSocialesTest extends TestCase
         $id = $this->cuenta();
 
         $this->actingAs($this->usuarioCon('admin'))
-            ->post("/creadores/{$this->uuid}/redes/{$id}/verificar", [
+            ->post("/backoffice/creadores/{$this->uuid}/redes/{$id}/verificar", [
                 'verification_method' => 'oauth',
                 'confirma_comprobacion' => '1',
             ])
@@ -164,7 +164,7 @@ final class RedesSocialesTest extends TestCase
         $id = $this->cuenta();
 
         $this->actingAs($this->usuarioCon('content_reviewer'))
-            ->post("/creadores/{$this->uuid}/redes/{$id}/verificar", [
+            ->post("/backoffice/creadores/{$this->uuid}/redes/{$id}/verificar", [
                 'verification_method' => 'bio_code', 'confirma_comprobacion' => '1',
             ])
             ->assertForbidden();
@@ -177,7 +177,7 @@ final class RedesSocialesTest extends TestCase
         $id = $this->cuenta();
 
         $this->actingAs($this->usuarioCon('campaign_manager'))
-            ->post("/creadores/{$this->uuid}/redes/{$id}/metrica", [
+            ->post("/backoffice/creadores/{$this->uuid}/redes/{$id}/metrica", [
                 'source' => 'self_declared',
                 'captured_at' => now()->format('Y-m-d\TH:i'),
                 'followers' => 12000,
@@ -202,7 +202,7 @@ final class RedesSocialesTest extends TestCase
         ]);
 
         $this->actingAs($this->usuarioCon('campaign_manager'))
-            ->post("/creadores/{$this->uuid}/redes/{$id}/metrica", [
+            ->post("/backoffice/creadores/{$this->uuid}/redes/{$id}/metrica", [
                 'source' => 'self_declared',
                 'captured_at' => now()->format('Y-m-d\TH:i'),
                 'followers' => 90000,
@@ -223,7 +223,7 @@ final class RedesSocialesTest extends TestCase
         $id = $this->cuenta();
 
         $this->actingAs($this->usuarioCon('campaign_manager'))
-            ->post("/creadores/{$this->uuid}/redes/{$id}/metrica", [
+            ->post("/backoffice/creadores/{$this->uuid}/redes/{$id}/metrica", [
                 'source' => 'self_declared',
                 'captured_at' => now()->format('Y-m-d\TH:i'),
                 'engagement_rate' => '87',

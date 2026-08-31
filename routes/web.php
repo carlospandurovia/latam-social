@@ -53,7 +53,10 @@ use Illuminate\Support\Facades\Route;
  | una de las reglas no negociables de docs/08.
  */
 
-Route::redirect('/', '/panel');
+// 9.21a: la raiz sigue llevando al panel mientras no haya landing. Con la
+// sesion cerrada, el middleware `auth` manda al acceso, que es lo que pasaba
+// antes. En `9.21b` esto se convierte en la portada publica.
+Route::redirect('/', '/backoffice/panel');
 
 Route::middleware('guest')->group(function (): void {
     Route::get('/entrar', [AccesoController::class, 'formulario'])->name('acceso');
@@ -155,7 +158,29 @@ Route::get('/aprobacion/estado/gracias', [AprobacionController::class, 'gracias'
 Route::get('/aprobacion/estado/no-disponible', [AprobacionController::class, 'caducada'])
     ->name('aprobacion.caducada');
 
-Route::middleware('auth')->group(function (): void {
+// ===========================================================================
+//  LA TRASTIENDA, DEBAJO DE `/backoffice` (9.21a)
+// ===========================================================================
+//
+// Hasta hoy el back-office vivia en la raiz: `/creadores` era la lista del
+// admin. Y `/creadores` tiene que ser la puerta publica de los creadores --el
+// enlace que se comparte en redes--, asi que las dos cosas se pisaban.
+//
+// Un prefijo, y ni una URL que corregir en la aplicacion: `docs/08` prohibe
+// escribir URLs a mano en las vistas --todo va por NOMBRE de ruta-- y esa regla,
+// que hasta hoy parecia una manía, es lo que convierte una mudanza de 165
+// pantallas en una linea. Los nombres no cambian: `creadores.index` sigue
+// llamandose igual y ahora vale `/backoffice/creadores`.
+//
+// Aqui dentro entra TODO lo que exige sesion, sea de quien sea: el equipo, el
+// creador que mira sus ingresos y el cliente que aprueba. Lo que cada uno ve lo
+// deciden sus permisos, que es como funcionaba ya; lo que cambia es que ahora
+// hay una direccion que significa «esto es de dentro».
+//
+// Fuera se quedan, a proposito, las que un desconocido tiene que poder abrir:
+// el acceso, los enlaces de contrasena, la invitacion y la aprobacion por token,
+// y el logotipo de la marca --que lo pinta la propia pantalla de acceso--.
+Route::middleware('auth')->prefix('backoffice')->group(function (): void {
     Route::post('/salir', [AccesoController::class, 'salir'])->name('salir');
 
     Route::get('/panel', PanelController::class)->name('panel');

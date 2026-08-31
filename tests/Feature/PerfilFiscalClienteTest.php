@@ -51,7 +51,7 @@ final class PerfilFiscalClienteTest extends TestCase
         $uuid = $this->crearCliente($gestor);
 
         $this->actingAs($gestor)
-            ->post("/clientes/{$uuid}/fiscal", $this->fiscal())
+            ->post("/backoffice/clientes/{$uuid}/fiscal", $this->fiscal())
             ->assertSessionHas('exito');
 
         $perfil = DB::table('client_tax_profiles')->where('tax_id_number', '20123456789')->first();
@@ -74,10 +74,10 @@ final class PerfilFiscalClienteTest extends TestCase
         $gestor = $this->usuarioCon('campaign_manager');
         $uuid = $this->crearCliente($gestor);
 
-        $this->actingAs($gestor)->post("/clientes/{$uuid}/fiscal", $this->fiscal());
+        $this->actingAs($gestor)->post("/backoffice/clientes/{$uuid}/fiscal", $this->fiscal());
 
         $this->actingAs($gestor)
-            ->post("/clientes/{$uuid}/fiscal", $this->fiscal([
+            ->post("/backoffice/clientes/{$uuid}/fiscal", $this->fiscal([
                 'legal_name' => 'ACME SAC',
                 'tax_id_number' => '20999999999',
                 'valid_from' => '2026-06-01',
@@ -107,8 +107,8 @@ final class PerfilFiscalClienteTest extends TestCase
         $gestor = $this->usuarioCon('campaign_manager');
         $uuid = $this->crearCliente($gestor);
 
-        $this->actingAs($gestor)->post("/clientes/{$uuid}/fiscal", $this->fiscal());
-        $this->actingAs($gestor)->post("/clientes/{$uuid}/fiscal", $this->fiscal([
+        $this->actingAs($gestor)->post("/backoffice/clientes/{$uuid}/fiscal", $this->fiscal());
+        $this->actingAs($gestor)->post("/backoffice/clientes/{$uuid}/fiscal", $this->fiscal([
             'tax_id_number' => '20999999999', 'valid_from' => '2026-06-01',
         ]));
 
@@ -134,10 +134,10 @@ final class PerfilFiscalClienteTest extends TestCase
         $gestor = $this->usuarioCon('campaign_manager');
         $uuid = $this->crearCliente($gestor);
 
-        $this->actingAs($gestor)->post("/clientes/{$uuid}/fiscal", $this->fiscal());
+        $this->actingAs($gestor)->post("/backoffice/clientes/{$uuid}/fiscal", $this->fiscal());
 
         $this->actingAs($gestor)
-            ->post("/clientes/{$uuid}/fiscal", $this->fiscal([
+            ->post("/backoffice/clientes/{$uuid}/fiscal", $this->fiscal([
                 'tax_id_number' => '20999999999', 'valid_from' => '2025-06-01',
             ]))
             ->assertSessionHas('aviso');
@@ -152,10 +152,10 @@ final class PerfilFiscalClienteTest extends TestCase
         $gestor = $this->usuarioCon('campaign_manager');
         $uuid = $this->crearCliente($gestor);
 
-        $this->actingAs($gestor)->post("/clientes/{$uuid}/fiscal", $this->fiscal());
+        $this->actingAs($gestor)->post("/backoffice/clientes/{$uuid}/fiscal", $this->fiscal());
 
         $this->actingAs($gestor)
-            ->post("/clientes/{$uuid}/fiscal", $this->fiscal(['tax_id_number' => '20999999999']))
+            ->post("/backoffice/clientes/{$uuid}/fiscal", $this->fiscal(['tax_id_number' => '20999999999']))
             ->assertSessionHas('aviso');
 
         $this->assertSame(1, DB::table('client_tax_profiles')->count());
@@ -170,15 +170,15 @@ final class PerfilFiscalClienteTest extends TestCase
     {
         $gestor = $this->usuarioCon('campaign_manager');
         $uuid = $this->crearCliente($gestor);
-        $this->actingAs($gestor)->post("/clientes/{$uuid}/fiscal", $this->fiscal());
+        $this->actingAs($gestor)->post("/backoffice/clientes/{$uuid}/fiscal", $this->fiscal());
 
-        $this->actingAs($gestor)->post('/clientes', $this->cliente([
+        $this->actingAs($gestor)->post('/backoffice/clientes', $this->cliente([
             'commercial_name' => 'Otra empresa', 'client_code' => 'OTRA-01',
         ]));
         $otro = (string) DB::table('client_organizations')->where('client_code', 'OTRA-01')->value('uuid');
 
         $this->actingAs($gestor)
-            ->post("/clientes/{$otro}/fiscal", $this->fiscal())
+            ->post("/backoffice/clientes/{$otro}/fiscal", $this->fiscal())
             ->assertSessionHas('aviso');
 
         $this->assertStringContainsString('ACME', (string) session('aviso'));
@@ -194,9 +194,9 @@ final class PerfilFiscalClienteTest extends TestCase
         $gestor = $this->usuarioCon('campaign_manager');
         $uuid = $this->crearCliente($gestor);
 
-        $this->actingAs($gestor)->post("/clientes/{$uuid}/fiscal", $this->fiscal());
+        $this->actingAs($gestor)->post("/backoffice/clientes/{$uuid}/fiscal", $this->fiscal());
         $this->actingAs($gestor)
-            ->post("/clientes/{$uuid}/fiscal", $this->fiscal([
+            ->post("/backoffice/clientes/{$uuid}/fiscal", $this->fiscal([
                 'country_id' => $this->paisCO,
                 'legal_name' => 'ACME Colombia SAS',
                 'tax_id_type' => 'NIT',
@@ -211,12 +211,12 @@ final class PerfilFiscalClienteTest extends TestCase
     {
         $gestor = $this->usuarioCon('campaign_manager');
         $uuid = $this->crearCliente($gestor);
-        $this->actingAs($gestor)->post("/clientes/{$uuid}/fiscal", $this->fiscal());
+        $this->actingAs($gestor)->post("/backoffice/clientes/{$uuid}/fiscal", $this->fiscal());
 
         $perfil = DB::table('client_tax_profiles')->first();
 
         $this->actingAs($gestor)
-            ->put("/clientes/{$uuid}/fiscal/{$perfil->id}", $this->fiscal([
+            ->put("/backoffice/clientes/{$uuid}/fiscal/{$perfil->id}", $this->fiscal([
                 'legal_name' => 'ACME Sociedad Anonima Cerrada',
             ], correccion: true))
             ->assertSessionHas('exito');
@@ -238,8 +238,8 @@ final class PerfilFiscalClienteTest extends TestCase
         $gestor = $this->usuarioCon('campaign_manager');
         $uuid = $this->crearCliente($gestor);
 
-        $this->actingAs($gestor)->post("/clientes/{$uuid}/fiscal", $this->fiscal());
-        $this->actingAs($gestor)->post("/clientes/{$uuid}/fiscal", $this->fiscal([
+        $this->actingAs($gestor)->post("/backoffice/clientes/{$uuid}/fiscal", $this->fiscal());
+        $this->actingAs($gestor)->post("/backoffice/clientes/{$uuid}/fiscal", $this->fiscal([
             'tax_id_number' => '20999999999', 'valid_from' => '2026-06-01',
         ]));
 
@@ -247,11 +247,11 @@ final class PerfilFiscalClienteTest extends TestCase
         $this->assertNotNull($cerrado, 'la premisa: tiene que haber uno cerrado');
 
         $this->actingAs($gestor)
-            ->get("/clientes/{$uuid}/fiscal/{$cerrado->id}/corregir")
+            ->get("/backoffice/clientes/{$uuid}/fiscal/{$cerrado->id}/corregir")
             ->assertNotFound();
 
         $this->actingAs($gestor)
-            ->put("/clientes/{$uuid}/fiscal/{$cerrado->id}", $this->fiscal(['legal_name' => 'Reescrita'], correccion: true))
+            ->put("/backoffice/clientes/{$uuid}/fiscal/{$cerrado->id}", $this->fiscal(['legal_name' => 'Reescrita'], correccion: true))
             ->assertNotFound();
 
         $this->assertSame(
@@ -265,16 +265,16 @@ final class PerfilFiscalClienteTest extends TestCase
     {
         $gestor = $this->usuarioCon('campaign_manager');
         $uuid = $this->crearCliente($gestor);
-        $this->actingAs($gestor)->post("/clientes/{$uuid}/fiscal", $this->fiscal());
+        $this->actingAs($gestor)->post("/backoffice/clientes/{$uuid}/fiscal", $this->fiscal());
         $ajeno = DB::table('client_tax_profiles')->first();
 
-        $this->actingAs($gestor)->post('/clientes', $this->cliente([
+        $this->actingAs($gestor)->post('/backoffice/clientes', $this->cliente([
             'commercial_name' => 'Otra empresa', 'client_code' => 'OTRA-01',
         ]));
         $otro = (string) DB::table('client_organizations')->where('client_code', 'OTRA-01')->value('uuid');
 
         $this->actingAs($gestor)
-            ->get("/clientes/{$otro}/fiscal/{$ajeno->id}/corregir")
+            ->get("/backoffice/clientes/{$otro}/fiscal/{$ajeno->id}/corregir")
             ->assertNotFound();
     }
 
@@ -286,7 +286,7 @@ final class PerfilFiscalClienteTest extends TestCase
         // Sin esta validación el valor llegaría a `ck_ctxp_term` y el operador
         // vería un 45000 en vez de un mensaje.
         $this->actingAs($gestor)
-            ->post("/clientes/{$uuid}/fiscal", $this->fiscal(['payment_term_days' => 200]))
+            ->post("/backoffice/clientes/{$uuid}/fiscal", $this->fiscal(['payment_term_days' => 200]))
             ->assertSessionHasErrors('payment_term_days');
 
         $this->assertSame(0, DB::table('client_tax_profiles')->count());
@@ -305,7 +305,7 @@ final class PerfilFiscalClienteTest extends TestCase
         $uuid = $this->crearCliente($gestor);
 
         $this->actingAs($this->usuarioCon('content_reviewer'))
-            ->get("/clientes/{$uuid}/fiscal/nuevo")
+            ->get("/backoffice/clientes/{$uuid}/fiscal/nuevo")
             ->assertForbidden();
     }
 
@@ -316,7 +316,7 @@ final class PerfilFiscalClienteTest extends TestCase
         // La otra mitad de la decisión: finanzas emite la factura, así que tiene
         // que poder corregir la identidad con la que se emite.
         $this->actingAs($this->usuarioCon('finance'))
-            ->post("/clientes/{$uuid}/fiscal", $this->fiscal())
+            ->post("/backoffice/clientes/{$uuid}/fiscal", $this->fiscal())
             ->assertSessionHas('exito');
 
         $this->assertSame(1, DB::table('client_tax_profiles')->count());
@@ -351,7 +351,7 @@ final class PerfilFiscalClienteTest extends TestCase
 
     private function crearCliente(User $quien): string
     {
-        $this->actingAs($quien)->post('/clientes', $this->cliente());
+        $this->actingAs($quien)->post('/backoffice/clientes', $this->cliente());
 
         return (string) DB::table('client_organizations')->where('client_code', 'ACME-01')->value('uuid');
     }

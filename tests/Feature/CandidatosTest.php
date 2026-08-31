@@ -394,7 +394,7 @@ final class CandidatosTest extends TestCase
     public function test_la_pantalla_dice_por_que_esta_filtrando(): void
     {
         $this->actingAs($this->usuarioCon('campaign_manager'))
-            ->get("/campanas/{$this->uuid}/candidatos")
+            ->get("/backoffice/campanas/{$this->uuid}/candidatos")
             ->assertOk()
             ->assertSee('La campaña ya está filtrando por ti', false)
             ->assertSee('Edad mínima efectiva', false);
@@ -405,7 +405,7 @@ final class CandidatosTest extends TestCase
         $id = $this->candidato();
 
         $this->actingAs($this->usuarioCon('campaign_manager'))
-            ->post("/campanas/{$this->uuid}/candidatos", ['creator_id' => $id])
+            ->post("/backoffice/campanas/{$this->uuid}/candidatos", ['creator_id' => $id])
             ->assertSessionHas('aviso');
 
         $this->assertSame(0, DB::table('campaign_creators')->count());
@@ -415,9 +415,9 @@ final class CandidatosTest extends TestCase
     {
         $revisor = $this->usuarioCon('content_reviewer');
 
-        $this->actingAs($revisor)->get("/campanas/{$this->uuid}/candidatos")->assertOk();
+        $this->actingAs($revisor)->get("/backoffice/campanas/{$this->uuid}/candidatos")->assertOk();
         $this->actingAs($revisor)
-            ->post("/campanas/{$this->uuid}/candidatos", ['creator_id' => $this->candidatoCompleto()])
+            ->post("/backoffice/campanas/{$this->uuid}/candidatos", ['creator_id' => $this->candidatoCompleto()])
             ->assertForbidden();
     }
 
@@ -430,7 +430,7 @@ final class CandidatosTest extends TestCase
         $ajena = (int) DB::table('campaign_creators')->where('campaign_id', $otra)->value('id');
 
         $this->actingAs($this->usuarioCon('campaign_manager'))
-            ->delete("/campanas/{$this->uuid}/candidatos/{$ajena}")
+            ->delete("/backoffice/campanas/{$this->uuid}/candidatos/{$ajena}")
             ->assertNotFound();
 
         $this->assertSame(1, DB::table('campaign_creators')->where('id', $ajena)->count());

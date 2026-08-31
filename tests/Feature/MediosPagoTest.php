@@ -75,7 +75,7 @@ final class MediosPagoTest extends TestCase
     /** @param array<string, mixed> $cambios */
     private function capturar(User $quien, array $cambios = []): int
     {
-        $this->actingAs($quien)->post("/creadores/{$this->uuid}/pagos", $this->formulario($cambios));
+        $this->actingAs($quien)->post("/backoffice/creadores/{$this->uuid}/pagos", $this->formulario($cambios));
 
         return (int) DB::table('creator_payment_methods')
             ->where('creator_id', $this->creadorId)->orderByDesc('id')->value('id');
@@ -84,7 +84,7 @@ final class MediosPagoTest extends TestCase
     private function verificado(): int
     {
         $id = $this->capturar($this->usuarioCon('finance'));
-        $this->actingAs($this->usuarioCon('finance'))->post("/creadores/{$this->uuid}/pagos/{$id}/verificar");
+        $this->actingAs($this->usuarioCon('finance'))->post("/backoffice/creadores/{$this->uuid}/pagos/{$id}/verificar");
 
         return $id;
     }
@@ -105,16 +105,16 @@ final class MediosPagoTest extends TestCase
     public function test_la_cuenta_bancaria_no_es_para_cualquiera(): void
     {
         // DEC-053: finanzas es el único rol no administrador con acceso.
-        $this->actingAs($this->usuarioCon('campaign_manager'))->get("/creadores/{$this->uuid}/pagos")->assertForbidden();
-        $this->actingAs($this->usuarioCon('content_reviewer'))->get("/creadores/{$this->uuid}/pagos")->assertForbidden();
-        $this->actingAs($this->usuarioCon('finance'))->get("/creadores/{$this->uuid}/pagos")->assertOk();
-        $this->actingAs($this->usuarioCon('admin'))->get("/creadores/{$this->uuid}/pagos")->assertOk();
+        $this->actingAs($this->usuarioCon('campaign_manager'))->get("/backoffice/creadores/{$this->uuid}/pagos")->assertForbidden();
+        $this->actingAs($this->usuarioCon('content_reviewer'))->get("/backoffice/creadores/{$this->uuid}/pagos")->assertForbidden();
+        $this->actingAs($this->usuarioCon('finance'))->get("/backoffice/creadores/{$this->uuid}/pagos")->assertOk();
+        $this->actingAs($this->usuarioCon('admin'))->get("/backoffice/creadores/{$this->uuid}/pagos")->assertOk();
     }
 
     public function test_quien_no_gestiona_pagos_no_captura(): void
     {
         $this->actingAs($this->usuarioCon('campaign_manager'))
-            ->post("/creadores/{$this->uuid}/pagos", $this->formulario())
+            ->post("/backoffice/creadores/{$this->uuid}/pagos", $this->formulario())
             ->assertForbidden();
 
         $this->assertDatabaseCount('creator_payment_methods', 0);
@@ -163,7 +163,7 @@ final class MediosPagoTest extends TestCase
         $this->assertSame(64, strlen($medio->account_number_fingerprint));
 
         // Y la máscara es lo único que llega a la pantalla.
-        $this->actingAs($this->usuarioCon('finance'))->get("/creadores/{$this->uuid}/pagos")
+        $this->actingAs($this->usuarioCon('finance'))->get("/backoffice/creadores/{$this->uuid}/pagos")
             ->assertSee('****5678')
             ->assertDontSee($numero);
     }
@@ -175,7 +175,7 @@ final class MediosPagoTest extends TestCase
         // Sin normalizar, un guion bastaría para colar la misma cuenta dos
         // veces y multiplicar las filas que hay que verificar.
         $this->actingAs($this->usuarioCon('finance'))
-            ->post("/creadores/{$this->uuid}/pagos", $this->formulario(['account_number' => '1910-0012-3456-78']))
+            ->post("/backoffice/creadores/{$this->uuid}/pagos", $this->formulario(['account_number' => '1910-0012-3456-78']))
             ->assertSessionHas('aviso');
 
         $this->assertDatabaseCount('creator_payment_methods', 1);
@@ -195,7 +195,7 @@ final class MediosPagoTest extends TestCase
         $id = $this->capturar($capturador);
 
         $this->actingAs($capturador)
-            ->post("/creadores/{$this->uuid}/pagos/{$id}/verificar")
+            ->post("/backoffice/creadores/{$this->uuid}/pagos/{$id}/verificar")
             ->assertSessionHas('aviso');
 
         $this->assertSame('pending', DB::table('creator_payment_methods')->where('id', $id)->value('status'));
@@ -238,7 +238,7 @@ final class MediosPagoTest extends TestCase
         $id = $this->capturar($this->usuarioCon('finance'));
 
         $this->actingAs($this->usuarioCon('finance'))
-            ->post("/creadores/{$this->uuid}/pagos/{$id}/retirar", ['motivo' => 'El titular no coincide con el DNI que trajo.'])
+            ->post("/backoffice/creadores/{$this->uuid}/pagos/{$id}/retirar", ['motivo' => 'El titular no coincide con el DNI que trajo.'])
             ->assertRedirect(route('creadores.pagos', $this->uuid));
 
         $medio = DB::table('creator_payment_methods')->where('id', $id)->first();
@@ -257,7 +257,7 @@ final class MediosPagoTest extends TestCase
         $id = $this->verificado();
 
         $this->actingAs($this->usuarioCon('finance'))
-            ->post("/creadores/{$this->uuid}/pagos/{$id}/retirar", ['motivo' => 'El creador cambio de banco y trajo la constancia.']);
+            ->post("/backoffice/creadores/{$this->uuid}/pagos/{$id}/retirar", ['motivo' => 'El creador cambio de banco y trajo la constancia.']);
 
         $medio = DB::table('creator_payment_methods')->where('id', $id)->first();
 
@@ -272,7 +272,7 @@ final class MediosPagoTest extends TestCase
         $id = $this->capturar($this->usuarioCon('finance'));
 
         $this->actingAs($this->usuarioCon('finance'))
-            ->post("/creadores/{$this->uuid}/pagos/{$id}/retirar", ['motivo' => 'mal'])
+            ->post("/backoffice/creadores/{$this->uuid}/pagos/{$id}/retirar", ['motivo' => 'mal'])
             ->assertSessionHasErrors('motivo');
 
         $this->assertSame('pending', DB::table('creator_payment_methods')->where('id', $id)->value('status'));
@@ -285,7 +285,7 @@ final class MediosPagoTest extends TestCase
         $id = $this->capturar($this->usuarioCon('finance'));
 
         $this->actingAs($this->usuarioCon('finance'))
-            ->post("/creadores/{$this->uuid}/pagos/{$id}/predeterminado")
+            ->post("/backoffice/creadores/{$this->uuid}/pagos/{$id}/predeterminado")
             ->assertSessionHas('aviso');
 
         $this->assertSame(0, (int) DB::table('creator_payment_methods')->where('id', $id)->value('is_default'));
@@ -294,11 +294,11 @@ final class MediosPagoTest extends TestCase
     public function test_marcar_uno_nuevo_quita_el_anterior(): void
     {
         $primero = $this->verificado();
-        $this->actingAs($this->usuarioCon('finance'))->post("/creadores/{$this->uuid}/pagos/{$primero}/predeterminado");
+        $this->actingAs($this->usuarioCon('finance'))->post("/backoffice/creadores/{$this->uuid}/pagos/{$primero}/predeterminado");
 
         $segundo = $this->capturar($this->usuarioCon('finance'), ['account_number' => '19100099998888']);
-        $this->actingAs($this->usuarioCon('finance'))->post("/creadores/{$this->uuid}/pagos/{$segundo}/verificar");
-        $this->actingAs($this->usuarioCon('finance'))->post("/creadores/{$this->uuid}/pagos/{$segundo}/predeterminado");
+        $this->actingAs($this->usuarioCon('finance'))->post("/backoffice/creadores/{$this->uuid}/pagos/{$segundo}/verificar");
+        $this->actingAs($this->usuarioCon('finance'))->post("/backoffice/creadores/{$this->uuid}/pagos/{$segundo}/predeterminado");
 
         // `uq_cpm_default` solo admite uno por creador: si el orden fuera el
         // contrario, la base rechazaría la operación entera.
@@ -316,7 +316,7 @@ final class MediosPagoTest extends TestCase
         $this->crearCreador('luisvega', 'luis@ejemplo.test', '40000002', $otroUuid);
 
         $this->actingAs($this->usuarioCon('finance'))
-            ->post("/creadores/{$otroUuid}/pagos", $this->formulario(['holder_document_number' => '40000002']))
+            ->post("/backoffice/creadores/{$otroUuid}/pagos", $this->formulario(['holder_document_number' => '40000002']))
             ->assertRedirect(route('creadores.pagos', $otroUuid));
 
         // DEC-065: se admite. Un tutor puede cobrar por dos pupilos.

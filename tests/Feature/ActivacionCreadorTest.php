@@ -197,13 +197,13 @@ final class ActivacionCreadorTest extends TestCase
     public function test_solo_quien_puede_verificar_o_activar_ve_la_pantalla(): void
     {
         $this->actingAs($this->usuarioCon('content_reviewer'))
-            ->get("/creadores/{$this->uuid}/activacion")->assertForbidden();
+            ->get("/backoffice/creadores/{$this->uuid}/activacion")->assertForbidden();
         $this->actingAs($this->usuarioCon('finance'))
-            ->get("/creadores/{$this->uuid}/activacion")->assertForbidden();
+            ->get("/backoffice/creadores/{$this->uuid}/activacion")->assertForbidden();
         $this->actingAs($this->usuarioCon('admin'))
-            ->get("/creadores/{$this->uuid}/activacion")->assertOk();
+            ->get("/backoffice/creadores/{$this->uuid}/activacion")->assertOk();
         $this->actingAs($this->usuarioCon('campaign_manager'))
-            ->get("/creadores/{$this->uuid}/activacion")->assertOk();
+            ->get("/backoffice/creadores/{$this->uuid}/activacion")->assertOk();
     }
 
     /**
@@ -215,7 +215,7 @@ final class ActivacionCreadorTest extends TestCase
         $this->equiparTodo();
 
         $this->actingAs($this->usuarioCon('finance'))
-            ->post("/creadores/{$this->uuid}/activar")->assertForbidden();
+            ->post("/backoffice/creadores/{$this->uuid}/activar")->assertForbidden();
 
         $this->assertSame('pending', DB::table('creators')->where('id', $this->creadorId)->value('status'));
     }
@@ -227,7 +227,7 @@ final class ActivacionCreadorTest extends TestCase
         $this->equiparTodo();
 
         $this->actingAs($this->usuarioCon('admin'))
-            ->post("/creadores/{$this->uuid}/activar", ['motivo' => 'Revisado por reclutamiento'])
+            ->post("/backoffice/creadores/{$this->uuid}/activar", ['motivo' => 'Revisado por reclutamiento'])
             ->assertRedirect(route('creadores.show', $this->uuid));
 
         $creador = DB::table('creators')->where('id', $this->creadorId)->first();
@@ -250,7 +250,7 @@ final class ActivacionCreadorTest extends TestCase
     public function test_la_bitacora_guarda_con_que_se_dio_por_buena_la_activacion(): void
     {
         $this->equiparTodo();
-        $this->actingAs($this->usuarioCon('admin'))->post("/creadores/{$this->uuid}/activar");
+        $this->actingAs($this->usuarioCon('admin'))->post("/backoffice/creadores/{$this->uuid}/activar");
 
         $entrada = DB::table('audit_logs')->where('action', 'creator.activated')->first();
         $cambios = json_decode((string) $entrada->changes, true);
@@ -320,7 +320,7 @@ final class ActivacionCreadorTest extends TestCase
         };
 
         $this->actingAs($this->usuarioCon('admin'))
-            ->post("/creadores/{$this->uuid}/activar")
+            ->post("/backoffice/creadores/{$this->uuid}/activar")
             ->assertSessionHas('aviso');
 
         $this->assertSame(
@@ -373,7 +373,7 @@ final class ActivacionCreadorTest extends TestCase
         $this->equiparTodo(elegibleDesde: now()->addDays(3)->toDateTimeString());
 
         $this->actingAs($this->usuarioCon('admin'))
-            ->post("/creadores/{$this->uuid}/activar")->assertSessionHas('aviso');
+            ->post("/backoffice/creadores/{$this->uuid}/activar")->assertSessionHas('aviso');
 
         $this->assertSame('pending', DB::table('creators')->where('id', $this->creadorId)->value('status'));
     }
@@ -386,7 +386,7 @@ final class ActivacionCreadorTest extends TestCase
         $this->equiparTodo();
 
         $this->actingAs($this->usuarioCon('admin'))
-            ->post("/creadores/{$this->uuid}/activar")->assertSessionHas('aviso');
+            ->post("/backoffice/creadores/{$this->uuid}/activar")->assertSessionHas('aviso');
 
         $this->assertSame('pending', DB::table('creators')->where('id', $this->creadorId)->value('status'));
 
@@ -419,7 +419,7 @@ final class ActivacionCreadorTest extends TestCase
         $this->ponerTerminos();
 
         $this->actingAs($this->usuarioCon('admin'))
-            ->post("/creadores/{$this->uuid}/activar")->assertSessionHas('aviso');
+            ->post("/backoffice/creadores/{$this->uuid}/activar")->assertSessionHas('aviso');
 
         $this->assertSame('pending', DB::table('creators')->where('id', $this->creadorId)->value('status'));
     }
@@ -435,7 +435,7 @@ final class ActivacionCreadorTest extends TestCase
         $this->ponerMedioDePago('guardian', $tutorId);
         $this->ponerTerminos();
 
-        $this->actingAs($this->usuarioCon('admin'))->post("/creadores/{$this->uuid}/activar");
+        $this->actingAs($this->usuarioCon('admin'))->post("/backoffice/creadores/{$this->uuid}/activar");
 
         $this->assertSame('active', DB::table('creators')->where('id', $this->creadorId)->value('status'));
     }
@@ -487,7 +487,7 @@ final class ActivacionCreadorTest extends TestCase
         $this->publicarTerminos();
 
         $this->actingAs($this->usuarioCon('admin'))
-            ->post("/creadores/{$this->uuid}/terminos", [
+            ->post("/backoffice/creadores/{$this->uuid}/terminos", [
                 'channel' => 'email',
                 'accepted_at' => now()->subHour()->format('Y-m-d\TH:i'),
                 'evidencia' => self::pdfDePrueba('correo.pdf'),
@@ -506,7 +506,7 @@ final class ActivacionCreadorTest extends TestCase
         $this->publicarTerminos();
 
         $this->actingAs($this->usuarioCon('admin'))
-            ->post("/creadores/{$this->uuid}/terminos", [
+            ->post("/backoffice/creadores/{$this->uuid}/terminos", [
                 'channel' => 'email',
                 'accepted_at' => now()->subHour()->format('Y-m-d\TH:i'),
                 'confirma_revision' => '1',
@@ -521,7 +521,7 @@ final class ActivacionCreadorTest extends TestCase
         $this->publicarTerminos();
 
         $this->actingAs($this->usuarioCon('admin'))
-            ->post("/creadores/{$this->uuid}/terminos", [
+            ->post("/backoffice/creadores/{$this->uuid}/terminos", [
                 'channel' => 'email',
                 'accepted_at' => '2025-06-01T10:00',
                 'evidencia' => self::pdfDePrueba('correo.pdf'),
@@ -536,7 +536,7 @@ final class ActivacionCreadorTest extends TestCase
     public function test_verificar_identidad_guarda_las_tres_columnas_y_el_archivo(): void
     {
         $this->actingAs($this->usuarioCon('admin'))
-            ->post("/creadores/{$this->uuid}/identidad", [
+            ->post("/backoffice/creadores/{$this->uuid}/identidad", [
                 'documento' => self::pdfDePrueba('dni.pdf'),
                 'confirma_cotejo' => '1',
                 'nota' => 'DNI cotejado contra la ficha',
@@ -561,7 +561,7 @@ final class ActivacionCreadorTest extends TestCase
     public function test_no_se_verifica_la_identidad_sin_confirmar_el_cotejo(): void
     {
         $this->actingAs($this->usuarioCon('admin'))
-            ->post("/creadores/{$this->uuid}/identidad", [
+            ->post("/backoffice/creadores/{$this->uuid}/identidad", [
                 'documento' => self::pdfDePrueba('dni.pdf'),
             ])->assertSessionHasErrors('confirma_cotejo');
 
@@ -571,7 +571,7 @@ final class ActivacionCreadorTest extends TestCase
     public function test_no_se_admite_un_ejecutable_disfrazado_de_pdf(): void
     {
         $this->actingAs($this->usuarioCon('admin'))
-            ->post("/creadores/{$this->uuid}/identidad", [
+            ->post("/backoffice/creadores/{$this->uuid}/identidad", [
                 'documento' => UploadedFile::fake()->create('malicioso.php', 10, 'application/x-php'),
                 'confirma_cotejo' => '1',
             ])->assertSessionHasErrors('documento');
@@ -586,8 +586,8 @@ final class ActivacionCreadorTest extends TestCase
         $this->equiparTodo();
         $usuario = $this->usuarioCon('admin');
 
-        $this->actingAs($usuario)->post("/creadores/{$this->uuid}/activar");
-        $this->actingAs($usuario)->post("/creadores/{$this->uuid}/activar")->assertSessionHas('aviso');
+        $this->actingAs($usuario)->post("/backoffice/creadores/{$this->uuid}/activar");
+        $this->actingAs($usuario)->post("/backoffice/creadores/{$this->uuid}/activar")->assertSessionHas('aviso');
 
         $this->assertSame(1, DB::table('status_transitions')
             ->where('entity_type', 'creator')->where('entity_id', $this->creadorId)
@@ -597,7 +597,7 @@ final class ActivacionCreadorTest extends TestCase
     public function test_la_pantalla_dice_que_falta(): void
     {
         $this->actingAs($this->usuarioCon('admin'))
-            ->get("/creadores/{$this->uuid}/activacion")
+            ->get("/backoffice/creadores/{$this->uuid}/activacion")
             ->assertOk()
             ->assertSee('No hay ninguna cuenta con la propiedad comprobada.')
             ->assertSee('No hay perfil tributario aprobado y vigente', false);

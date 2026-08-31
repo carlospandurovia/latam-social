@@ -2,6 +2,29 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 
+## [9.21a · La trastienda se muda a /backoffice] — 2026-08-31
+
+Lo vio el negocio antes de escribir una línea de la landing: `/creadores` era la
+lista del admin y tiene que ser la **puerta pública de los creadores**.
+
+### Cambiado
+- **149 rutas** pasan a colgar de `/backoffice`. Los nombres no cambian:
+  `creadores.index` se sigue llamando igual y ahora vale `/backoffice/creadores`.
+- Dentro entra **todo lo que exige sesión**, sea de quien sea — equipo, creador y
+  cliente —; lo que cada uno ve lo siguen decidiendo sus permisos.
+- La raíz sigue llevando al panel hasta que `9.21b` ponga la portada.
+
+### Sabido y dicho
+- **Costó una línea.** `docs/08` prohíbe escribir URLs a mano en las vistas, y
+  esa regla —que podía parecer una manía— es lo que hace gratis una mudanza de
+  149 pantallas. Comprobado: cero resultados en `app/`, `resources/` y `config/`.
+- **21 rutas se quedan fuera con su motivo escrito**, y dos de ellas comparten
+  primer segmento con algo que sí se movió: `/contrasena/nueva` frente a
+  `/contrasena`, y `/marca/logo` frente a `/marca`.
+- **390 direcciones sí estaban escritas a mano: en las pruebas.** Una prueba que
+  escribe `/clientes` fija la URL. Se corrigieron con un guion, y la primera
+  pasada dejó dos fuera —con cadena de consulta— que cazó la suite. Queda `T-78`.
+
 ## [9.20 · Cada cosa en su sitio] — 2026-08-31
 
 Reportado así: *«me voy a configuración y cuando le doy clic en alguna me manda a

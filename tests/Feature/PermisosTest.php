@@ -41,8 +41,8 @@ final class PermisosTest extends TestCase
     {
         $usuario = $this->usuarioCon(null);
 
-        $this->actingAs($usuario)->get('/creadores')->assertForbidden();
-        $this->actingAs($usuario)->get('/catalogos/currencies')->assertForbidden();
+        $this->actingAs($usuario)->get('/backoffice/creadores')->assertForbidden();
+        $this->actingAs($usuario)->get('/backoffice/catalogos/currencies')->assertForbidden();
     }
 
     /** Rol externo: existe, tiene usuario, y no toca nada interno. */
@@ -50,31 +50,31 @@ final class PermisosTest extends TestCase
     {
         $usuario = $this->usuarioCon('client_user');
 
-        $this->actingAs($usuario)->get('/creadores')->assertForbidden();
-        $this->actingAs($usuario)->get('/catalogos/currencies')->assertForbidden();
+        $this->actingAs($usuario)->get('/backoffice/creadores')->assertForbidden();
+        $this->actingAs($usuario)->get('/backoffice/catalogos/currencies')->assertForbidden();
     }
 
     public function test_con_el_permiso_correcto_se_entra(): void
     {
         $usuario = $this->usuarioCon('content_reviewer');
 
-        $this->actingAs($usuario)->get('/creadores')->assertOk();
-        $this->actingAs($usuario)->get('/catalogos/currencies')->assertOk();
+        $this->actingAs($usuario)->get('/backoffice/creadores')->assertOk();
+        $this->actingAs($usuario)->get('/backoffice/catalogos/currencies')->assertOk();
     }
 
     public function test_el_administrador_llega_a_todo(): void
     {
         $usuario = $this->usuarioCon('admin');
 
-        $this->actingAs($usuario)->get('/creadores')->assertOk();
-        $this->actingAs($usuario)->get('/catalogos/currencies')->assertOk();
+        $this->actingAs($usuario)->get('/backoffice/creadores')->assertOk();
+        $this->actingAs($usuario)->get('/backoffice/catalogos/currencies')->assertOk();
     }
 
     /** El panel es la portada de cualquier usuario interno: no exige permiso. */
     public function test_el_panel_no_exige_permiso_pero_si_sesion(): void
     {
-        $this->get('/panel')->assertRedirect('/entrar');
-        $this->actingAs($this->usuarioCon(null))->get('/panel')->assertOk();
+        $this->get('/backoffice/panel')->assertRedirect('/entrar');
+        $this->actingAs($this->usuarioCon(null))->get('/backoffice/panel')->assertOk();
     }
 
     // ------------------------------------------------------- la matriz de datos

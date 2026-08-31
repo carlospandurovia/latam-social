@@ -371,15 +371,15 @@ final class CorreoTest extends TestCase
         ]);
 
         $this->actingAs($this->usuarioCon('campaign_manager'))
-            ->get('/correos')
+            ->get('/backoffice/correos')
             ->assertOk()
             ->assertSee('Buzon lleno.', false);
     }
 
     public function test_sin_permiso_no_se_ve_el_registro(): void
     {
-        $this->actingAs($this->usuarioCon('content_reviewer'))->get('/correos')->assertForbidden();
-        $this->actingAs($this->usuarioCon(null))->get('/correos')->assertForbidden();
+        $this->actingAs($this->usuarioCon('content_reviewer'))->get('/backoffice/correos')->assertForbidden();
+        $this->actingAs($this->usuarioCon(null))->get('/backoffice/correos')->assertForbidden();
     }
 
     public function test_la_pantalla_de_plantillas_lista_lo_publicado(): void
@@ -387,7 +387,7 @@ final class CorreoTest extends TestCase
         $this->plantilla('creator.bienvenida', 'es', '1.0', 'Hola', 'Bienvenido.');
 
         $this->actingAs($this->usuarioCon('finance'))
-            ->get('/correos/plantillas')
+            ->get('/backoffice/correos/plantillas')
             ->assertOk()
             ->assertSee('creator.bienvenida', false)
             ->assertSee('vigente', false);

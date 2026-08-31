@@ -47,7 +47,7 @@ final class ContactosTest extends TestCase
         $uuid = $this->crearCliente($gestor);
 
         $this->actingAs($gestor)
-            ->post("/clientes/{$uuid}/contactos", $this->contacto())
+            ->post("/backoffice/clientes/{$uuid}/contactos", $this->contacto())
             ->assertSessionHas('exito');
 
         $fila = DB::table('contacts')->where('contact_email', 'ana@acme.test')->first();
@@ -72,7 +72,7 @@ final class ContactosTest extends TestCase
 
         foreach (['commercial', 'billing', 'legal', 'operations'] as $i => $tipo) {
             $this->actingAs($gestor)
-                ->post("/clientes/{$uuid}/contactos", $this->contacto([
+                ->post("/backoffice/clientes/{$uuid}/contactos", $this->contacto([
                     'full_name' => "Principal {$tipo}",
                     'contact_email' => "{$tipo}@acme.test",
                     'contact_type' => $tipo,
@@ -98,7 +98,7 @@ final class ContactosTest extends TestCase
 
         foreach (['uno', 'dos', 'tres'] as $n) {
             $this->actingAs($gestor)
-                ->post("/clientes/{$uuid}/contactos", $this->contacto([
+                ->post("/backoffice/clientes/{$uuid}/contactos", $this->contacto([
                     'full_name' => "Suplente {$n}",
                     'contact_email' => "{$n}@acme.test",
                 ]))
@@ -117,11 +117,11 @@ final class ContactosTest extends TestCase
         $gestor = $this->usuarioCon('campaign_manager');
         $uuid = $this->crearCliente($gestor);
 
-        $this->actingAs($gestor)->post("/clientes/{$uuid}/contactos", $this->contacto([
+        $this->actingAs($gestor)->post("/backoffice/clientes/{$uuid}/contactos", $this->contacto([
             'full_name' => 'Ana Primera', 'is_primary' => '1',
         ]));
 
-        $respuesta = $this->actingAs($gestor)->post("/clientes/{$uuid}/contactos", $this->contacto([
+        $respuesta = $this->actingAs($gestor)->post("/backoffice/clientes/{$uuid}/contactos", $this->contacto([
             'full_name' => 'Beto Segundo',
             'contact_email' => 'beto@acme.test',
             'is_primary' => '1',
@@ -148,17 +148,17 @@ final class ContactosTest extends TestCase
         $gestor = $this->usuarioCon('campaign_manager');
         $uuid = $this->crearCliente($gestor);
 
-        $this->actingAs($gestor)->post("/clientes/{$uuid}/contactos", $this->contacto([
+        $this->actingAs($gestor)->post("/backoffice/clientes/{$uuid}/contactos", $this->contacto([
             'full_name' => 'Ana Primera', 'is_primary' => '1',
         ]));
-        $this->actingAs($gestor)->post("/clientes/{$uuid}/contactos", $this->contacto([
+        $this->actingAs($gestor)->post("/backoffice/clientes/{$uuid}/contactos", $this->contacto([
             'full_name' => 'Fito Suplente', 'contact_email' => 'fito@acme.test',
         ]));
 
         $fito = DB::table('contacts')->where('full_name', 'Fito Suplente')->first();
 
         $this->actingAs($gestor)
-            ->put("/clientes/{$uuid}/contactos/{$fito->uuid}", $this->contacto([
+            ->put("/backoffice/clientes/{$uuid}/contactos/{$fito->uuid}", $this->contacto([
                 'full_name' => 'Fito Suplente', 'contact_email' => 'fito@acme.test',
                 'is_primary' => '1',
             ]))
@@ -180,25 +180,25 @@ final class ContactosTest extends TestCase
         $gestor = $this->usuarioCon('campaign_manager');
         $uuid = $this->crearCliente($gestor);
 
-        $this->actingAs($gestor)->post("/clientes/{$uuid}/contactos", $this->contacto([
+        $this->actingAs($gestor)->post("/backoffice/clientes/{$uuid}/contactos", $this->contacto([
             'full_name' => 'Ana Primera', 'is_primary' => '1',
         ]));
         $ana = DB::table('contacts')->where('full_name', 'Ana Primera')->first();
 
         // Se da de baja: el puesto queda libre y conserva la marca.
-        $this->actingAs($gestor)->put("/clientes/{$uuid}/contactos/{$ana->uuid}", $this->contacto([
+        $this->actingAs($gestor)->put("/backoffice/clientes/{$uuid}/contactos/{$ana->uuid}", $this->contacto([
             'full_name' => 'Ana Primera', 'is_primary' => '1', 'status' => 'inactive',
         ]));
         $this->assertSame(1, (int) DB::table('contacts')->where('id', $ana->id)->value('is_primary'));
 
         // Otro ocupa el puesto.
-        $this->actingAs($gestor)->post("/clientes/{$uuid}/contactos", $this->contacto([
+        $this->actingAs($gestor)->post("/backoffice/clientes/{$uuid}/contactos", $this->contacto([
             'full_name' => 'Beto Segundo', 'contact_email' => 'beto@acme.test', 'is_primary' => '1',
         ]));
 
         // Y ahora Ana vuelve. En SQL crudo esto es un 1062.
         $this->actingAs($gestor)
-            ->put("/clientes/{$uuid}/contactos/{$ana->uuid}", $this->contacto([
+            ->put("/backoffice/clientes/{$uuid}/contactos/{$ana->uuid}", $this->contacto([
                 'full_name' => 'Ana Primera', 'is_primary' => '1', 'status' => 'active',
             ]))
             ->assertSessionHas('exito');
@@ -217,10 +217,10 @@ final class ContactosTest extends TestCase
         $gestor = $this->usuarioCon('campaign_manager');
         $uuid = $this->crearCliente($gestor);
 
-        $this->actingAs($gestor)->post("/clientes/{$uuid}/contactos", $this->contacto([
+        $this->actingAs($gestor)->post("/backoffice/clientes/{$uuid}/contactos", $this->contacto([
             'full_name' => 'Ana Comercial', 'is_primary' => '1',
         ]));
-        $this->actingAs($gestor)->post("/clientes/{$uuid}/contactos", $this->contacto([
+        $this->actingAs($gestor)->post("/backoffice/clientes/{$uuid}/contactos", $this->contacto([
             'full_name' => 'Carla Factura', 'contact_email' => 'carla@acme.test',
             'contact_type' => 'billing', 'is_primary' => '1',
         ]));
@@ -228,7 +228,7 @@ final class ContactosTest extends TestCase
         $carla = DB::table('contacts')->where('full_name', 'Carla Factura')->first();
 
         $this->actingAs($gestor)
-            ->put("/clientes/{$uuid}/contactos/{$carla->uuid}", $this->contacto([
+            ->put("/backoffice/clientes/{$uuid}/contactos/{$carla->uuid}", $this->contacto([
                 'full_name' => 'Carla Factura', 'contact_email' => 'carla@acme.test',
                 'contact_type' => 'commercial', 'is_primary' => '1',
             ]))
@@ -247,17 +247,17 @@ final class ContactosTest extends TestCase
         $gestor = $this->usuarioCon('campaign_manager');
         $uuid = $this->crearCliente($gestor);
 
-        $this->actingAs($gestor)->post("/clientes/{$uuid}/contactos", $this->contacto([
+        $this->actingAs($gestor)->post("/backoffice/clientes/{$uuid}/contactos", $this->contacto([
             'full_name' => 'Ana Primera', 'is_primary' => '1',
         ]));
         $ana = DB::table('contacts')->where('full_name', 'Ana Primera')->first();
 
-        $this->actingAs($gestor)->put("/clientes/{$uuid}/contactos/{$ana->uuid}", $this->contacto([
+        $this->actingAs($gestor)->put("/backoffice/clientes/{$uuid}/contactos/{$ana->uuid}", $this->contacto([
             'full_name' => 'Ana Primera', 'is_primary' => '1', 'status' => 'inactive',
         ]));
 
         $this->actingAs($gestor)
-            ->post("/clientes/{$uuid}/contactos", $this->contacto([
+            ->post("/backoffice/clientes/{$uuid}/contactos", $this->contacto([
                 'full_name' => 'Beto Segundo', 'contact_email' => 'beto@acme.test', 'is_primary' => '1',
             ]))
             ->assertSessionHas('exito');
@@ -275,7 +275,7 @@ final class ContactosTest extends TestCase
         // Sin esta validación el valor llegaría a `ck_contacts_type` y el
         // operador vería un 45000 en vez de un mensaje.
         $this->actingAs($gestor)
-            ->post("/clientes/{$uuid}/contactos", $this->contacto(['contact_type' => 'ventas']))
+            ->post("/backoffice/clientes/{$uuid}/contactos", $this->contacto(['contact_type' => 'ventas']))
             ->assertSessionHasErrors('contact_type');
 
         $this->assertSame(0, DB::table('contacts')->count());
@@ -287,7 +287,7 @@ final class ContactosTest extends TestCase
         $uuid = $this->crearCliente($gestor);
 
         $this->actingAs($gestor)
-            ->post("/clientes/{$uuid}/contactos", $this->contacto(['contact_email' => 'esto no es un correo']))
+            ->post("/backoffice/clientes/{$uuid}/contactos", $this->contacto(['contact_email' => 'esto no es un correo']))
             ->assertSessionHasErrors('contact_email');
     }
 
@@ -301,11 +301,11 @@ final class ContactosTest extends TestCase
         $gestor = $this->usuarioCon('campaign_manager');
         $uuid = $this->crearCliente($gestor);
 
-        $this->actingAs($gestor)->post("/clientes/{$uuid}/contactos", $this->contacto([
+        $this->actingAs($gestor)->post("/backoffice/clientes/{$uuid}/contactos", $this->contacto([
             'full_name' => 'Ana', 'contact_email' => 'facturacion@acme.test', 'contact_type' => 'billing',
         ]));
         $this->actingAs($gestor)
-            ->post("/clientes/{$uuid}/contactos", $this->contacto([
+            ->post("/backoffice/clientes/{$uuid}/contactos", $this->contacto([
                 'full_name' => 'Beto', 'contact_email' => 'facturacion@acme.test', 'contact_type' => 'billing',
             ]))
             ->assertSessionHas('exito');
@@ -321,16 +321,16 @@ final class ContactosTest extends TestCase
         $gestor = $this->usuarioCon('campaign_manager');
         $uuid = $this->crearCliente($gestor);
 
-        $this->actingAs($gestor)->post("/clientes/{$uuid}/contactos", $this->contacto());
+        $this->actingAs($gestor)->post("/backoffice/clientes/{$uuid}/contactos", $this->contacto());
         $ajeno = DB::table('contacts')->first();
 
-        $this->actingAs($gestor)->post('/clientes', $this->cliente([
+        $this->actingAs($gestor)->post('/backoffice/clientes', $this->cliente([
             'commercial_name' => 'Otra empresa', 'client_code' => 'OTRA-01',
         ]));
         $otro = (string) DB::table('client_organizations')->where('client_code', 'OTRA-01')->value('uuid');
 
         $this->actingAs($gestor)
-            ->get("/clientes/{$otro}/contactos/{$ajeno->uuid}/editar")
+            ->get("/backoffice/clientes/{$otro}/contactos/{$ajeno->uuid}/editar")
             ->assertNotFound();
     }
 
@@ -340,7 +340,7 @@ final class ContactosTest extends TestCase
         $uuid = $this->crearCliente($gestor);
 
         $this->actingAs($this->usuarioCon('finance'))
-            ->get("/clientes/{$uuid}/contactos/nuevo")
+            ->get("/backoffice/clientes/{$uuid}/contactos/nuevo")
             ->assertForbidden();
     }
 
@@ -364,7 +364,7 @@ final class ContactosTest extends TestCase
 
     private function crearCliente(User $quien): string
     {
-        $this->actingAs($quien)->post('/clientes', $this->cliente());
+        $this->actingAs($quien)->post('/backoffice/clientes', $this->cliente());
 
         return (string) DB::table('client_organizations')->where('client_code', 'ACME-01')->value('uuid');
     }

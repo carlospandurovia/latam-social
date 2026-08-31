@@ -36,13 +36,16 @@ final class RutasTest extends TestCase
 
     public function test_la_raiz_redirige_al_panel(): void
     {
-        $this->get('/')->assertRedirect('/panel');
+        // 9.21a: el back-office se mudo a `/backoffice` para dejar libre
+        // `/creadores`, que tiene que ser la puerta publica de los creadores.
+        // La raiz seguira llevando aqui hasta que `9.21b` ponga la portada.
+        $this->get('/')->assertRedirect('/backoffice/panel');
     }
 
     /** Sin sesión no se ve el panel. */
     public function test_el_panel_exige_sesion(): void
     {
-        $this->get('/panel')->assertRedirect(route('acceso'));
+        $this->get('/backoffice/panel')->assertRedirect(route('acceso'));
     }
 
     public function test_la_pantalla_de_acceso_es_publica(): void
@@ -53,7 +56,7 @@ final class RutasTest extends TestCase
     /** Las rutas de negocio están detrás de `auth`, no solo ocultas del menú. */
     public function test_las_rutas_de_negocio_exigen_sesion(): void
     {
-        $this->get('/creadores')->assertRedirect(route('acceso'));
-        $this->get('/catalogos/currencies')->assertRedirect(route('acceso'));
+        $this->get('/backoffice/creadores')->assertRedirect(route('acceso'));
+        $this->get('/backoffice/catalogos/currencies')->assertRedirect(route('acceso'));
     }
 }

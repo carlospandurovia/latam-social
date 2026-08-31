@@ -85,7 +85,7 @@ final class AvisoCambioSensibleTest extends TestCase
         Queue::fake();
 
         $this->actingAs($this->usuarioCon('finance'))
-            ->post("/creadores/{$this->uuid}/fiscal", $this->perfilFiscal())
+            ->post("/backoffice/creadores/{$this->uuid}/fiscal", $this->perfilFiscal())
             ->assertSessionHas('exito');
 
         $this->assertSame(1, DB::table('domain_events')
@@ -105,7 +105,7 @@ final class AvisoCambioSensibleTest extends TestCase
         Queue::fake();
 
         $this->actingAs($this->usuarioCon('finance'))
-            ->post("/creadores/{$this->uuid}/pagos", $this->medioDePagoFormulario())
+            ->post("/backoffice/creadores/{$this->uuid}/pagos", $this->medioDePagoFormulario())
             ->assertSessionHas('exito');
 
         $this->assertSame('creator.payment_method_changed',
@@ -119,7 +119,7 @@ final class AvisoCambioSensibleTest extends TestCase
         $suyo = (string) DB::table('creators')->where('id', $this->creadorId)->value('email');
 
         $this->actingAs($this->usuarioCon('finance'))
-            ->post("/creadores/{$this->uuid}/fiscal", $this->perfilFiscal());
+            ->post("/backoffice/creadores/{$this->uuid}/fiscal", $this->perfilFiscal());
 
         $this->assertSame($suyo, DB::table('email_log')->value('to_email'));
     }
@@ -138,7 +138,7 @@ final class AvisoCambioSensibleTest extends TestCase
         Queue::fake();
 
         $this->actingAs($this->usuarioCon('finance'))
-            ->post("/creadores/{$this->uuid}/fiscal", $this->perfilFiscal());
+            ->post("/backoffice/creadores/{$this->uuid}/fiscal", $this->perfilFiscal());
 
         $plantilla = DB::table('email_templates')
             ->where('code', 'creator.tax_profile_changed')->first();
@@ -159,7 +159,7 @@ final class AvisoCambioSensibleTest extends TestCase
         Queue::fake();
 
         $this->actingAs($this->usuarioCon('finance'))
-            ->post("/creadores/{$this->uuid}/fiscal", $this->perfilFiscal());
+            ->post("/backoffice/creadores/{$this->uuid}/fiscal", $this->perfilFiscal());
 
         $this->assertSame('pending',
             DB::table('creator_tax_profiles')->where('creator_id', $this->creadorId)->value('status'),
@@ -183,7 +183,7 @@ final class AvisoCambioSensibleTest extends TestCase
         DB::table('email_templates')->delete();
 
         $this->actingAs($this->usuarioCon('finance'))
-            ->post("/creadores/{$this->uuid}/fiscal", $this->perfilFiscal())
+            ->post("/backoffice/creadores/{$this->uuid}/fiscal", $this->perfilFiscal())
             ->assertSessionHas('exito');
 
         $this->assertSame(1, DB::table('creator_tax_profiles')->count(), 'el cambio NO se bloquea');
@@ -239,7 +239,7 @@ final class AvisoCambioSensibleTest extends TestCase
         Queue::fake();
         $usuario = $this->usuarioCon('finance');
 
-        $this->actingAs($usuario)->post("/creadores/{$this->uuid}/fiscal", $this->perfilFiscal());
+        $this->actingAs($usuario)->post("/backoffice/creadores/{$this->uuid}/fiscal", $this->perfilFiscal());
 
         $this->assertSame((int) $usuario->id,
             (int) DB::table('domain_events')->value('actor_user_id'));

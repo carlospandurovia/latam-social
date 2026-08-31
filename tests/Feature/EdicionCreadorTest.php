@@ -62,17 +62,17 @@ final class EdicionCreadorTest extends TestCase
     {
         $usuario = $this->usuarioCon('content_reviewer');   // tiene creator.view
 
-        $this->actingAs($usuario)->get("/creadores/{$this->uuid}")->assertOk();
-        $this->actingAs($usuario)->get("/creadores/{$this->uuid}/editar")->assertForbidden();
+        $this->actingAs($usuario)->get("/backoffice/creadores/{$this->uuid}")->assertOk();
+        $this->actingAs($usuario)->get("/backoffice/creadores/{$this->uuid}/editar")->assertForbidden();
         $this->actingAs($usuario)
-            ->put("/creadores/{$this->uuid}", $this->formulario(['city' => 'Cusco']))
+            ->put("/backoffice/creadores/{$this->uuid}", $this->formulario(['city' => 'Cusco']))
             ->assertForbidden();
     }
 
     public function test_quien_puede_gestionar_entra_al_formulario(): void
     {
         $this->actingAs($this->usuarioCon('campaign_manager'))
-            ->get("/creadores/{$this->uuid}/editar")
+            ->get("/backoffice/creadores/{$this->uuid}/editar")
             ->assertOk();
     }
 
@@ -83,7 +83,7 @@ final class EdicionCreadorTest extends TestCase
         $usuario = $this->usuarioCon('admin');
 
         $this->actingAs($usuario)
-            ->put("/creadores/{$this->uuid}", $this->formulario([
+            ->put("/backoffice/creadores/{$this->uuid}", $this->formulario([
                 'city' => 'Cusco',
                 'payment_term_days' => 45,
             ]))
@@ -110,7 +110,7 @@ final class EdicionCreadorTest extends TestCase
     public function test_sin_cambios_no_ensucia_la_bitacora(): void
     {
         $this->actingAs($this->usuarioCon('admin'))
-            ->put("/creadores/{$this->uuid}", $this->formulario())
+            ->put("/backoffice/creadores/{$this->uuid}", $this->formulario())
             ->assertRedirect();
 
         $this->assertSame(0, DB::table('audit_logs')->where('action', 'creator.updated')->count());
@@ -137,7 +137,7 @@ final class EdicionCreadorTest extends TestCase
             ->first(['email', 'document_number', 'first_name']);
 
         $this->actingAs($this->usuarioCon('admin'))
-            ->put("/creadores/{$this->uuid}", $this->formulario([
+            ->put("/backoffice/creadores/{$this->uuid}", $this->formulario([
                 'city' => 'Arequipa',
                 'email' => 'secuestrada@atacante.test',
                 'document_number' => '99999999',
@@ -161,7 +161,7 @@ final class EdicionCreadorTest extends TestCase
     public function test_rechaza_un_plazo_de_pago_imposible(): void
     {
         $this->actingAs($this->usuarioCon('admin'))
-            ->put("/creadores/{$this->uuid}", $this->formulario(['payment_term_days' => 400]))
+            ->put("/backoffice/creadores/{$this->uuid}", $this->formulario(['payment_term_days' => 400]))
             ->assertSessionHasErrors('payment_term_days');
 
         $this->assertSame(
@@ -173,7 +173,7 @@ final class EdicionCreadorTest extends TestCase
     public function test_rechaza_una_moneda_que_no_existe(): void
     {
         $this->actingAs($this->usuarioCon('admin'))
-            ->put("/creadores/{$this->uuid}", $this->formulario(['preferred_currency_code' => 'XXX']))
+            ->put("/backoffice/creadores/{$this->uuid}", $this->formulario(['preferred_currency_code' => 'XXX']))
             ->assertSessionHasErrors('preferred_currency_code');
     }
 
@@ -186,7 +186,7 @@ final class EdicionCreadorTest extends TestCase
     public function test_una_entrada_de_bitacora_no_se_puede_reescribir(): void
     {
         $this->actingAs($this->usuarioCon('admin'))
-            ->put("/creadores/{$this->uuid}", $this->formulario(['city' => 'Trujillo']));
+            ->put("/backoffice/creadores/{$this->uuid}", $this->formulario(['city' => 'Trujillo']));
 
         $this->expectException(QueryException::class);
         DB::table('audit_logs')->where('action', 'creator.updated')->update(['action' => 'nada']);
@@ -195,7 +195,7 @@ final class EdicionCreadorTest extends TestCase
     public function test_una_entrada_de_bitacora_no_se_puede_borrar(): void
     {
         $this->actingAs($this->usuarioCon('admin'))
-            ->put("/creadores/{$this->uuid}", $this->formulario(['city' => 'Piura']));
+            ->put("/backoffice/creadores/{$this->uuid}", $this->formulario(['city' => 'Piura']));
 
         $this->expectException(QueryException::class);
         DB::table('audit_logs')->where('action', 'creator.updated')->delete();

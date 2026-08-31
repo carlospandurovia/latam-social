@@ -52,7 +52,7 @@ final class CampanasTest extends TestCase
         $this->paisPE = (int) DB::table('countries')->where('iso2', 'PE')->value('id');
 
         $gestor = $this->usuarioCon('campaign_manager');
-        $this->actingAs($gestor)->post('/clientes', [
+        $this->actingAs($gestor)->post('/backoffice/clientes', [
             'commercial_name' => 'ACME', 'client_code' => 'ACME-01',
             'country_id' => $this->paisPE, 'status' => 'prospect',
         ]);
@@ -69,7 +69,7 @@ final class CampanasTest extends TestCase
     public function test_alta_de_una_campana_resuelve_quien_la_factura(): void
     {
         $this->actingAs($this->usuarioCon('campaign_manager'))
-            ->post('/campanas', $this->campana())
+            ->post('/backoffice/campanas', $this->campana())
             ->assertSessionHas('exito');
 
         $fila = DB::table('campaigns')->where('name', 'Lanzamiento verano')->first();
@@ -94,7 +94,7 @@ final class CampanasTest extends TestCase
             ->update(['valid_to' => '2026-12-31']);
 
         $this->actingAs($this->usuarioCon('campaign_manager'))
-            ->post('/campanas', $this->campana(['starts_on' => '2027-03-01', 'ends_on' => '2027-03-31']))
+            ->post('/backoffice/campanas', $this->campana(['starts_on' => '2027-03-01', 'ends_on' => '2027-03-31']))
             ->assertSessionHas('aviso');
 
         $fila = DB::table('campaigns')->where('name', 'Lanzamiento verano')->first();
@@ -122,11 +122,11 @@ final class CampanasTest extends TestCase
         // se esta escribiendo. El limite real es `approved`, y esta prueba lo
         // descubrio al ponerse roja afirmando el limite equivocado.
         $this->actingAs($gestor)
-            ->post("/campanas/{$uuid}/estado", ['estado' => E::EN_APROBACION])
+            ->post("/backoffice/campanas/{$uuid}/estado", ['estado' => E::EN_APROBACION])
             ->assertSessionHas('exito');
 
         $this->actingAs($this->usuarioCon('finance'))
-            ->post("/campanas/{$uuid}/estado", ['estado' => E::APROBADA])
+            ->post("/backoffice/campanas/{$uuid}/estado", ['estado' => E::APROBADA])
             ->assertSessionHas('aviso');
 
         $this->assertSame('pending_approval', DB::table('campaigns')->where('uuid', $uuid)->value('status'));
@@ -142,7 +142,7 @@ final class CampanasTest extends TestCase
         $uuid = $this->crear($gestor);
 
         $this->actingAs($gestor)
-            ->post("/campanas/{$uuid}/estado", ['estado' => E::TERMINADA])
+            ->post("/backoffice/campanas/{$uuid}/estado", ['estado' => E::TERMINADA])
             ->assertSessionHas('aviso');
 
         $this->assertSame('draft', DB::table('campaigns')->where('uuid', $uuid)->value('status'));
@@ -155,10 +155,10 @@ final class CampanasTest extends TestCase
         $gestor = $this->usuarioCon('campaign_manager');
         $uuid = $this->crear($gestor);
 
-        $this->actingAs($gestor)->post("/campanas/{$uuid}/estado", ['estado' => E::EN_APROBACION]);
+        $this->actingAs($gestor)->post("/backoffice/campanas/{$uuid}/estado", ['estado' => E::EN_APROBACION]);
 
         $this->actingAs($gestor)
-            ->post("/campanas/{$uuid}/estado", ['estado' => E::APROBADA])
+            ->post("/backoffice/campanas/{$uuid}/estado", ['estado' => E::APROBADA])
             ->assertForbidden();
 
         $this->assertSame('pending_approval', DB::table('campaigns')->where('uuid', $uuid)->value('status'));
@@ -168,10 +168,10 @@ final class CampanasTest extends TestCase
     {
         $gestor = $this->usuarioCon('campaign_manager');
         $uuid = $this->crear($gestor);
-        $this->actingAs($gestor)->post("/campanas/{$uuid}/estado", ['estado' => E::EN_APROBACION]);
+        $this->actingAs($gestor)->post("/backoffice/campanas/{$uuid}/estado", ['estado' => E::EN_APROBACION]);
 
         $this->actingAs($this->usuarioCon('finance'))
-            ->post("/campanas/{$uuid}/estado", ['estado' => E::APROBADA])
+            ->post("/backoffice/campanas/{$uuid}/estado", ['estado' => E::APROBADA])
             ->assertSessionHas('exito');
 
         $fila = DB::table('campaigns')->where('uuid', $uuid)->first();
@@ -194,8 +194,8 @@ final class CampanasTest extends TestCase
     {
         $gestor = $this->usuarioCon('campaign_manager');
         $uuid = $this->crear($gestor);
-        $this->actingAs($gestor)->post("/campanas/{$uuid}/estado", ['estado' => E::EN_APROBACION]);
-        $this->actingAs($this->usuarioCon('finance'))->post("/campanas/{$uuid}/estado", ['estado' => E::APROBADA]);
+        $this->actingAs($gestor)->post("/backoffice/campanas/{$uuid}/estado", ['estado' => E::EN_APROBACION]);
+        $this->actingAs($this->usuarioCon('finance'))->post("/backoffice/campanas/{$uuid}/estado", ['estado' => E::APROBADA]);
 
         $otra = $this->entidadLegal(['code' => 'OTRA-71']);
 
@@ -218,7 +218,7 @@ final class CampanasTest extends TestCase
             ->update(['valid_to' => '2026-12-31']);
 
         $this->actingAs($gestor)
-            ->put("/campanas/{$uuid}", $this->campana(['starts_on' => '2027-03-01', 'ends_on' => '2027-03-31']))
+            ->put("/backoffice/campanas/{$uuid}", $this->campana(['starts_on' => '2027-03-01', 'ends_on' => '2027-03-31']))
             ->assertSessionHas('exito');
 
         $this->assertNull(DB::table('campaigns')->where('uuid', $uuid)->value('billing_legal_entity_id'),
@@ -261,7 +261,7 @@ final class CampanasTest extends TestCase
             'la premisa: hoy el resolver diria otra cosa',
         );
 
-        $respuesta = $this->actingAs($gestor)->get("/campanas/{$uuid}");
+        $respuesta = $this->actingAs($gestor)->get("/backoffice/campanas/{$uuid}");
 
         $respuesta->assertOk();
         $respuesta->assertSee($nombreGuardado, false);
@@ -284,7 +284,7 @@ final class CampanasTest extends TestCase
         $gestor = $this->usuarioCon('campaign_manager');
         $uuid = $this->crear($gestor);
 
-        $respuesta = $this->actingAs($gestor)->get("/campanas/{$uuid}");
+        $respuesta = $this->actingAs($gestor)->get("/backoffice/campanas/{$uuid}");
 
         $respuesta->assertOk();
         // El «desde el» sale de `CoberturaFacturacion::HAY`: es el porque.
@@ -298,10 +298,10 @@ final class CampanasTest extends TestCase
     {
         $gestor = $this->usuarioCon('campaign_manager');
         $uuid = $this->crear($gestor);
-        $this->actingAs($gestor)->post("/campanas/{$uuid}/estado", ['estado' => E::EN_APROBACION]);
-        $this->actingAs($this->usuarioCon('finance'))->post("/campanas/{$uuid}/estado", ['estado' => E::APROBADA]);
+        $this->actingAs($gestor)->post("/backoffice/campanas/{$uuid}/estado", ['estado' => E::EN_APROBACION]);
+        $this->actingAs($this->usuarioCon('finance'))->post("/backoffice/campanas/{$uuid}/estado", ['estado' => E::APROBADA]);
 
-        $this->actingAs($gestor)->get("/campanas/{$uuid}/editar")->assertStatus(409);
+        $this->actingAs($gestor)->get("/backoffice/campanas/{$uuid}/editar")->assertStatus(409);
     }
 
     // ------------------------------------------------------------ validacion
@@ -314,14 +314,14 @@ final class CampanasTest extends TestCase
     {
         $gestor = $this->usuarioCon('campaign_manager');
 
-        $this->actingAs($gestor)->post('/clientes', [
+        $this->actingAs($gestor)->post('/backoffice/clientes', [
             'commercial_name' => 'OTRO', 'client_code' => 'OTRO-01',
             'country_id' => $this->paisPE, 'status' => 'prospect',
         ]);
         $otroCliente = (int) DB::table('client_organizations')->where('client_code', 'OTRO-01')->value('id');
 
         $this->actingAs($gestor)
-            ->post('/campanas', $this->campana(['client_organization_id' => $otroCliente]))
+            ->post('/backoffice/campanas', $this->campana(['client_organization_id' => $otroCliente]))
             ->assertSessionHasErrors('client_brand_id');
 
         $this->assertSame(0, DB::table('campaigns')->count());
@@ -331,7 +331,7 @@ final class CampanasTest extends TestCase
     public function test_una_fecha_sin_ceros_se_rechaza(): void
     {
         $this->actingAs($this->usuarioCon('campaign_manager'))
-            ->post('/campanas', $this->campana(['starts_on' => '2026-2-1']))
+            ->post('/backoffice/campanas', $this->campana(['starts_on' => '2026-2-1']))
             ->assertSessionHasErrors('starts_on');
 
         $this->assertSame(0, DB::table('campaigns')->count());
@@ -340,7 +340,7 @@ final class CampanasTest extends TestCase
     public function test_no_termina_antes_de_empezar(): void
     {
         $this->actingAs($this->usuarioCon('campaign_manager'))
-            ->post('/campanas', $this->campana(['starts_on' => '2026-06-01', 'ends_on' => '2026-05-01']))
+            ->post('/backoffice/campanas', $this->campana(['starts_on' => '2026-06-01', 'ends_on' => '2026-05-01']))
             ->assertSessionHasErrors('ends_on');
     }
 
@@ -351,15 +351,15 @@ final class CampanasTest extends TestCase
         $uuid = $this->crear($this->usuarioCon('campaign_manager'));
         $revisor = $this->usuarioCon('content_reviewer');
 
-        $this->actingAs($revisor)->get('/campanas')->assertOk();
-        $this->actingAs($revisor)->get("/campanas/{$uuid}")->assertOk();
-        $this->actingAs($revisor)->get('/campanas/nueva')->assertForbidden();
+        $this->actingAs($revisor)->get('/backoffice/campanas')->assertOk();
+        $this->actingAs($revisor)->get("/backoffice/campanas/{$uuid}")->assertOk();
+        $this->actingAs($revisor)->get('/backoffice/campanas/nueva')->assertForbidden();
     }
 
     /** Sin permiso de ver, ni la lista. */
     public function test_sin_permiso_no_se_ven_las_campanas(): void
     {
-        $this->actingAs($this->usuarioCon(null))->get('/campanas')->assertForbidden();
+        $this->actingAs($this->usuarioCon(null))->get('/backoffice/campanas')->assertForbidden();
     }
 
     // ------------------------------------------------------------------ apoyo
@@ -387,7 +387,7 @@ final class CampanasTest extends TestCase
      */
     private function crear(User $quien, bool $conBrief = true): string
     {
-        $this->actingAs($quien)->post('/campanas', $this->campana());
+        $this->actingAs($quien)->post('/backoffice/campanas', $this->campana());
 
         $fila = DB::table('campaigns')->where('name', 'Lanzamiento verano')->first(['id', 'uuid']);
 

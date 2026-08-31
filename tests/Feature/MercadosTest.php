@@ -69,7 +69,7 @@ final class MercadosTest extends TestCase
         $this->paisPE = (int) DB::table('countries')->where('iso2', 'PE')->value('id');
         $this->paisCO = (int) DB::table('countries')->where('iso2', 'CO')->value('id');
 
-        $this->actingAs($this->usuarioCon('campaign_manager'))->post('/clientes', [
+        $this->actingAs($this->usuarioCon('campaign_manager'))->post('/backoffice/clientes', [
             'commercial_name' => 'ACME', 'client_code' => 'ACME-01',
             'country_id' => $this->paisPE, 'status' => 'prospect',
         ]);
@@ -95,7 +95,7 @@ final class MercadosTest extends TestCase
         $this->requisitoDe($this->idDe($uuid));
 
         $this->actingAs($this->usuarioCon('finance'))
-            ->post("/campanas/{$uuid}/estado", ['estado' => E::APROBADA])
+            ->post("/backoffice/campanas/{$uuid}/estado", ['estado' => E::APROBADA])
             ->assertSessionHas('aviso');
 
         $this->assertSame('pending_approval', DB::table('campaigns')->where('uuid', $uuid)->value('status'));
@@ -110,7 +110,7 @@ final class MercadosTest extends TestCase
         $this->mercadoDe($this->idDe($uuid), $this->paisPE);
 
         $this->actingAs($this->usuarioCon('finance'))
-            ->post("/campanas/{$uuid}/estado", ['estado' => E::APROBADA])
+            ->post("/backoffice/campanas/{$uuid}/estado", ['estado' => E::APROBADA])
             ->assertSessionHas('exito');
 
         $this->assertSame('approved', DB::table('campaigns')->where('uuid', $uuid)->value('status'));
@@ -174,14 +174,14 @@ final class MercadosTest extends TestCase
         $peru = $this->mercadoDe($campanaId, $this->paisPE);
         $this->requisitoDe($campanaId);
 
-        $this->actingAs($gestor)->get("/campanas/{$uuid}/mercados/{$peru}")->assertOk()
+        $this->actingAs($gestor)->get("/backoffice/campanas/{$uuid}/mercados/{$peru}")->assertOk()
             ->assertSee('sigue el brief general', false);
 
         $this->requisitoDe($campanaId, [
             'campaign_market_id' => $peru, 'content_format_id' => $this->otroFormato(),
         ]);
 
-        $this->actingAs($gestor)->get("/campanas/{$uuid}/mercados/{$peru}")->assertOk()
+        $this->actingAs($gestor)->get("/backoffice/campanas/{$uuid}/mercados/{$peru}")->assertOk()
             ->assertSee('tiene brief propio', false)
             ->assertSee('no se suman', false);
     }
@@ -239,7 +239,7 @@ final class MercadosTest extends TestCase
         $mercadoAjeno = $this->mercadoDe($ajena, $this->paisCO);
 
         $this->actingAs($this->usuarioCon('campaign_manager'))
-            ->post("/campanas/{$uuid}/requisitos", $this->requisito(['campaign_market_id' => $mercadoAjeno]))
+            ->post("/backoffice/campanas/{$uuid}/requisitos", $this->requisito(['campaign_market_id' => $mercadoAjeno]))
             ->assertSessionHasErrors('campaign_market_id');
 
         $this->assertSame(0, DB::table('campaign_requirements')->count());
@@ -252,9 +252,9 @@ final class MercadosTest extends TestCase
         $gestor = $this->usuarioCon('campaign_manager');
         $uuid = $this->campanaEnBorrador();
 
-        $this->actingAs($gestor)->post("/campanas/{$uuid}/mercados", ['country_id' => $this->paisPE])
+        $this->actingAs($gestor)->post("/backoffice/campanas/{$uuid}/mercados", ['country_id' => $this->paisPE])
             ->assertSessionHas('exito');
-        $this->actingAs($gestor)->post("/campanas/{$uuid}/mercados", ['country_id' => $this->paisPE])
+        $this->actingAs($gestor)->post("/backoffice/campanas/{$uuid}/mercados", ['country_id' => $this->paisPE])
             ->assertSessionHas('aviso');
 
         $this->assertSame(1, DB::table('campaign_markets')->where('campaign_id', $this->idDe($uuid))->count());
@@ -268,11 +268,11 @@ final class MercadosTest extends TestCase
         $uuid = $this->campanaEnBorrador();
 
         $this->actingAs($gestor)
-            ->post("/campanas/{$uuid}/mercados", ['country_id' => $this->paisPE, 'target_creators' => 0])
+            ->post("/backoffice/campanas/{$uuid}/mercados", ['country_id' => $this->paisPE, 'target_creators' => 0])
             ->assertSessionHasErrors('target_creators');
 
         $this->actingAs($gestor)
-            ->post("/campanas/{$uuid}/mercados", ['country_id' => $this->paisPE, 'target_creators' => ''])
+            ->post("/backoffice/campanas/{$uuid}/mercados", ['country_id' => $this->paisPE, 'target_creators' => ''])
             ->assertSessionHas('exito');
 
         $this->assertNull(DB::table('campaign_markets')
@@ -295,7 +295,7 @@ final class MercadosTest extends TestCase
         $uuid = $this->campanaAprobada();
 
         $this->actingAs($this->usuarioCon('campaign_manager'))
-            ->post("/campanas/{$uuid}/mercados", ['country_id' => $this->paisCO])
+            ->post("/backoffice/campanas/{$uuid}/mercados", ['country_id' => $this->paisCO])
             ->assertSessionHas('exito');
 
         $this->assertSame(2, DB::table('campaign_markets')->where('campaign_id', $this->idDe($uuid))->count());
@@ -307,7 +307,7 @@ final class MercadosTest extends TestCase
         $mercado = (int) DB::table('campaign_markets')->where('campaign_id', $this->idDe($uuid))->value('id');
 
         $this->actingAs($this->usuarioCon('campaign_manager'))
-            ->delete("/campanas/{$uuid}/mercados/{$mercado}")
+            ->delete("/backoffice/campanas/{$uuid}/mercados/{$mercado}")
             ->assertSessionHas('aviso');
 
         $this->assertSame(1, DB::table('campaign_markets')->where('id', $mercado)->count());
@@ -338,7 +338,7 @@ final class MercadosTest extends TestCase
         $mercado = $this->mercadoDe($this->idDe($uuid), $this->paisCO);
 
         $this->actingAs($this->usuarioCon('campaign_manager'))
-            ->delete("/campanas/{$uuid}/mercados/{$mercado}")
+            ->delete("/backoffice/campanas/{$uuid}/mercados/{$mercado}")
             ->assertSessionHas('exito');
 
         $this->assertSame(0, DB::table('campaign_markets')->where('id', $mercado)->count());
@@ -353,7 +353,7 @@ final class MercadosTest extends TestCase
         $this->requisitoDe($campanaId, ['campaign_market_id' => $mercado]);
 
         $this->actingAs($this->usuarioCon('campaign_manager'))
-            ->delete("/campanas/{$uuid}/mercados/{$mercado}")
+            ->delete("/backoffice/campanas/{$uuid}/mercados/{$mercado}")
             ->assertSessionHas('aviso');
 
         $this->assertSame(1, DB::table('campaign_markets')->where('id', $mercado)->count());
@@ -368,7 +368,7 @@ final class MercadosTest extends TestCase
         $mercadoAjeno = $this->mercadoDe($ajena, $this->paisCO);
 
         $this->actingAs($this->usuarioCon('campaign_manager'))
-            ->delete("/campanas/{$uuid}/mercados/{$mercadoAjeno}")
+            ->delete("/backoffice/campanas/{$uuid}/mercados/{$mercadoAjeno}")
             ->assertNotFound();
 
         $this->assertSame(1, DB::table('campaign_markets')->where('id', $mercadoAjeno)->count());
@@ -382,8 +382,8 @@ final class MercadosTest extends TestCase
         $mercado = $this->mercadoDe($this->idDe($uuid), $this->paisPE);
         $revisor = $this->usuarioCon('content_reviewer');
 
-        $this->actingAs($revisor)->get("/campanas/{$uuid}/mercados/{$mercado}")->assertOk();
-        $this->actingAs($revisor)->post("/campanas/{$uuid}/mercados", ['country_id' => $this->paisCO])
+        $this->actingAs($revisor)->get("/backoffice/campanas/{$uuid}/mercados/{$mercado}")->assertOk();
+        $this->actingAs($revisor)->post("/backoffice/campanas/{$uuid}/mercados", ['country_id' => $this->paisCO])
             ->assertForbidden();
     }
 
@@ -415,7 +415,7 @@ final class MercadosTest extends TestCase
     private function campanaEnBorrador(?User $quien = null): string
     {
         $this->actingAs($quien ?? $this->usuarioCon('campaign_manager'))
-            ->post('/campanas', $this->datos());
+            ->post('/backoffice/campanas', $this->datos());
 
         return (string) DB::table('campaigns')->where('name', 'Lanzamiento verano')->value('uuid');
     }
@@ -425,7 +425,7 @@ final class MercadosTest extends TestCase
         $gestor = $this->usuarioCon('campaign_manager');
         $uuid = $this->campanaEnBorrador($gestor);
 
-        $this->actingAs($gestor)->post("/campanas/{$uuid}/estado", ['estado' => E::EN_APROBACION]);
+        $this->actingAs($gestor)->post("/backoffice/campanas/{$uuid}/estado", ['estado' => E::EN_APROBACION]);
 
         return $uuid;
     }
@@ -438,7 +438,7 @@ final class MercadosTest extends TestCase
         $this->mercadoDe($this->idDe($uuid), $this->paisPE);
 
         $this->actingAs($this->usuarioCon('finance'))
-            ->post("/campanas/{$uuid}/estado", ['estado' => E::APROBADA]);
+            ->post("/backoffice/campanas/{$uuid}/estado", ['estado' => E::APROBADA]);
 
         $this->assertNotNull(DB::table('campaigns')->where('uuid', $uuid)->value('confirmed_at'),
             'la premisa de estas pruebas es que la campana esta CONFIRMADA');

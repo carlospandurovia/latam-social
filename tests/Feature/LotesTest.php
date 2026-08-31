@@ -351,8 +351,8 @@ final class LotesTest extends TestCase
 
     public function test_la_pantalla_exige_permiso(): void
     {
-        $this->actingAs($this->usuarioCon('content_reviewer'))->get('/lotes')->assertForbidden();
-        $this->actingAs($this->usuarioCon('finance'))->get('/lotes')->assertOk();
+        $this->actingAs($this->usuarioCon('content_reviewer'))->get('/backoffice/lotes')->assertForbidden();
+        $this->actingAs($this->usuarioCon('finance'))->get('/backoffice/lotes')->assertOk();
     }
 
     public function test_el_csv_lleva_lo_que_hace_falta_para_pagar(): void
@@ -360,7 +360,7 @@ final class LotesTest extends TestCase
         $this->pagable(500.0);
         $uuid = Lotes::armar($this->entidadId, $this->moneda, (int) $this->usuarioCon('finance')->id);
 
-        $respuesta = $this->actingAs($this->usuarioCon('finance'))->get("/lotes/{$uuid}/csv");
+        $respuesta = $this->actingAs($this->usuarioCon('finance'))->get("/backoffice/lotes/{$uuid}/csv");
 
         $respuesta->assertOk();
         $respuesta->assertHeader('content-type', 'text/csv; charset=UTF-8');
@@ -377,7 +377,7 @@ final class LotesTest extends TestCase
 
         $this->assertCount(1, Pagos::porConciliar());
 
-        $this->actingAs($this->usuarioCon('finance'))->get('/pagos/conciliar')
+        $this->actingAs($this->usuarioCon('finance'))->get('/backoffice/pagos/conciliar')
             ->assertOk()
             ->assertSee('Enviado no es llegado', false);
     }

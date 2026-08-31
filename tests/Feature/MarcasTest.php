@@ -44,7 +44,7 @@ final class MarcasTest extends TestCase
     public function test_dar_de_alta_un_cliente_crea_su_primera_marca(): void
     {
         $this->actingAs($this->usuarioCon('campaign_manager'))
-            ->post('/clientes', $this->cliente())
+            ->post('/backoffice/clientes', $this->cliente())
             ->assertSessionHas('exito');
 
         $clienteId = (int) DB::table('client_organizations')->where('client_code', 'ACME-01')->value('id');
@@ -67,8 +67,8 @@ final class MarcasTest extends TestCase
     {
         $gestor = $this->usuarioCon('campaign_manager');
 
-        $this->actingAs($gestor)->post('/clientes', $this->cliente());
-        $this->actingAs($gestor)->post('/clientes', $this->cliente([
+        $this->actingAs($gestor)->post('/backoffice/clientes', $this->cliente());
+        $this->actingAs($gestor)->post('/backoffice/clientes', $this->cliente([
             'client_code' => 'ACME-02',
         ]))->assertSessionHas('exito');
 
@@ -85,7 +85,7 @@ final class MarcasTest extends TestCase
         $categorias = DB::table('categories')->orderBy('id')->limit(2)->pluck('id')->all();
 
         $this->actingAs($gestor)
-            ->post("/clientes/{$uuid}/marcas", [
+            ->post("/backoffice/clientes/{$uuid}/marcas", [
                 'name' => 'Segunda marca',
                 'status' => 'active',
                 'categorias' => $categorias,
@@ -107,7 +107,7 @@ final class MarcasTest extends TestCase
 
         // «ACME» ya existe: la creó el alta del cliente.
         $this->actingAs($gestor)
-            ->post("/clientes/{$uuid}/marcas", ['name' => 'ACME', 'status' => 'active'])
+            ->post("/backoffice/clientes/{$uuid}/marcas", ['name' => 'ACME', 'status' => 'active'])
             ->assertSessionHasErrors('name');
 
         $this->assertSame(1, DB::table('client_brands')->where('name', 'ACME')->count());
@@ -122,13 +122,13 @@ final class MarcasTest extends TestCase
         $gestor = $this->usuarioCon('campaign_manager');
         $uuid = $this->crearCliente($gestor);
 
-        $this->actingAs($gestor)->post('/clientes', $this->cliente([
+        $this->actingAs($gestor)->post('/backoffice/clientes', $this->cliente([
             'commercial_name' => 'Otra empresa', 'client_code' => 'OTRA-01',
         ]));
         $otro = (string) DB::table('client_organizations')->where('client_code', 'OTRA-01')->value('uuid');
 
         $this->actingAs($gestor)
-            ->post("/clientes/{$otro}/marcas", ['name' => 'ACME', 'status' => 'active'])
+            ->post("/backoffice/clientes/{$otro}/marcas", ['name' => 'ACME', 'status' => 'active'])
             ->assertSessionHas('exito');
 
         $this->assertSame(2, DB::table('client_brands')->where('name', 'ACME')->count());
@@ -151,7 +151,7 @@ final class MarcasTest extends TestCase
         $marca = DB::table('client_brands')->first();
 
         $this->actingAs($gestor)
-            ->put("/clientes/{$uuid}/marcas/{$marca->uuid}", [
+            ->put("/backoffice/clientes/{$uuid}/marcas/{$marca->uuid}", [
                 'name' => 'ACME', 'status' => 'active', 'website' => 'https://acme.test',
             ])
             ->assertSessionHas('exito');
@@ -166,7 +166,7 @@ final class MarcasTest extends TestCase
         $marca = DB::table('client_brands')->first();
 
         $this->actingAs($gestor)
-            ->put("/clientes/{$uuid}/marcas/{$marca->uuid}", ['name' => 'ACME Perú', 'status' => 'active'])
+            ->put("/backoffice/clientes/{$uuid}/marcas/{$marca->uuid}", ['name' => 'ACME Perú', 'status' => 'active'])
             ->assertSessionHas('exito');
 
         $this->assertSame('acme-peru', DB::table('client_brands')->where('id', $marca->id)->value('slug'));
@@ -181,14 +181,14 @@ final class MarcasTest extends TestCase
         $gestor = $this->usuarioCon('campaign_manager');
         $this->crearCliente($gestor);
 
-        $this->actingAs($gestor)->post('/clientes', $this->cliente([
+        $this->actingAs($gestor)->post('/backoffice/clientes', $this->cliente([
             'commercial_name' => 'Otra empresa', 'client_code' => 'OTRA-01',
         ]));
         $otroUuid = (string) DB::table('client_organizations')->where('client_code', 'OTRA-01')->value('uuid');
         $marcaAjena = DB::table('client_brands')->where('name', 'ACME')->first();
 
         $this->actingAs($gestor)
-            ->get("/clientes/{$otroUuid}/marcas/{$marcaAjena->uuid}/editar")
+            ->get("/backoffice/clientes/{$otroUuid}/marcas/{$marcaAjena->uuid}/editar")
             ->assertNotFound();
     }
 
@@ -198,7 +198,7 @@ final class MarcasTest extends TestCase
         $uuid = $this->crearCliente($gestor);
 
         $this->actingAs($this->usuarioCon('finance'))
-            ->get("/clientes/{$uuid}/marcas/nueva")
+            ->get("/backoffice/clientes/{$uuid}/marcas/nueva")
             ->assertForbidden();
     }
 
@@ -216,7 +216,7 @@ final class MarcasTest extends TestCase
         $largo = str_repeat('A', 155);
 
         $this->actingAs($this->usuarioCon('campaign_manager'))
-            ->post('/clientes', $this->cliente(['commercial_name' => $largo]))
+            ->post('/backoffice/clientes', $this->cliente(['commercial_name' => $largo]))
             ->assertSessionHas('exito');
 
         $cliente = DB::table('client_organizations')->where('client_code', 'ACME-01')->first();
@@ -241,14 +241,14 @@ final class MarcasTest extends TestCase
         $marca = DB::table('client_brands')->first();
         $categorias = DB::table('categories')->orderBy('id')->limit(2)->pluck('id')->all();
 
-        $this->actingAs($gestor)->put("/clientes/{$uuid}/marcas/{$marca->uuid}", [
+        $this->actingAs($gestor)->put("/backoffice/clientes/{$uuid}/marcas/{$marca->uuid}", [
             'name' => 'ACME', 'status' => 'active',
             'categorias' => $categorias, 'categorias_enviadas' => '1',
         ]);
         $this->assertSame(2, DB::table('client_brand_categories')->where('client_brand_id', $marca->id)->count());
 
         // Sin `categorias_enviadas`: la seccion no venia, no se toca.
-        $this->actingAs($gestor)->put("/clientes/{$uuid}/marcas/{$marca->uuid}", [
+        $this->actingAs($gestor)->put("/backoffice/clientes/{$uuid}/marcas/{$marca->uuid}", [
             'name' => 'ACME Peru', 'status' => 'active',
         ])->assertSessionHas('exito');
 
@@ -288,7 +288,7 @@ final class MarcasTest extends TestCase
         $marca = DB::table('client_brands')->first();
         $categorias = DB::table('categories')->orderBy('id')->limit(2)->pluck('id')->all();
 
-        $this->actingAs($gestor)->put("/clientes/{$uuid}/marcas/{$marca->uuid}", [
+        $this->actingAs($gestor)->put("/backoffice/clientes/{$uuid}/marcas/{$marca->uuid}", [
             'name' => 'ACME', 'status' => 'active',
             'categorias' => $categorias, 'categorias_enviadas' => '1',
         ]);
@@ -300,7 +300,7 @@ final class MarcasTest extends TestCase
         $antes = (int) DB::table('audit_logs')->max('id');
 
         // Se vuelve a guardar EXACTAMENTE lo mismo.
-        $this->actingAs($gestor)->put("/clientes/{$uuid}/marcas/{$marca->uuid}", [
+        $this->actingAs($gestor)->put("/backoffice/clientes/{$uuid}/marcas/{$marca->uuid}", [
             'name' => 'ACME', 'status' => 'active',
             'categorias' => $categorias, 'categorias_enviadas' => '1',
         ])->assertSessionHas('aviso');
@@ -326,13 +326,13 @@ final class MarcasTest extends TestCase
         $uuid = $this->crearCliente($gestor);
         $marca = DB::table('client_brands')->first();
 
-        $this->actingAs($gestor)->put("/clientes/{$uuid}/marcas/{$marca->uuid}", [
+        $this->actingAs($gestor)->put("/backoffice/clientes/{$uuid}/marcas/{$marca->uuid}", [
             'name' => 'ACME', 'status' => 'active', 'categorias_enviadas' => '1',
             'categorias' => DB::table('categories')->orderBy('id')->limit(1)->pluck('id')->all(),
         ]);
         $this->assertSame(1, DB::table('client_brand_categories')->where('client_brand_id', $marca->id)->count());
 
-        $this->actingAs($gestor)->put("/clientes/{$uuid}/marcas/{$marca->uuid}", [
+        $this->actingAs($gestor)->put("/backoffice/clientes/{$uuid}/marcas/{$marca->uuid}", [
             'name' => 'ACME', 'status' => 'paused', 'categorias_enviadas' => '1',
         ])->assertSessionHas('exito');
 
@@ -343,7 +343,7 @@ final class MarcasTest extends TestCase
 
     private function crearCliente(User $quien): string
     {
-        $this->actingAs($quien)->post('/clientes', $this->cliente());
+        $this->actingAs($quien)->post('/backoffice/clientes', $this->cliente());
 
         return (string) DB::table('client_organizations')->where('client_code', 'ACME-01')->value('uuid');
     }

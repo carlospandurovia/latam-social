@@ -41,7 +41,7 @@ final class EntidadesLegalesTest extends TestCase
     public function test_alta_de_una_sociedad(): void
     {
         $this->actingAs($this->admin())
-            ->post('/entidades', $this->sociedad())
+            ->post('/backoffice/entidades', $this->sociedad())
             ->assertSessionHas('exito');
 
         $entidad = DB::table('legal_entities')->where('code', 'E45-A')->first();
@@ -62,7 +62,7 @@ final class EntidadesLegalesTest extends TestCase
         $pais = $this->paisSinCobertura();
 
         $this->actingAs($admin)
-            ->post("/entidades/{$uuid}/cobertura", [
+            ->post("/backoffice/entidades/{$uuid}/cobertura", [
                 'country_id' => $pais,
                 'coverage_basis' => 'service_export',
                 'valid_from' => '2026-01-01',
@@ -88,7 +88,7 @@ final class EntidadesLegalesTest extends TestCase
 
         $segunda = $this->crearSociedad($admin, ['code' => 'E45-B', 'tax_id_number' => '20450000002']);
         $this->actingAs($admin)
-            ->post("/entidades/{$segunda}/cobertura", [
+            ->post("/backoffice/entidades/{$segunda}/cobertura", [
                 'country_id' => $pais,
                 'coverage_basis' => 'local_entity',
                 'valid_from' => '2026-06-01',
@@ -118,7 +118,7 @@ final class EntidadesLegalesTest extends TestCase
 
         $segunda = $this->crearSociedad($admin, ['code' => 'E45-B', 'tax_id_number' => '20450000002']);
         $this->actingAs($admin)
-            ->post("/entidades/{$segunda}/cobertura", [
+            ->post("/backoffice/entidades/{$segunda}/cobertura", [
                 'country_id' => $pais,
                 'coverage_basis' => 'local_entity',
                 'valid_from' => '2026-01-01',
@@ -146,7 +146,7 @@ final class EntidadesLegalesTest extends TestCase
         $this->cubrir($admin, $primera, $pais, '2026-01-01');
 
         $this->actingAs($admin)
-            ->post("/entidades/{$primera}/baja", ['hasta' => '2026-06-30', 'estado' => 'inactive'])
+            ->post("/backoffice/entidades/{$primera}/baja", ['hasta' => '2026-06-30', 'estado' => 'inactive'])
             ->assertSessionHas('exito');
 
         $this->assertSame('inactive', DB::table('legal_entities')->where('uuid', $primera)->value('status'));
@@ -165,7 +165,7 @@ final class EntidadesLegalesTest extends TestCase
         // La consecuencia que importa: otra sociedad ya puede tomar el país.
         $segunda = $this->crearSociedad($admin, ['code' => 'E45-B', 'tax_id_number' => '20450000002']);
         $this->actingAs($admin)
-            ->post("/entidades/{$segunda}/cobertura", [
+            ->post("/backoffice/entidades/{$segunda}/cobertura", [
                 'country_id' => $pais,
                 'coverage_basis' => 'service_export',
                 'valid_from' => '2026-07-01',
@@ -199,7 +199,7 @@ final class EntidadesLegalesTest extends TestCase
         $this->cubrir($admin, $primera, $pais, '2026-01-01');
 
         $this->actingAs($admin)
-            ->post("/entidades/{$primera}/baja", ['hasta' => '2026-06-30', 'estado' => 'inactive'])
+            ->post("/backoffice/entidades/{$primera}/baja", ['hasta' => '2026-06-30', 'estado' => 'inactive'])
             ->assertSessionHas('exito');
 
         $segunda = $this->crearSociedad($admin, ['code' => 'E45-T73', 'tax_id_number' => '20450000073']);
@@ -207,7 +207,7 @@ final class EntidadesLegalesTest extends TestCase
         // EL MISMO DIA en que se cerró la anterior: ese día todavía está
         // cubierto. Sale con palabras y con la fecha en la que sí se puede.
         $this->actingAs($admin)
-            ->post("/entidades/{$segunda}/cobertura", [
+            ->post("/backoffice/entidades/{$segunda}/cobertura", [
                 'country_id' => $pais,
                 'coverage_basis' => 'service_export',
                 'valid_from' => '2026-06-30',
@@ -220,7 +220,7 @@ final class EntidadesLegalesTest extends TestCase
 
         // Al día siguiente sí, que es lo que el mensaje dice.
         $this->actingAs($admin)
-            ->post("/entidades/{$segunda}/cobertura", [
+            ->post("/backoffice/entidades/{$segunda}/cobertura", [
                 'country_id' => $pais,
                 'coverage_basis' => 'service_export',
                 'valid_from' => '2026-07-01',
@@ -241,7 +241,7 @@ final class EntidadesLegalesTest extends TestCase
         $this->cubrir($admin, $uuid, $pais, '2027-01-01');
 
         $this->actingAs($admin)
-            ->post("/entidades/{$uuid}/baja", ['hasta' => '2026-06-30', 'estado' => 'inactive'])
+            ->post("/backoffice/entidades/{$uuid}/baja", ['hasta' => '2026-06-30', 'estado' => 'inactive'])
             ->assertSessionHas('aviso');
 
         $this->assertStringContainsString('empieza DESPUES', (string) session('aviso'));
@@ -259,7 +259,7 @@ final class EntidadesLegalesTest extends TestCase
         $uuid = $this->crearSociedad($admin);
 
         $this->actingAs($admin)
-            ->post("/entidades/{$uuid}/baja", ['hasta' => '2026-12-31', 'estado' => 'dissolved'])
+            ->post("/backoffice/entidades/{$uuid}/baja", ['hasta' => '2026-12-31', 'estado' => 'dissolved'])
             ->assertSessionHas('exito');
 
         $entidad = DB::table('legal_entities')->where('uuid', $uuid)->first();
@@ -278,10 +278,10 @@ final class EntidadesLegalesTest extends TestCase
         $admin = $this->admin();
         $pais = $this->paisSinCobertura();
         $uuid = $this->crearSociedad($admin);
-        $this->actingAs($admin)->post("/entidades/{$uuid}/baja", ['hasta' => '2026-06-30', 'estado' => 'inactive']);
+        $this->actingAs($admin)->post("/backoffice/entidades/{$uuid}/baja", ['hasta' => '2026-06-30', 'estado' => 'inactive']);
 
         $this->actingAs($admin)
-            ->post("/entidades/{$uuid}/cobertura", [
+            ->post("/backoffice/entidades/{$uuid}/cobertura", [
                 'country_id' => $pais,
                 'coverage_basis' => 'service_export',
                 'valid_from' => '2026-07-01',
@@ -297,7 +297,7 @@ final class EntidadesLegalesTest extends TestCase
         $this->crearSociedad($admin);
 
         $this->actingAs($admin)
-            ->post('/entidades', $this->sociedad(['tax_id_number' => '20450009999']))
+            ->post('/backoffice/entidades', $this->sociedad(['tax_id_number' => '20450009999']))
             ->assertSessionHasErrors('code');
 
         $this->assertSame(1, DB::table('legal_entities')->where('code', 'E45-A')->count());
@@ -310,7 +310,7 @@ final class EntidadesLegalesTest extends TestCase
         $this->crearSociedad($admin);
 
         $this->actingAs($admin)
-            ->post('/entidades', $this->sociedad(['code' => 'E45-B']))
+            ->post('/backoffice/entidades', $this->sociedad(['code' => 'E45-B']))
             ->assertSessionHasErrors('tax_id_number');
     }
 
@@ -322,7 +322,7 @@ final class EntidadesLegalesTest extends TestCase
     {
         foreach (['finance', 'campaign_manager'] as $rol) {
             $this->actingAs($this->usuarioCon($rol))
-                ->get('/entidades')
+                ->get('/backoffice/entidades')
                 ->assertForbidden();
         }
     }
@@ -342,7 +342,7 @@ final class EntidadesLegalesTest extends TestCase
         $segunda = $this->crearSociedad($admin, ['code' => 'E45-B', 'tax_id_number' => '20450000002']);
 
         $this->actingAs($admin)
-            ->put("/entidades/{$segunda}", $this->sociedad([
+            ->put("/backoffice/entidades/{$segunda}", $this->sociedad([
                 'tax_id_number' => '20450000001',
             ], edicion: true))
             ->assertSessionHasErrors('tax_id_number');
@@ -361,7 +361,7 @@ final class EntidadesLegalesTest extends TestCase
         $uuid = $this->crearSociedad($admin, ['incorporated_on' => '2020-05-01']);
 
         $this->actingAs($admin)
-            ->post("/entidades/{$uuid}/baja", ['hasta' => '2019-12-31', 'estado' => 'dissolved'])
+            ->post("/backoffice/entidades/{$uuid}/baja", ['hasta' => '2019-12-31', 'estado' => 'dissolved'])
             ->assertSessionHas('aviso');
 
         $this->assertStringContainsString('no puede dejar de existir antes de existir', (string) session('aviso'));
@@ -380,7 +380,7 @@ final class EntidadesLegalesTest extends TestCase
         $this->cubrir($admin, $uuid, $pais, '2026-01-01');
 
         $this->actingAs($admin)
-            ->post("/entidades/{$uuid}/cobertura", [
+            ->post("/backoffice/entidades/{$uuid}/cobertura", [
                 'country_id' => $pais,
                 'coverage_basis' => 'local_entity',
                 'valid_from' => '2026-06-01',
@@ -409,7 +409,7 @@ final class EntidadesLegalesTest extends TestCase
         $uuid = $this->crearSociedad($admin);
 
         $this->actingAs($admin)
-            ->post("/entidades/{$uuid}/cobertura", [
+            ->post("/backoffice/entidades/{$uuid}/cobertura", [
                 'country_id' => $pais,
                 'coverage_basis' => 'service_export',
                 'valid_from' => '2026-2-1',
@@ -460,7 +460,7 @@ final class EntidadesLegalesTest extends TestCase
 
         // 1. Empezar ANTES que la ocupada se veta con palabras, nombrandola.
         $this->actingAs($admin)
-            ->post("/entidades/{$segunda}/cobertura", [
+            ->post("/backoffice/entidades/{$segunda}/cobertura", [
                 'country_id' => $pais,
                 'coverage_basis' => 'service_export',
                 'valid_from' => '2025-12-01',
@@ -475,7 +475,7 @@ final class EntidadesLegalesTest extends TestCase
         //    nueva queda abierta. Sin mirar a la inactiva, `abrir()` no cerraria
         //    nada y el disparador rechazaria el INSERT.
         $this->actingAs($admin)
-            ->post("/entidades/{$segunda}/cobertura", [
+            ->post("/backoffice/entidades/{$segunda}/cobertura", [
                 'country_id' => $pais,
                 'coverage_basis' => 'service_export',
                 'valid_from' => '2026-07-01',
@@ -523,7 +523,7 @@ final class EntidadesLegalesTest extends TestCase
 
     private function cubrir(User $quien, string $uuid, int $pais, string $desde): void
     {
-        $this->actingAs($quien)->post("/entidades/{$uuid}/cobertura", [
+        $this->actingAs($quien)->post("/backoffice/entidades/{$uuid}/cobertura", [
             'country_id' => $pais,
             'coverage_basis' => 'service_export',
             'valid_from' => $desde,
@@ -536,7 +536,7 @@ final class EntidadesLegalesTest extends TestCase
     private function crearSociedad(User $quien, array $cambios = []): string
     {
         $datos = $this->sociedad($cambios);
-        $this->actingAs($quien)->post('/entidades', $datos);
+        $this->actingAs($quien)->post('/backoffice/entidades', $datos);
 
         return (string) DB::table('legal_entities')->where('code', $datos['code'])->value('uuid');
     }

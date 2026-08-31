@@ -63,7 +63,7 @@ final class BriefTest extends TestCase
 
         $this->paisPE = (int) DB::table('countries')->where('iso2', 'PE')->value('id');
 
-        $this->actingAs($this->usuarioCon('campaign_manager'))->post('/clientes', [
+        $this->actingAs($this->usuarioCon('campaign_manager'))->post('/backoffice/clientes', [
             'commercial_name' => 'ACME', 'client_code' => 'ACME-01',
             'country_id' => $this->paisPE, 'status' => 'prospect',
         ]);
@@ -88,7 +88,7 @@ final class BriefTest extends TestCase
         $uuid = $this->campanaEnAprobacion();
 
         $this->actingAs($this->usuarioCon('finance'))
-            ->post("/campanas/{$uuid}/estado", ['estado' => E::APROBADA])
+            ->post("/backoffice/campanas/{$uuid}/estado", ['estado' => E::APROBADA])
             ->assertSessionHas('aviso');
 
         $this->assertSame('pending_approval', DB::table('campaigns')->where('uuid', $uuid)->value('status'));
@@ -112,7 +112,7 @@ final class BriefTest extends TestCase
         $this->requisitoDe($this->idDe($uuid));
 
         $this->actingAs($this->usuarioCon('finance'))
-            ->post("/campanas/{$uuid}/estado", ['estado' => E::APROBADA])
+            ->post("/backoffice/campanas/{$uuid}/estado", ['estado' => E::APROBADA])
             ->assertSessionHas('exito');
 
         $this->assertSame('approved', DB::table('campaigns')->where('uuid', $uuid)->value('status'));
@@ -125,7 +125,7 @@ final class BriefTest extends TestCase
         $this->requisitoDe($this->idDe($uuid));
 
         $this->actingAs($this->usuarioCon('finance'))
-            ->post("/campanas/{$uuid}/estado", ['estado' => E::APROBADA])
+            ->post("/backoffice/campanas/{$uuid}/estado", ['estado' => E::APROBADA])
             ->assertSessionHas('aviso');
 
         $this->assertSame('pending_approval', DB::table('campaigns')->where('uuid', $uuid)->value('status'));
@@ -139,7 +139,7 @@ final class BriefTest extends TestCase
         $this->requisitoDe($this->idDe($uuid));
 
         $this->actingAs($this->usuarioCon('finance'))
-            ->post("/campanas/{$uuid}/estado", ['estado' => E::APROBADA])
+            ->post("/backoffice/campanas/{$uuid}/estado", ['estado' => E::APROBADA])
             ->assertSessionHas('exito');
 
         $fila = DB::table('campaigns')->where('uuid', $uuid)->first();
@@ -154,7 +154,7 @@ final class BriefTest extends TestCase
         $uuid = $this->campanaEnAprobacion(['revenue_amount' => '0']);
 
         $this->actingAs($this->usuarioCon('finance'))
-            ->post("/campanas/{$uuid}/estado", ['estado' => E::APROBADA]);
+            ->post("/backoffice/campanas/{$uuid}/estado", ['estado' => E::APROBADA]);
 
         $aviso = (string) session('aviso');
 
@@ -168,7 +168,7 @@ final class BriefTest extends TestCase
     public function test_gratuita_con_importe_se_rechaza(): void
     {
         $this->actingAs($this->usuarioCon('campaign_manager'))
-            ->post('/campanas', $this->datos(['revenue_amount' => '5000.00', 'is_gratis' => '1']))
+            ->post('/backoffice/campanas', $this->datos(['revenue_amount' => '5000.00', 'is_gratis' => '1']))
             ->assertSessionHasErrors('revenue_amount');
 
         $this->assertSame(0, DB::table('campaigns')->count());
@@ -186,7 +186,7 @@ final class BriefTest extends TestCase
         unset($datos['is_gratis']);
 
         $this->actingAs($this->usuarioCon('campaign_manager'))
-            ->post('/campanas', $datos)
+            ->post('/backoffice/campanas', $datos)
             ->assertSessionHas('exito');
 
         $this->assertSame(0, (int) DB::table('campaigns')->where('name', 'Lanzamiento verano')->value('is_gratis'));
@@ -231,10 +231,10 @@ final class BriefTest extends TestCase
         $gestor = $this->usuarioCon('campaign_manager');
         $uuid = $this->campanaEnBorrador(quien: $gestor);
 
-        $this->actingAs($gestor)->post("/campanas/{$uuid}/requisitos", $this->requisito());
+        $this->actingAs($gestor)->post("/backoffice/campanas/{$uuid}/requisitos", $this->requisito());
 
         $this->actingAs($gestor)
-            ->post("/campanas/{$uuid}/requisitos", $this->requisito(['quantity' => 5]))
+            ->post("/backoffice/campanas/{$uuid}/requisitos", $this->requisito(['quantity' => 5]))
             ->assertRedirect()
             ->assertSessionHas('aviso');
 
@@ -251,10 +251,10 @@ final class BriefTest extends TestCase
 
         $datos = $this->requisito(['campaign_market_id' => $mercadoId]);
 
-        $this->actingAs($gestor)->post("/campanas/{$uuid}/requisitos", $datos);
+        $this->actingAs($gestor)->post("/backoffice/campanas/{$uuid}/requisitos", $datos);
 
         $respuesta = $this->actingAs($gestor)
-            ->post("/campanas/{$uuid}/requisitos", $datos + ['quantity' => 5]);
+            ->post("/backoffice/campanas/{$uuid}/requisitos", $datos + ['quantity' => 5]);
 
         // Lo que se afirma es que NO es un 500. Antes de esto, esta misma
         // peticion devolvia una traza de Laravel al operador.
@@ -277,9 +277,9 @@ final class BriefTest extends TestCase
         $mercadoId = (int) DB::table('campaign_markets')
             ->where('campaign_id', $this->idDe($uuid))->value('id');
 
-        $this->actingAs($gestor)->post("/campanas/{$uuid}/requisitos", $this->requisito());
+        $this->actingAs($gestor)->post("/backoffice/campanas/{$uuid}/requisitos", $this->requisito());
         $this->actingAs($gestor)
-            ->post("/campanas/{$uuid}/requisitos", $this->requisito(['campaign_market_id' => $mercadoId]))
+            ->post("/backoffice/campanas/{$uuid}/requisitos", $this->requisito(['campaign_market_id' => $mercadoId]))
             ->assertSessionHas('exito');
 
         $this->assertSame(2, DB::table('campaign_requirements')
@@ -293,10 +293,10 @@ final class BriefTest extends TestCase
         $gestor = $this->usuarioCon('campaign_manager');
         $uuid = $this->campanaEnBorrador();
 
-        $this->actingAs($gestor)->post("/campanas/{$uuid}/requisitos", $this->requisito())
+        $this->actingAs($gestor)->post("/backoffice/campanas/{$uuid}/requisitos", $this->requisito())
             ->assertSessionHas('exito');
 
-        $this->actingAs($gestor)->post("/campanas/{$uuid}/requisitos", $this->requisito())
+        $this->actingAs($gestor)->post("/backoffice/campanas/{$uuid}/requisitos", $this->requisito())
             ->assertSessionHas('aviso');
 
         $this->assertSame(1, DB::table('campaign_requirements')->where('campaign_id', $this->idDe($uuid))->count(),
@@ -310,7 +310,7 @@ final class BriefTest extends TestCase
         $uuid = $this->campanaEnBorrador();
 
         $this->actingAs($this->usuarioCon('campaign_manager'))
-            ->post("/campanas/{$uuid}/requisitos", $this->requisito(['quantity' => 0]))
+            ->post("/backoffice/campanas/{$uuid}/requisitos", $this->requisito(['quantity' => 0]))
             ->assertSessionHasErrors('quantity');
 
         $this->assertSame(0, DB::table('campaign_requirements')->count());
@@ -324,7 +324,7 @@ final class BriefTest extends TestCase
         $requisitoAjeno = $this->requisitoDe($ajena);
 
         $this->actingAs($this->usuarioCon('campaign_manager'))
-            ->delete("/campanas/{$mia}/requisitos/{$requisitoAjeno}")
+            ->delete("/backoffice/campanas/{$mia}/requisitos/{$requisitoAjeno}")
             ->assertNotFound();
 
         $this->assertSame(1, DB::table('campaign_requirements')->where('id', $requisitoAjeno)->count());
@@ -336,7 +336,7 @@ final class BriefTest extends TestCase
         $requisito = $this->requisitoDe($this->idDe($uuid));
 
         $this->actingAs($this->usuarioCon('campaign_manager'))
-            ->delete("/campanas/{$uuid}/requisitos/{$requisito}")
+            ->delete("/backoffice/campanas/{$uuid}/requisitos/{$requisito}")
             ->assertSessionHas('exito');
 
         $this->assertSame(0, DB::table('campaign_requirements')->where('id', $requisito)->count());
@@ -349,15 +349,15 @@ final class BriefTest extends TestCase
         $uuid = $this->campanaEnAprobacion();
         $requisito = $this->requisitoDe($this->idDe($uuid));
 
-        $this->actingAs($this->usuarioCon('finance'))->post("/campanas/{$uuid}/estado", ['estado' => E::APROBADA]);
+        $this->actingAs($this->usuarioCon('finance'))->post("/backoffice/campanas/{$uuid}/estado", ['estado' => E::APROBADA]);
         $this->assertSame('approved', DB::table('campaigns')->where('uuid', $uuid)->value('status'));
 
         $this->actingAs($gestor)
-            ->post("/campanas/{$uuid}/requisitos", $this->requisito(['content_format_id' => $this->otroFormato()]))
+            ->post("/backoffice/campanas/{$uuid}/requisitos", $this->requisito(['content_format_id' => $this->otroFormato()]))
             ->assertSessionHas('aviso');
 
         $this->actingAs($gestor)
-            ->delete("/campanas/{$uuid}/requisitos/{$requisito}")
+            ->delete("/backoffice/campanas/{$uuid}/requisitos/{$requisito}")
             ->assertSessionHas('aviso');
 
         $this->assertSame(1, DB::table('campaign_requirements')->where('campaign_id', $this->idDe($uuid))->count(),
@@ -370,7 +370,7 @@ final class BriefTest extends TestCase
         $uuid = $this->campanaEnBorrador();
 
         $this->actingAs($this->usuarioCon('content_reviewer'))
-            ->post("/campanas/{$uuid}/requisitos", $this->requisito())
+            ->post("/backoffice/campanas/{$uuid}/requisitos", $this->requisito())
             ->assertForbidden();
 
         $this->assertSame(0, DB::table('campaign_requirements')->count());
@@ -391,14 +391,14 @@ final class BriefTest extends TestCase
         $gestor = $this->usuarioCon('campaign_manager');
         $uuid = $this->campanaEnBorrador(['revenue_amount' => '0']);
 
-        $this->actingAs($gestor)->get("/campanas/{$uuid}")->assertOk()
+        $this->actingAs($gestor)->get("/backoffice/campanas/{$uuid}")->assertOk()
             ->assertSee('Todavía no puede salir de borrador', false)
             ->assertSee('BR-CAMPAIGN-004', false);
 
         $this->requisitoDe($this->idDe($uuid));
         DB::table('campaigns')->where('uuid', $uuid)->update(['is_gratis' => 1]);
 
-        $this->actingAs($gestor)->get("/campanas/{$uuid}")->assertOk()
+        $this->actingAs($gestor)->get("/backoffice/campanas/{$uuid}")->assertOk()
             ->assertDontSee('Todavía no puede salir de borrador', false);
     }
 
@@ -440,7 +440,7 @@ final class BriefTest extends TestCase
     private function campanaEnBorrador(array $cambios = [], ?User $quien = null): string
     {
         $this->actingAs($quien ?? $this->usuarioCon('campaign_manager'))
-            ->post('/campanas', $this->datos($cambios));
+            ->post('/backoffice/campanas', $this->datos($cambios));
 
         $fila = DB::table('campaigns')->where('name', 'Lanzamiento verano')->first(['id', 'uuid']);
         $this->mercadoDe((int) $fila->id, $this->paisPE);
@@ -454,7 +454,7 @@ final class BriefTest extends TestCase
         $gestor = $this->usuarioCon('campaign_manager');
         $uuid = $this->campanaEnBorrador($cambios, $gestor);
 
-        $this->actingAs($gestor)->post("/campanas/{$uuid}/estado", ['estado' => E::EN_APROBACION]);
+        $this->actingAs($gestor)->post("/backoffice/campanas/{$uuid}/estado", ['estado' => E::EN_APROBACION]);
 
         return $uuid;
     }

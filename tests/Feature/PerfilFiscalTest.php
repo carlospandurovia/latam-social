@@ -62,7 +62,7 @@ final class PerfilFiscalTest extends TestCase
 
     private function capturar(User $quien, array $cambios = []): int
     {
-        $this->actingAs($quien)->post("/creadores/{$this->uuid}/fiscal", $this->formulario($cambios));
+        $this->actingAs($quien)->post("/backoffice/creadores/{$this->uuid}/fiscal", $this->formulario($cambios));
 
         return (int) DB::table('creator_tax_profiles')
             ->where('creator_id', $this->creadorId)->orderByDesc('id')->value('id');
@@ -73,16 +73,16 @@ final class PerfilFiscalTest extends TestCase
     public function test_los_datos_fiscales_no_son_para_cualquiera(): void
     {
         // DEC-053: finanzas es el único rol no administrador con datos fiscales.
-        $this->actingAs($this->usuarioCon('campaign_manager'))->get("/creadores/{$this->uuid}/fiscal")->assertForbidden();
-        $this->actingAs($this->usuarioCon('content_reviewer'))->get("/creadores/{$this->uuid}/fiscal")->assertForbidden();
-        $this->actingAs($this->usuarioCon('finance'))->get("/creadores/{$this->uuid}/fiscal")->assertOk();
-        $this->actingAs($this->usuarioCon('admin'))->get("/creadores/{$this->uuid}/fiscal")->assertOk();
+        $this->actingAs($this->usuarioCon('campaign_manager'))->get("/backoffice/creadores/{$this->uuid}/fiscal")->assertForbidden();
+        $this->actingAs($this->usuarioCon('content_reviewer'))->get("/backoffice/creadores/{$this->uuid}/fiscal")->assertForbidden();
+        $this->actingAs($this->usuarioCon('finance'))->get("/backoffice/creadores/{$this->uuid}/fiscal")->assertOk();
+        $this->actingAs($this->usuarioCon('admin'))->get("/backoffice/creadores/{$this->uuid}/fiscal")->assertOk();
     }
 
     public function test_quien_no_gestiona_no_captura(): void
     {
         $this->actingAs($this->usuarioCon('campaign_manager'))
-            ->post("/creadores/{$this->uuid}/fiscal", $this->formulario())
+            ->post("/backoffice/creadores/{$this->uuid}/fiscal", $this->formulario())
             ->assertForbidden();
 
         $this->assertDatabaseCount('creator_tax_profiles', 0);
@@ -114,7 +114,7 @@ final class PerfilFiscalTest extends TestCase
         // comprobación del servidor, un id ajeno colaría los datos fiscales de
         // otra persona en este creador.
         $this->actingAs($this->usuarioCon('finance'))
-            ->post("/creadores/{$this->uuid}/fiscal", $this->formulario([
+            ->post("/backoffice/creadores/{$this->uuid}/fiscal", $this->formulario([
                 'holder_type' => 'guardian',
                 'holder_guardian_id' => $ajeno,
             ]))
@@ -130,7 +130,7 @@ final class PerfilFiscalTest extends TestCase
         $id = $this->capturar($this->usuarioCon('finance'));
 
         $this->actingAs($this->usuarioCon('finance'))
-            ->post("/creadores/{$this->uuid}/fiscal/{$id}/aprobar", ['confirma_revision' => '1'])
+            ->post("/backoffice/creadores/{$this->uuid}/fiscal/{$id}/aprobar", ['confirma_revision' => '1'])
             ->assertSessionHasErrors('withholding_status');
 
         $this->assertSame('pending', DB::table('creator_tax_profiles')->where('id', $id)->value('status'));
@@ -141,7 +141,7 @@ final class PerfilFiscalTest extends TestCase
         $id = $this->capturar($this->usuarioCon('finance'));
 
         $this->actingAs($this->usuarioCon('finance'))
-            ->post("/creadores/{$this->uuid}/fiscal/{$id}/aprobar", [
+            ->post("/backoffice/creadores/{$this->uuid}/fiscal/{$id}/aprobar", [
                 'withholding_status' => 'applies',
                 'confirma_revision' => '1',
             ])
@@ -153,7 +153,7 @@ final class PerfilFiscalTest extends TestCase
         $id = $this->capturar($this->usuarioCon('finance'));
 
         $this->actingAs($this->usuarioCon('finance'))
-            ->post("/creadores/{$this->uuid}/fiscal/{$id}/aprobar", [
+            ->post("/backoffice/creadores/{$this->uuid}/fiscal/{$id}/aprobar", [
                 'withholding_status' => 'applies',
                 'withholding_rate' => '30',
                 'withholding_basis' => 'LIR art. 54 inc. f - por confirmar con contador',
@@ -182,7 +182,7 @@ final class PerfilFiscalTest extends TestCase
         $id = $this->capturar($mismo);
 
         $this->actingAs($mismo)
-            ->post("/creadores/{$this->uuid}/fiscal/{$id}/aprobar", [
+            ->post("/backoffice/creadores/{$this->uuid}/fiscal/{$id}/aprobar", [
                 'withholding_status' => 'not_applicable',
                 'confirma_revision' => '1',
             ])
@@ -198,7 +198,7 @@ final class PerfilFiscalTest extends TestCase
         $aprobador = $this->usuarioCon('finance');
 
         $primero = $this->capturar($capturador);
-        $this->actingAs($aprobador)->post("/creadores/{$this->uuid}/fiscal/{$primero}/aprobar", [
+        $this->actingAs($aprobador)->post("/backoffice/creadores/{$this->uuid}/fiscal/{$primero}/aprobar", [
             'withholding_status' => 'not_applicable', 'confirma_revision' => '1',
         ]);
 
@@ -206,7 +206,7 @@ final class PerfilFiscalTest extends TestCase
             'tax_regime_code' => 'GENERAL', 'tax_id_number' => '10400000099',
             'valid_from' => '2026-07-01',
         ]);
-        $this->actingAs($aprobador)->post("/creadores/{$this->uuid}/fiscal/{$segundo}/aprobar", [
+        $this->actingAs($aprobador)->post("/backoffice/creadores/{$this->uuid}/fiscal/{$segundo}/aprobar", [
             'withholding_status' => 'not_applicable', 'confirma_revision' => '1',
         ]);
 
@@ -246,7 +246,7 @@ final class PerfilFiscalTest extends TestCase
         $aprobador = $this->usuarioCon('finance');
 
         $primero = $this->capturar($capturador);
-        $this->actingAs($aprobador)->post("/creadores/{$this->uuid}/fiscal/{$primero}/aprobar", [
+        $this->actingAs($aprobador)->post("/backoffice/creadores/{$this->uuid}/fiscal/{$primero}/aprobar", [
             'withholding_status' => 'not_applicable', 'confirma_revision' => '1',
         ]);
 
@@ -254,7 +254,7 @@ final class PerfilFiscalTest extends TestCase
             'tax_regime_code' => 'GENERAL', 'tax_id_number' => '10400000099',
             'valid_from' => '2026-07-01',
         ]);
-        $this->actingAs($aprobador)->post("/creadores/{$this->uuid}/fiscal/{$segundo}/aprobar", [
+        $this->actingAs($aprobador)->post("/backoffice/creadores/{$this->uuid}/fiscal/{$segundo}/aprobar", [
             'withholding_status' => 'not_applicable', 'confirma_revision' => '1',
         ]);
 
@@ -286,7 +286,7 @@ final class PerfilFiscalTest extends TestCase
         $aprobador = $this->usuarioCon('finance');
 
         $primero = $this->capturar($capturador, ['valid_from' => '2026-06-01']);
-        $this->actingAs($aprobador)->post("/creadores/{$this->uuid}/fiscal/{$primero}/aprobar", [
+        $this->actingAs($aprobador)->post("/backoffice/creadores/{$this->uuid}/fiscal/{$primero}/aprobar", [
             'withholding_status' => 'not_applicable', 'confirma_revision' => '1',
         ]);
 
@@ -296,7 +296,7 @@ final class PerfilFiscalTest extends TestCase
         ]);
 
         $this->actingAs($aprobador)
-            ->post("/creadores/{$this->uuid}/fiscal/{$retroactivo}/aprobar", [
+            ->post("/backoffice/creadores/{$this->uuid}/fiscal/{$retroactivo}/aprobar", [
                 'withholding_status' => 'not_applicable', 'confirma_revision' => '1',
             ])
             ->assertSessionHas('aviso');
@@ -322,7 +322,7 @@ final class PerfilFiscalTest extends TestCase
         $aprobador = $this->usuarioCon('finance');
 
         $primero = $this->capturar($capturador, ['valid_from' => '2026-06-01']);
-        $this->actingAs($aprobador)->post("/creadores/{$this->uuid}/fiscal/{$primero}/aprobar", [
+        $this->actingAs($aprobador)->post("/backoffice/creadores/{$this->uuid}/fiscal/{$primero}/aprobar", [
             'withholding_status' => 'not_applicable', 'confirma_revision' => '1',
         ]);
 
@@ -332,7 +332,7 @@ final class PerfilFiscalTest extends TestCase
         ]);
 
         $this->actingAs($aprobador)
-            ->post("/creadores/{$this->uuid}/fiscal/{$mismoDia}/aprobar", [
+            ->post("/backoffice/creadores/{$this->uuid}/fiscal/{$mismoDia}/aprobar", [
                 'withholding_status' => 'not_applicable', 'confirma_revision' => '1',
             ])
             ->assertSessionHas('aviso');
@@ -345,11 +345,11 @@ final class PerfilFiscalTest extends TestCase
         $id = $this->capturar($this->usuarioCon('finance'));
 
         $this->actingAs($this->usuarioCon('finance'))
-            ->post("/creadores/{$this->uuid}/fiscal/{$id}/rechazar", ['rejection_note' => 'no'])
+            ->post("/backoffice/creadores/{$this->uuid}/fiscal/{$id}/rechazar", ['rejection_note' => 'no'])
             ->assertSessionHasErrors('rejection_note');
 
         $this->actingAs($this->usuarioCon('finance'))
-            ->post("/creadores/{$this->uuid}/fiscal/{$id}/rechazar", [
+            ->post("/backoffice/creadores/{$this->uuid}/fiscal/{$id}/rechazar", [
                 'rejection_note' => 'El RUC esta de baja en SUNAT desde marzo.',
             ])
             ->assertRedirect();
@@ -373,7 +373,7 @@ final class PerfilFiscalTest extends TestCase
         $id = $this->capturar($mismo);
 
         $this->actingAs($mismo)
-            ->post("/creadores/{$this->uuid}/fiscal/{$id}/rechazar", [
+            ->post("/backoffice/creadores/{$this->uuid}/fiscal/{$id}/rechazar", [
                 'rejection_note' => 'Me equivoque de RUC al teclearlo.',
             ])
             ->assertRedirect();
@@ -392,7 +392,7 @@ final class PerfilFiscalTest extends TestCase
         DB::table('creators')->where('id', $this->creadorId)->update(['anonymized_at' => now()]);
 
         $this->actingAs($this->usuarioCon('finance'))
-            ->post("/creadores/{$this->uuid}/fiscal", $this->formulario())
+            ->post("/backoffice/creadores/{$this->uuid}/fiscal", $this->formulario())
             ->assertSessionHas('aviso');
 
         $this->assertDatabaseCount('creator_tax_profiles', 0);
@@ -418,7 +418,7 @@ final class PerfilFiscalTest extends TestCase
 
         // A nombre del propio menor: aprobado y vigente, pero no sirve.
         $id = $this->capturar($capturador);
-        $this->actingAs($aprobador)->post("/creadores/{$this->uuid}/fiscal/{$id}/aprobar", [
+        $this->actingAs($aprobador)->post("/backoffice/creadores/{$this->uuid}/fiscal/{$id}/aprobar", [
             'withholding_status' => 'not_applicable', 'confirma_revision' => '1',
         ]);
 
@@ -447,7 +447,7 @@ final class PerfilFiscalTest extends TestCase
             'holder_guardian_id' => $tutorId,
             'valid_from' => '2026-02-01',
         ]);
-        $this->actingAs($aprobador)->post("/creadores/{$this->uuid}/fiscal/{$nuevo}/aprobar", [
+        $this->actingAs($aprobador)->post("/backoffice/creadores/{$this->uuid}/fiscal/{$nuevo}/aprobar", [
             'withholding_status' => 'not_applicable', 'confirma_revision' => '1',
         ]);
 
@@ -470,7 +470,7 @@ final class PerfilFiscalTest extends TestCase
         $aprobador = $this->usuarioCon('finance');
 
         $id = $this->capturar($capturador);
-        $this->actingAs($aprobador)->post("/creadores/{$this->uuid}/fiscal/{$id}/aprobar", [
+        $this->actingAs($aprobador)->post("/backoffice/creadores/{$this->uuid}/fiscal/{$id}/aprobar", [
             'withholding_status' => 'not_applicable', 'confirma_revision' => '1',
         ]);
 
@@ -480,7 +480,7 @@ final class PerfilFiscalTest extends TestCase
         ]);
 
         $this->actingAs($soloAprueba)
-            ->post("/creadores/{$this->uuid}/fiscal/{$id}/anular", [
+            ->post("/backoffice/creadores/{$this->uuid}/fiscal/{$id}/anular", [
                 'annulment_reason' => 'Estaba a nombre del menor y no del tutor',
                 'confirma' => '1',
             ])
@@ -495,19 +495,19 @@ final class PerfilFiscalTest extends TestCase
         $finanzas = $this->usuarioCon('finance');
 
         $this->actingAs($finanzas)
-            ->post("/creadores/{$this->uuid}/fiscal/{$id}/anular", ['confirma' => '1'])
+            ->post("/backoffice/creadores/{$this->uuid}/fiscal/{$id}/anular", ['confirma' => '1'])
             ->assertSessionHasErrors('annulment_reason');
 
         // Un motivo de una palabra no explica nada dentro de dos años.
         $this->actingAs($finanzas)
-            ->post("/creadores/{$this->uuid}/fiscal/{$id}/anular", [
+            ->post("/backoffice/creadores/{$this->uuid}/fiscal/{$id}/anular", [
                 'annulment_reason' => 'error', 'confirma' => '1',
             ])
             ->assertSessionHasErrors('annulment_reason');
 
         // Y sin confirmar que se entiende la consecuencia, tampoco.
         $this->actingAs($finanzas)
-            ->post("/creadores/{$this->uuid}/fiscal/{$id}/anular", [
+            ->post("/backoffice/creadores/{$this->uuid}/fiscal/{$id}/anular", [
                 'annulment_reason' => 'Estaba a nombre del menor y no del tutor',
             ])
             ->assertSessionHasErrors('confirma');
@@ -529,7 +529,7 @@ final class PerfilFiscalTest extends TestCase
 
         $finanzas = $this->usuarioCon('finance');
         $this->actingAs($finanzas)
-            ->post("/creadores/{$this->uuid}/fiscal/{$id}/anular", [
+            ->post("/backoffice/creadores/{$this->uuid}/fiscal/{$id}/anular", [
                 'annulment_reason' => 'Estaba a nombre del menor y no del tutor',
                 'confirma' => '1',
             ])
@@ -559,21 +559,21 @@ final class PerfilFiscalTest extends TestCase
         $aprobador = $this->usuarioCon('finance');
 
         $primero = $this->capturar($capturador);
-        $this->actingAs($aprobador)->post("/creadores/{$this->uuid}/fiscal/{$primero}/aprobar", [
+        $this->actingAs($aprobador)->post("/backoffice/creadores/{$this->uuid}/fiscal/{$primero}/aprobar", [
             'withholding_status' => 'not_applicable', 'confirma_revision' => '1',
         ]);
 
         $segundo = $this->capturar($capturador, [
             'tax_id_number' => '10400000055', 'valid_from' => '2026-07-01',
         ]);
-        $this->actingAs($aprobador)->post("/creadores/{$this->uuid}/fiscal/{$segundo}/aprobar", [
+        $this->actingAs($aprobador)->post("/backoffice/creadores/{$this->uuid}/fiscal/{$segundo}/aprobar", [
             'withholding_status' => 'not_applicable', 'confirma_revision' => '1',
         ]);
 
         $this->assertSame('superseded', DB::table('creator_tax_profiles')->where('id', $primero)->value('status'));
 
         $this->actingAs($this->usuarioCon('finance'))
-            ->post("/creadores/{$this->uuid}/fiscal/{$primero}/anular", [
+            ->post("/backoffice/creadores/{$this->uuid}/fiscal/{$primero}/anular", [
                 'annulment_reason' => 'Quiero reescribir un periodo que ya paso',
                 'confirma' => '1',
             ])
@@ -589,7 +589,7 @@ final class PerfilFiscalTest extends TestCase
     {
         $id = $this->capturar($this->usuarioCon('finance'));
         $this->actingAs($this->usuarioCon('finance'))
-            ->post("/creadores/{$this->uuid}/fiscal/{$id}/aprobar", [
+            ->post("/backoffice/creadores/{$this->uuid}/fiscal/{$id}/aprobar", [
                 'withholding_status' => 'not_applicable', 'confirma_revision' => '1',
             ]);
 

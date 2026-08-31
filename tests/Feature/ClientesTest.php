@@ -68,19 +68,19 @@ final class ClientesTest extends TestCase
     public function test_ver_clientes_no_es_lo_mismo_que_crearlos(): void
     {
         $this->actingAs($this->usuarioCon('finance'))
-            ->get('/clientes')
+            ->get('/backoffice/clientes')
             ->assertOk();
 
         // `finance` tiene `client.view` y no `client.manage`.
         $this->actingAs($this->usuarioCon('finance'))
-            ->get('/clientes/nuevo')
+            ->get('/backoffice/clientes/nuevo')
             ->assertForbidden();
     }
 
     public function test_quien_monta_campanas_si_los_crea(): void
     {
         $this->actingAs($this->usuarioCon('campaign_manager'))
-            ->get('/clientes/nuevo')
+            ->get('/backoffice/clientes/nuevo')
             ->assertOk();
     }
 
@@ -89,7 +89,7 @@ final class ClientesTest extends TestCase
     public function test_alta_de_un_cliente_con_cobertura(): void
     {
         $this->actingAs($this->usuarioCon('campaign_manager'))
-            ->post('/clientes', $this->formulario(['status' => 'active']))
+            ->post('/backoffice/clientes', $this->formulario(['status' => 'active']))
             ->assertSessionHas('exito');
 
         $cliente = DB::table('client_organizations')->where('client_code', 'ACME-01')->first();
@@ -105,7 +105,7 @@ final class ClientesTest extends TestCase
     public function test_no_se_activa_un_cliente_al_que_nadie_puede_facturar(): void
     {
         $this->actingAs($this->usuarioCon('campaign_manager'))
-            ->post('/clientes', $this->formulario([
+            ->post('/backoffice/clientes', $this->formulario([
                 'country_id' => $this->paisSinCobertura,
                 'status' => 'active',
             ]))
@@ -125,7 +125,7 @@ final class ClientesTest extends TestCase
     public function test_el_mismo_cliente_como_prospecto_si_se_apunta(): void
     {
         $this->actingAs($this->usuarioCon('campaign_manager'))
-            ->post('/clientes', $this->formulario([
+            ->post('/backoffice/clientes', $this->formulario([
                 'country_id' => $this->paisSinCobertura,
                 'status' => 'prospect',
             ]))
@@ -140,14 +140,14 @@ final class ClientesTest extends TestCase
     {
         $gestor = $this->usuarioCon('campaign_manager');
 
-        $this->actingAs($gestor)->post('/clientes', $this->formulario([
+        $this->actingAs($gestor)->post('/backoffice/clientes', $this->formulario([
             'country_id' => $this->paisSinCobertura, 'status' => 'prospect',
         ]));
 
         $uuid = (string) DB::table('client_organizations')->where('client_code', 'ACME-01')->value('uuid');
 
         $this->actingAs($gestor)
-            ->put("/clientes/{$uuid}", $this->formulario([
+            ->put("/backoffice/clientes/{$uuid}", $this->formulario([
                 'country_id' => $this->paisSinCobertura, 'status' => 'active',
             ]))
             ->assertSessionHas('aviso');
@@ -159,7 +159,7 @@ final class ClientesTest extends TestCase
     {
         $gestor = $this->usuarioCon('campaign_manager');
 
-        $this->actingAs($gestor)->post('/clientes', $this->formulario([
+        $this->actingAs($gestor)->post('/backoffice/clientes', $this->formulario([
             'country_id' => $this->paisSinCobertura, 'status' => 'prospect',
         ]));
 
@@ -169,7 +169,7 @@ final class ClientesTest extends TestCase
         $this->cubrir($this->paisSinCobertura);
 
         $this->actingAs($gestor)
-            ->put("/clientes/{$uuid}", $this->formulario([
+            ->put("/backoffice/clientes/{$uuid}", $this->formulario([
                 'country_id' => $this->paisSinCobertura, 'status' => 'active',
             ]))
             ->assertSessionHas('exito');
@@ -181,9 +181,9 @@ final class ClientesTest extends TestCase
     {
         $gestor = $this->usuarioCon('campaign_manager');
 
-        $this->actingAs($gestor)->post('/clientes', $this->formulario());
+        $this->actingAs($gestor)->post('/backoffice/clientes', $this->formulario());
         $this->actingAs($gestor)
-            ->post('/clientes', $this->formulario(['commercial_name' => 'Otro']))
+            ->post('/backoffice/clientes', $this->formulario(['commercial_name' => 'Otro']))
             ->assertSessionHasErrors('client_code');
 
         $this->assertSame(1, DB::table('client_organizations')->where('client_code', 'ACME-01')->count());
@@ -192,12 +192,12 @@ final class ClientesTest extends TestCase
     public function test_editar_deja_rastro_en_la_bitacora(): void
     {
         $gestor = $this->usuarioCon('campaign_manager');
-        $this->actingAs($gestor)->post('/clientes', $this->formulario());
+        $this->actingAs($gestor)->post('/backoffice/clientes', $this->formulario());
 
         $uuid = (string) DB::table('client_organizations')->where('client_code', 'ACME-01')->value('uuid');
 
         $this->actingAs($gestor)
-            ->put("/clientes/{$uuid}", $this->formulario(['commercial_name' => 'ACME renombrada']))
+            ->put("/backoffice/clientes/{$uuid}", $this->formulario(['commercial_name' => 'ACME renombrada']))
             ->assertSessionHas('exito');
 
         $this->assertDatabaseHas('audit_logs', ['action' => 'client.updated']);

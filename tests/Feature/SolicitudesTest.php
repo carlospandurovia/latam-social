@@ -55,9 +55,9 @@ final class SolicitudesTest extends TestCase
 
     public function test_solo_quien_puede_aprobar_ve_la_bandeja(): void
     {
-        $this->actingAs($this->usuarioCon('content_reviewer'))->get('/solicitudes')->assertForbidden();
-        $this->actingAs($this->usuarioCon('finance'))->get('/solicitudes')->assertForbidden();
-        $this->actingAs($this->usuarioCon('admin'))->get('/solicitudes')->assertOk();
+        $this->actingAs($this->usuarioCon('content_reviewer'))->get('/backoffice/solicitudes')->assertForbidden();
+        $this->actingAs($this->usuarioCon('finance'))->get('/backoffice/solicitudes')->assertForbidden();
+        $this->actingAs($this->usuarioCon('admin'))->get('/backoffice/solicitudes')->assertOk();
     }
 
     // ------------------------------------------------------------- la aprobación
@@ -72,7 +72,7 @@ final class SolicitudesTest extends TestCase
     public function test_aprobar_crea_al_creador_en_pendiente_no_en_activo(): void
     {
         $this->actingAs($this->usuarioCon('admin'))
-            ->post("/solicitudes/{$this->uuid}/aprobar", $this->alta())
+            ->post("/backoffice/solicitudes/{$this->uuid}/aprobar", $this->alta())
             ->assertRedirect();
 
         $creador = DB::table('creators')->where('email', 'ana@ejemplo.test')->first();
@@ -90,7 +90,7 @@ final class SolicitudesTest extends TestCase
     public function test_la_aprobacion_deja_dos_entradas_en_la_bitacora(): void
     {
         $this->actingAs($this->usuarioCon('admin'))
-            ->post("/solicitudes/{$this->uuid}/aprobar", $this->alta());
+            ->post("/backoffice/solicitudes/{$this->uuid}/aprobar", $this->alta());
 
         $this->assertSame(1, DB::table('audit_logs')->where('action', 'creator_application.approved')->count());
         $this->assertSame(1, DB::table('audit_logs')->where('action', 'creator.created')->count());
@@ -102,7 +102,7 @@ final class SolicitudesTest extends TestCase
         $this->creadorPendiente(['uuid' => (string) Str::uuid(), 'first_name' => 'Otra', 'last_name' => 'Persona', 'display_name' => 'otra', 'birth_date' => '1990-01-01', 'email' => 'otra@ejemplo.test']);
 
         $this->actingAs($this->usuarioCon('admin'))
-            ->post("/solicitudes/{$this->uuid}/aprobar", $this->alta())
+            ->post("/backoffice/solicitudes/{$this->uuid}/aprobar", $this->alta())
             ->assertSessionHas('choque');
 
         $this->assertSame('submitted', DB::table('creator_applications')->where('uuid', $this->uuid)->value('status'));
@@ -123,7 +123,7 @@ final class SolicitudesTest extends TestCase
             'email' => 'ana@ejemplo.test', 'document_type' => 'CE', 'document_number' => '999']);
 
         $this->actingAs($this->usuarioCon('admin'))
-            ->post("/solicitudes/{$this->uuid}/aprobar", $this->alta(['confirma_revision' => '1']))
+            ->post("/backoffice/solicitudes/{$this->uuid}/aprobar", $this->alta(['confirma_revision' => '1']))
             ->assertSessionHas('choque');
 
         $this->assertSame(1, DB::table('creators')->count());
@@ -135,7 +135,7 @@ final class SolicitudesTest extends TestCase
         unset($datos['confirma_revision']);
 
         $this->actingAs($this->usuarioCon('admin'))
-            ->post("/solicitudes/{$this->uuid}/aprobar", $datos)
+            ->post("/backoffice/solicitudes/{$this->uuid}/aprobar", $datos)
             ->assertSessionHasErrors('confirma_revision');
 
         $this->assertSame(0, DB::table('creators')->count());
@@ -144,7 +144,7 @@ final class SolicitudesTest extends TestCase
     public function test_rechaza_una_fecha_de_nacimiento_futura(): void
     {
         $this->actingAs($this->usuarioCon('admin'))
-            ->post("/solicitudes/{$this->uuid}/aprobar", $this->alta(['birth_date' => now()->addYear()->toDateString()]))
+            ->post("/backoffice/solicitudes/{$this->uuid}/aprobar", $this->alta(['birth_date' => now()->addYear()->toDateString()]))
             ->assertSessionHasErrors('birth_date');
     }
 
@@ -153,8 +153,8 @@ final class SolicitudesTest extends TestCase
     {
         $usuario = $this->usuarioCon('admin');
 
-        $this->actingAs($usuario)->post("/solicitudes/{$this->uuid}/aprobar", $this->alta());
-        $this->actingAs($usuario)->post("/solicitudes/{$this->uuid}/aprobar", $this->alta(['document_number' => '777']));
+        $this->actingAs($usuario)->post("/backoffice/solicitudes/{$this->uuid}/aprobar", $this->alta());
+        $this->actingAs($usuario)->post("/backoffice/solicitudes/{$this->uuid}/aprobar", $this->alta(['document_number' => '777']));
 
         $this->assertSame(1, DB::table('creators')->count());
     }
@@ -164,7 +164,7 @@ final class SolicitudesTest extends TestCase
     public function test_rechazar_exige_una_explicacion(): void
     {
         $this->actingAs($this->usuarioCon('admin'))
-            ->post("/solicitudes/{$this->uuid}/rechazar", ['motivo' => 'rejected', 'rejection_note' => 'corto'])
+            ->post("/backoffice/solicitudes/{$this->uuid}/rechazar", ['motivo' => 'rejected', 'rejection_note' => 'corto'])
             ->assertSessionHasErrors('rejection_note');
 
         $this->assertSame('submitted', DB::table('creator_applications')->where('uuid', $this->uuid)->value('status'));
@@ -173,7 +173,7 @@ final class SolicitudesTest extends TestCase
     public function test_rechazar_con_motivo_lo_deja_registrado(): void
     {
         $this->actingAs($this->usuarioCon('admin'))
-            ->post("/solicitudes/{$this->uuid}/rechazar", [
+            ->post("/backoffice/solicitudes/{$this->uuid}/rechazar", [
                 'motivo' => 'duplicate',
                 'rejection_note' => 'Ya existe una cuenta con este documento desde marzo.',
             ])

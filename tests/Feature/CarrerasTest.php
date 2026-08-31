@@ -88,7 +88,7 @@ final class CarrerasTest extends TestCase
         $uuid = $this->crearCliente($gestor);
 
         $sql = $this->sqlDe(function () use ($gestor, $uuid): void {
-            $this->actingAs($gestor)->post("/clientes/{$uuid}/contactos", $this->contacto([
+            $this->actingAs($gestor)->post("/backoffice/clientes/{$uuid}/contactos", $this->contacto([
                 'is_primary' => '1',
             ]))->assertSessionHas('exito');
         });
@@ -263,7 +263,7 @@ final class CarrerasTest extends TestCase
 
     private function crearCliente(User $quien): string
     {
-        $this->actingAs($quien)->post('/clientes', [
+        $this->actingAs($quien)->post('/backoffice/clientes', [
             'commercial_name' => 'ACME',
             'client_code' => 'ACME-01',
             'country_id' => $this->paisPE,

@@ -150,7 +150,7 @@ final class CompromisoTest extends TestCase
         $this->assertNotNull(Compromiso::vetoPorPresupuesto($this->campana(), 500.0));
 
         $this->actingAs($this->usuarioCon('finance'))
-            ->post("/campanas/{$this->uuid}/sobrecosto",
+            ->post("/backoffice/campanas/{$this->uuid}/sobrecosto",
                 ['budget_override_reason' => 'El cliente amplio el alcance a dos ciudades mas.'])
             ->assertSessionHas('exito');
 
@@ -160,7 +160,7 @@ final class CompromisoTest extends TestCase
     public function test_autorizar_exige_un_motivo_de_verdad(): void
     {
         $this->actingAs($this->usuarioCon('finance'))
-            ->post("/campanas/{$this->uuid}/sobrecosto", ['budget_override_reason' => 'porque'])
+            ->post("/backoffice/campanas/{$this->uuid}/sobrecosto", ['budget_override_reason' => 'porque'])
             ->assertSessionHas('aviso');
 
         $this->assertNull($this->campana()->budget_override_at);
@@ -170,7 +170,7 @@ final class CompromisoTest extends TestCase
     public function test_el_gestor_no_autoriza_su_propio_sobrecosto(): void
     {
         $this->actingAs($this->usuarioCon('campaign_manager'))
-            ->post("/campanas/{$this->uuid}/sobrecosto",
+            ->post("/backoffice/campanas/{$this->uuid}/sobrecosto",
                 ['budget_override_reason' => 'Lo necesito para cerrar la campana hoy.'])
             ->assertForbidden();
 
@@ -200,7 +200,7 @@ final class CompromisoTest extends TestCase
         $id = $this->participacion(400.0);
 
         $this->actingAs($this->usuarioCon('campaign_manager'))
-            ->post("/campanas/{$this->uuid}/candidatos/{$id}/monto", ['agreed_amount' => '550.00'])
+            ->post("/backoffice/campanas/{$this->uuid}/candidatos/{$id}/monto", ['agreed_amount' => '550.00'])
             ->assertSessionHas('exito');
 
         $this->assertSame(550.0, (float) DB::table('campaign_creators')->where('id', $id)->value('agreed_amount'));
@@ -212,7 +212,7 @@ final class CompromisoTest extends TestCase
         $this->aceptar($id);
 
         $this->actingAs($this->usuarioCon('campaign_manager'))
-            ->post("/campanas/{$this->uuid}/candidatos/{$id}/monto", ['agreed_amount' => '900.00'])
+            ->post("/backoffice/campanas/{$this->uuid}/candidatos/{$id}/monto", ['agreed_amount' => '900.00'])
             ->assertSessionHas('aviso');
 
         $this->assertSame(400.0, (float) DB::table('campaign_creators')->where('id', $id)->value('agreed_amount'));
@@ -286,7 +286,7 @@ final class CompromisoTest extends TestCase
         $this->participacion(600.0);
 
         $this->actingAs($this->usuarioCon('campaign_manager'))
-            ->get("/campanas/{$this->uuid}/candidatos")
+            ->get("/backoffice/campanas/{$this->uuid}/candidatos")
             ->assertOk()
             ->assertSee('Comprometido con creadores', false)
             ->assertSee('600.00', false);
@@ -303,7 +303,7 @@ final class CompromisoTest extends TestCase
         ]);
 
         $this->actingAs($this->usuarioCon('campaign_manager'))
-            ->post("/campanas/{$this->uuid}/candidatos/{$id}/monto", ['agreed_amount' => '100'])
+            ->post("/backoffice/campanas/{$this->uuid}/candidatos/{$id}/monto", ['agreed_amount' => '100'])
             ->assertNotFound();
     }
 

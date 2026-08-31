@@ -194,6 +194,63 @@ final class NavegacionTest extends TestCase
             ->assertSee(Preparacion::CATALOGOS);
     }
 
+    // ------------------------------------------------- la calle y la trastienda
+
+    /**
+     * **Todo lo que exige sesión vive bajo `/backoffice`** (9.21a).
+     *
+     * `/creadores` era la lista del admin, y tiene que ser la puerta pública de
+     * los creadores. Esta prueba es lo que impide que una ruta nueva vuelva a
+     * plantarse en la raíz sin querer: se recorren **todas** las rutas con
+     * nombre y se comprueba una por una.
+     *
+     * La lista de excepciones se escribe a mano, y ése es el punto: dejar algo
+     * fuera de `/backoffice` tiene que ser una decisión, no un descuido.
+     */
+    public function test_todo_lo_que_exige_sesion_vive_bajo_backoffice(): void
+    {
+        // Lo que un desconocido tiene que poder abrir. Cada una con su motivo:
+        // el acceso y la recuperación son la puerta; la invitación y la
+        // aprobación llegan por un enlace con token a alguien que no tiene
+        // cuenta; el logotipo lo pinta la propia pantalla de acceso.
+        $publicas = [
+            'acceso', 'entrar', 'recuperar', 'recuperar.enviar', 'recuperar.usar',
+            'recuperar.formulario', 'recuperar.fijar',
+            'invitacion.ver', 'invitacion.oferta', 'invitacion.aceptar', 'invitacion.rechazar',
+            'invitacion.preguntar', 'invitacion.gracias', 'invitacion.caducada',
+            'aprobacion.ver', 'aprobacion.pieza', 'aprobacion.responder',
+            'aprobacion.gracias', 'aprobacion.caducada',
+            'marca.logo', 'marca.favicon',
+        ];
+
+        $fuera = [];
+
+        foreach (app('router')->getRoutes() as $ruta) {
+            $nombre = $ruta->getName();
+
+            if ($nombre === null || in_array($nombre, $publicas, true)) {
+                continue;
+            }
+
+            if (!str_starts_with($ruta->uri(), 'backoffice/')) {
+                $fuera[] = $nombre.' → /'.$ruta->uri();
+            }
+        }
+
+        $this->assertSame([], $fuera, "Estas rutas exigen sesión y no están bajo `/backoffice`:\n"
+            .implode("\n", $fuera)."\nSi alguna debe ser pública, escríbela en la lista de arriba con su motivo.");
+    }
+
+    /** Y las públicas siguen fuera, que es la otra mitad. */
+    public function test_la_puerta_sigue_abierta_para_quien_no_tiene_cuenta(): void
+    {
+        foreach (['acceso', 'recuperar'] as $nombre) {
+            $this->assertStringNotContainsString('backoffice', route($nombre));
+        }
+
+        $this->get(route('acceso'))->assertOk();
+    }
+
     // -------------------------------------------------------- los catálogos
 
     public function test_los_catalogos_tienen_portada_y_siguen_donde_estaban(): void
