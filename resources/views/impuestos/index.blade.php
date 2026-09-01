@@ -91,7 +91,7 @@
       <h2 class="text-sm font-semibold">Publicar una tasa</h2>
 
       <label class="block text-xs text-slate-500">País
-        <select name="country_id" required class="mt-1 w-full rounded border-slate-300 text-sm">
+        <select name="country_id" required class="mt-1 w-full rounded border border-slate-300 text-sm">
           @foreach ($paises as $p)
             <option value="{{ $p->id }}">{{ $p->name }}</option>
           @endforeach
@@ -100,41 +100,41 @@
 
       <label class="block text-xs text-slate-500">Código
         <input name="code" required maxlength="20" placeholder="IGV" value="{{ old('code') }}"
-               class="mt-1 w-full rounded border-slate-300 text-sm font-mono">
+               class="mt-1 w-full rounded border border-slate-300 text-sm font-mono">
         <span class="text-[11px] text-slate-400">Es lo que sale impreso en el comprobante.</span>
       </label>
 
       <label class="block text-xs text-slate-500">Nombre
         <input name="name" required maxlength="80" placeholder="Impuesto General a las Ventas"
-               value="{{ old('name') }}" class="mt-1 w-full rounded border-slate-300 text-sm">
+               value="{{ old('name') }}" class="mt-1 w-full rounded border border-slate-300 text-sm">
       </label>
 
       <div class="grid gap-3 sm:grid-cols-2">
         <label class="block text-xs text-slate-500">Tasa (%)
           <input type="number" name="rate" step="0.0001" min="0" max="99.9999" required
                  placeholder="18" value="{{ old('rate') }}"
-                 class="mt-1 w-full rounded border-slate-300 text-sm">
+                 class="mt-1 w-full rounded border border-slate-300 text-sm">
         </label>
 
         <label class="block text-xs text-slate-500">Código oficial
           <input name="official_code" maxlength="10" placeholder="1000" value="{{ old('official_code') }}"
-                 class="mt-1 w-full rounded border-slate-300 text-sm font-mono">
+                 class="mt-1 w-full rounded border border-slate-300 text-sm font-mono">
         </label>
       </div>
 
       <label class="block text-xs text-slate-500">Rige desde
         <input type="date" name="valid_from" required value="{{ old('valid_from') }}"
-               class="mt-1 w-full rounded border-slate-300 text-sm">
+               class="mt-1 w-full rounded border border-slate-300 text-sm">
         <span class="text-[11px] text-slate-400">La anterior se cierra el día antes.</span>
       </label>
 
       <label class="block text-xs text-slate-500">Nota
         <input name="note" maxlength="255" placeholder="La norma que la cambió"
-               value="{{ old('note') }}" class="mt-1 w-full rounded border-slate-300 text-sm">
+               value="{{ old('note') }}" class="mt-1 w-full rounded border border-slate-300 text-sm">
       </label>
 
       <label class="flex items-start gap-2 text-xs text-slate-600">
-        <input type="checkbox" name="es_de_venta" value="1" class="mt-0.5 rounded border-slate-300">
+        <input type="checkbox" name="es_de_venta" value="1" class="mt-0.5 rounded border border-slate-300">
         <span>
           Es el impuesto que va en las <strong>facturas de venta</strong> de ese país.
           <span class="block text-[11px] text-slate-400">

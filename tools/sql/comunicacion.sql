@@ -133,3 +133,41 @@ BEGIN
 END//
 
 DELIMITER ;
+
+-- ==================== La cuenta con la que sale el correo (9.17g)
+-- Hasta 9.17g el correo se configuraba en `.env`, y eso significa ENTRAR A LA
+-- MAQUINA: el unico ajuste del sistema que exigia un despliegue para algo que
+-- cambia solo --una cuenta que caduca, un proveedor que se cambia-- y el que mas
+-- caro sale tener mal, porque con el transporte en «log» nadie recibe nada y el
+-- sistema no da ningun error.
+--
+-- Tabla propia y no columnas en la conexion (DEC-257): el esqueleto --quien,
+-- donde, estado, credencial, salud-- se queda en integration_connections, que ya
+-- sabe rotar un secreto sin pisarlo y ya impide dos activas del mismo proposito.
+-- Un puerto SMTP no le sirve a nadie mas.
+CREATE TABLE mail_settings (
+  id              BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  integration_connection_id BIGINT UNSIGNED NOT NULL,
+  host            VARCHAR(160)  NOT NULL,
+  port            SMALLINT UNSIGNED NOT NULL,
+  -- NULL = sin cifrar. Se admite porque un servidor de pruebas local no lo
+  -- lleva, y se avisa EN ROJO porque en cualquier otro sitio significa mandar
+  -- la contrasena en claro por la red.
+  encryption      VARCHAR(10)   NULL,
+  from_address    VARCHAR(255)  NOT NULL,
+  from_name       VARCHAR(120)  NOT NULL,
+  timeout_seconds SMALLINT UNSIGNED NOT NULL DEFAULT 10,
+  created_at      DATETIME(3)   NULL,
+  updated_at      DATETIME(3)   NULL,
+  UNIQUE KEY uq_mail_conexion (integration_connection_id),
+  CONSTRAINT fk_mail_conn FOREIGN KEY (integration_connection_id) REFERENCES integration_connections(id) ON DELETE RESTRICT,
+  CONSTRAINT ck_mail_host CHECK (TRIM(host) <> ''),
+  CONSTRAINT ck_mail_port CHECK (port BETWEEN 1 AND 65535),
+  -- `encryption IS NULL OR ...` a proposito: sin cifrar es un estado valido.
+  CONSTRAINT ck_mail_cifrado CHECK (encryption IS NULL OR encryption IN ('tls','ssl')),
+  CONSTRAINT ck_mail_remitente CHECK (from_address LIKE '%_@_%'),
+  CONSTRAINT ck_mail_nombre CHECK (CHAR_LENGTH(TRIM(from_name)) >= 2),
+  -- Un servidor que no contesta no puede colgar una peticion web durante
+  -- minutos: quien esta esperando cree que el sistema murio.
+  CONSTRAINT ck_mail_espera CHECK (timeout_seconds BETWEEN 1 AND 120)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

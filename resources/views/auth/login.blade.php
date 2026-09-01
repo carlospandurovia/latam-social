@@ -33,7 +33,7 @@
                     focus:border-marca-400 focus:ring-2 focus:ring-marca-200 focus:outline-none">
     </div>
     <label class="flex items-center gap-2 text-sm text-slate-600">
-      <input type="checkbox" name="remember" class="rounded border-slate-300 text-marca-500 focus:ring-marca-200">
+      <input type="checkbox" name="remember" class="rounded border border-slate-300 text-marca-500 focus:ring-marca-200">
       Mantener la sesión
     </label>
     <button type="submit"

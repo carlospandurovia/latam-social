@@ -8,7 +8,9 @@ use App\Modules\Communication\Console\ProbarCorreoCommand;
 use App\Modules\Communication\Console\PublicarPlantillaCommand;
 use App\Modules\Communication\Listeners\AvisarCambioSensible;
 use App\Modules\Communication\Listeners\EnviarCorreoPedido;
+use App\Modules\Communication\Services\CuentaDeCorreo;
 use App\Shared\Config\Aviso;
+use App\Shared\Config\Pestanas;
 use App\Shared\Config\Preparacion;
 use App\Shared\Eventos\CorreoPedido;
 use App\Shared\Eventos\EventoOcurrido;
@@ -51,6 +53,34 @@ final class CommunicationServiceProvider extends ServiceProvider
         // la lista de arriba--; Campaign, que lo necesita igual en `7.6`, no.
         Event::listen(CorreoPedido::class, EnviarCorreoPedido::class);
 
+        // 9.17g: la cuenta guardada manda sobre el `.env`. Se aplica al
+        // arrancar y sólo si hay tabla y conexión activa: durante `migrate` la
+        // tabla todavía no existe, y una excepción aquí deja la aplicación sin
+        // arrancar --que es peor que quedarse con la del entorno--.
+        try {
+            CuentaDeCorreo::aplicar();
+        } catch (\Throwable) {
+            // Se sigue con la del `.env`. El panel lo dice en rojo.
+        }
+
+        Pestanas::registrar(
+            'correo',
+            'Servidor de correo',
+            datos: static fn (): array => [
+                // `guardada()` y no `vigente()` (9.17i): la tarjeta tiene que
+                // poder ensenar la cuenta APAGADA, o no habria como encenderla.
+                'cuenta' => CuentaDeCorreo::guardada(),
+                'efecto' => CuentaDeCorreo::enEfecto(),
+                'cifrados' => CuentaDeCorreo::CIFRADOS,
+                'puertos' => CuentaDeCorreo::PUERTOS,
+                // 9.17i: los avisos van DENTRO de su tarjeta. Antes se pintaban
+                // todos juntos arriba y habia que adivinar a cual se referian.
+                'avisosCorreo' => CuentaDeCorreo::avisos(),
+            ],
+            avisos: static fn (): array => CuentaDeCorreo::avisos(),
+            orden: 30,
+        );
+
         $this->registrarPreparacion();
     }
 
@@ -75,17 +105,10 @@ final class CommunicationServiceProvider extends ServiceProvider
         // que es otra cosa --lo que salio-- y la tiene mas gente. Aqui se dice
         // si el correo esta configurado, y eso lo ve quien pueda abrir el panel.
         Preparacion::area('Correo', null, 'correos.index', static function (): array {
-            $avisos = [];
-            $transporte = (string) config('mail.default');
-
-            if (in_array($transporte, ['log', 'array', 'null'], true)) {
-                $avisos[] = Aviso::rojo(sprintf(
-                    'El correo está en «%s»: no sale de este servidor, se escribe en el registro. '
-                    .'Nadie recibe nada —ni el enlace de alta de un creador— y el sistema no '
-                    .'da ningún error. Hace falta una cuenta SMTP.',
-                    $transporte,
-                ));
-            }
+            // 9.17g: los avisos de la CUENTA salen de su servicio, que sabe si
+            // manda la base o el `.env`. Leer `config('mail.default')` aqui
+            // habria dicho «esta en log» aunque hubiera una cuenta guardada.
+            $avisos = CuentaDeCorreo::avisos();
 
             // Un fallo suelto es la vida normal --un buzon lleno, una direccion
             // mal escrita--. Lo que importa es que haya fallos SIN MIRAR: el

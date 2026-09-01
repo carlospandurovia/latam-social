@@ -75,17 +75,17 @@
         <div>
           <label for="first_name" class="block text-xs text-slate-500 mb-1">Nombres</label>
           <input id="first_name" name="first_name" required maxlength="80" value="{{ old('first_name') }}"
-                 class="w-full rounded-lg border-slate-300 text-sm">
+                 class="w-full rounded-lg border border-slate-300 text-sm">
         </div>
         <div>
           <label for="last_name" class="block text-xs text-slate-500 mb-1">Apellidos</label>
           <input id="last_name" name="last_name" required maxlength="80" value="{{ old('last_name') }}"
-                 class="w-full rounded-lg border-slate-300 text-sm">
+                 class="w-full rounded-lg border border-slate-300 text-sm">
         </div>
         <div>
           <label for="display_name" class="block text-xs text-slate-500 mb-1">Nombre público</label>
           <input id="display_name" name="display_name" required maxlength="120" value="{{ old('display_name') }}"
-                 class="w-full rounded-lg border-slate-300 text-sm">
+                 class="w-full rounded-lg border border-slate-300 text-sm">
         </div>
       </div>
 
@@ -93,12 +93,12 @@
         <div>
           <label for="birth_date" class="block text-xs text-slate-500 mb-1">Fecha de nacimiento</label>
           <input id="birth_date" name="birth_date" type="date" required value="{{ old('birth_date') }}"
-                 class="w-full rounded-lg border-slate-300 text-sm">
+                 class="w-full rounded-lg border border-slate-300 text-sm">
           <p class="text-xs text-amber-600 mt-1">Si es menor, hará falta tutor para activarlo.</p>
         </div>
         <div>
           <label for="document_country_code" class="block text-xs text-slate-500 mb-1">País del documento</label>
-          <select id="document_country_code" name="document_country_code" required class="w-full rounded-lg border-slate-300 text-sm">
+          <select id="document_country_code" name="document_country_code" required class="w-full rounded-lg border border-slate-300 text-sm">
             @foreach ($paises as $p)
               <option value="{{ $p->iso2 }}" @selected(old('document_country_code') === $p->iso2)>{{ $p->name }}</option>
             @endforeach
@@ -106,7 +106,7 @@
         </div>
         <div>
           <label for="document_type" class="block text-xs text-slate-500 mb-1">Tipo</label>
-          <select id="document_type" name="document_type" required class="w-full rounded-lg border-slate-300 text-sm">
+          <select id="document_type" name="document_type" required class="w-full rounded-lg border border-slate-300 text-sm">
             @foreach (['DNI','CE','RUC','PASSPORT','CC','NIT','CURP','RFC','RUT','SSN','NIE','NIF','OTHER'] as $t)
               <option value="{{ $t }}" @selected(old('document_type') === $t)>{{ $t }}</option>
             @endforeach
@@ -115,14 +115,14 @@
         <div>
           <label for="document_number" class="block text-xs text-slate-500 mb-1">Número</label>
           <input id="document_number" name="document_number" required maxlength="40" value="{{ old('document_number') }}"
-                 class="w-full rounded-lg border-slate-300 text-sm">
+                 class="w-full rounded-lg border border-slate-300 text-sm">
         </div>
       </div>
 
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label for="preferred_currency_code" class="block text-xs text-slate-500 mb-1">Moneda preferida</label>
-          <select id="preferred_currency_code" name="preferred_currency_code" required class="w-full rounded-lg border-slate-300 text-sm">
+          <select id="preferred_currency_code" name="preferred_currency_code" required class="w-full rounded-lg border border-slate-300 text-sm">
             @foreach ($monedas as $m)
               <option value="{{ $m->code }}" @selected(old('preferred_currency_code') === $m->code)>{{ $m->code }} — {{ $m->name }}</option>
             @endforeach
@@ -131,12 +131,12 @@
         <div>
           <label for="payment_term_days" class="block text-xs text-slate-500 mb-1">Plazo de pago (días)</label>
           <input id="payment_term_days" name="payment_term_days" type="number" min="0" max="180" required
-                 value="{{ old('payment_term_days', 30) }}" class="w-full rounded-lg border-slate-300 text-sm">
+                 value="{{ old('payment_term_days', 30) }}" class="w-full rounded-lg border border-slate-300 text-sm">
         </div>
       </div>
 
       <label class="flex items-start gap-2 text-sm text-slate-700 pt-2 border-t border-slate-100">
-        <input type="checkbox" name="confirma_revision" value="1" class="mt-0.5 rounded border-slate-300">
+        <input type="checkbox" name="confirma_revision" value="1" class="mt-0.5 rounded border border-slate-300">
         <span>Confirmo que revisé el documento de identidad y los posibles duplicados de arriba.</span>
       </label>
 
@@ -156,7 +156,7 @@
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div>
           <label for="motivo" class="block text-xs text-slate-500 mb-1">Motivo</label>
-          <select id="motivo" name="motivo" required class="w-full rounded-lg border-slate-300 text-sm">
+          <select id="motivo" name="motivo" required class="w-full rounded-lg border border-slate-300 text-sm">
             <option value="rejected">No cumple requisitos</option>
             <option value="duplicate">Es un duplicado</option>
           </select>
@@ -164,7 +164,7 @@
         <div class="sm:col-span-2">
           <label for="rejection_note" class="block text-xs text-slate-500 mb-1">Explicación (mínimo 10 caracteres)</label>
           <input id="rejection_note" name="rejection_note" required minlength="10" maxlength="255"
-                 value="{{ old('rejection_note') }}" class="w-full rounded-lg border-slate-300 text-sm"
+                 value="{{ old('rejection_note') }}" class="w-full rounded-lg border border-slate-300 text-sm"
                  placeholder="Qué le vas a poder explicar al creador dentro de seis meses.">
         </div>
       </div>

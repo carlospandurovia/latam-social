@@ -2,6 +2,74 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 
+## [9.17i · La cara de las integraciones] — 2026-09-01
+
+Crítica del negocio, con la pantalla de otro producto suyo delante: *«esta
+pantalla no se compara a la que me hiciste para LOTEALO, esperaba algo así»*.
+
+### Añadido
+
+- `parciales/tarjeta.blade.php` — **una sola plantilla** para las cinco
+  integraciones: título con icono, qué hace y qué pasa si no se activa, chapa de
+  estado, sus propios avisos, rejilla de campos y pie con los enlaces a dónde
+  conseguir lo que pide. Los enlaces que llevan a una pantalla con permiso no se
+  pintan a quien no lo tiene (`DEC-262`).
+- `parciales/icono.blade.php` — los seis iconos, en línea.
+- Interruptor de **encender y apagar** la cuenta de correo. Apagar devuelve el
+  correo al `.env` y **no borra nada** (`DEC-263`).
+- Aviso en ámbar cuando el puerto y el cifrado no casan —SSL con 587, TLS con
+  465—: no conectan y el servidor sólo contesta con una espera agotada
+  (`DEC-264`).
+
+### Cambiado
+
+- Los avisos de una integración se pintan **dentro de su tarjeta**. Antes salían
+  todos juntos arriba, repetidos, y sin decir a cuál se referían. La lista de
+  `Pestanas` sigue contando la chapa roja del rótulo: cambia dónde se pinta, no
+  quién la produce.
+- `panel-conexiones`, `panel-certificados`, `panel-series` y `panel-correo` se
+  parten en tarjeta + cuerpo. La pestaña de tipos de cambio también tiene la
+  suya, lista para `9.17h`.
+- `IntegracionesController` reparte estado y avisos por tarjeta: afirmar que algo
+  está «Activo» no es maquetación.
+- `CuentaDeCorreo::guardada()` sustituye a `vigente()` al guardar: con la cuenta
+  apagada, `vigente()` no la veía y cada guardado dejaba **una conexión huérfana
+  más**.
+
+### Arreglado
+
+- **`T-86` — 130 controles en 20 plantillas sin borde visible.** Tailwind 4 pone
+  `border: 0 solid` a todos los elementos, `<input>` y `<select>` incluidos, y el
+  proyecto no usa `@tailwindcss/forms`: `border-slate-300` sólo dice de qué color
+  sería el borde, y sin `border` no se pinta ninguno. Afectaba desde siempre a la
+  pantalla de acceso y a las dos portadas públicas. **No se ve leyendo el código
+  ni lo detecta ninguna prueba** — salió de compilar Tailwind y mirar la pantalla.
+
+## [9.17g · La cuenta de correo deja de vivir en el servidor] — 2026-09-01
+
+### Añadido
+- **`mail_settings`** — servidor, puerto, cifrado, remitente y espera, colgando
+  de la conexión. La contraseña va cifrada por la puerta de `9.17d`.
+- `Communication\Services\CuentaDeCorreo` — precedencia (**cuenta guardada >
+  `.env`**), aplicación al arrancar, envío de prueba que **escribe el resultado**
+  y avisos.
+- **`App\Shared\Config\Pestanas`** — cada módulo registra su pestaña. `Core` no
+  puede depender de `Communication`, y una integración nueva ya no es un `if` en
+  un controlador ajeno.
+- `tools/pruebas/9.17g-correo.sh` (9) y `CuentaDeCorreoTest` (14).
+
+### Cambiado
+- La regla de «sabe a dónde llamar» se parte en dos: *tiene alguna dirección* y
+  *si es web, va cifrada*. Escrita como «URL `https://`» **impedía activar una
+  cuenta de correo** — miraba sólo a SUNAT.
+
+### Decidido
+- `DEC-260`: la cuenta en la base, con la precedencia escrita y a la vista.
+- `DEC-261`: la regla partida, y las pestañas por registro invertido.
+
+### Sabido y dicho
+- Queda **`9.17h`**: los tipos de cambio a su pestaña.
+
 ## [9.17f · Integraciones por pestañas] — 2026-09-01
 
 Crítica del negocio a mi diseño. Al ir a comprobarla, tenía más razón de la que

@@ -41,7 +41,7 @@
       <label for="display_name" class="block text-sm font-medium text-slate-700 mb-1">Nombre público</label>
       <input id="display_name" name="display_name" type="text" required maxlength="120"
              value="{{ old('display_name', $creador->display_name) }}"
-             class="w-full rounded-xl border-slate-300 focus:border-marca-500 focus:ring-marca-500">
+             class="w-full rounded-xl border border-slate-300 focus:border-marca-500 focus:ring-marca-500">
     </div>
 
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
@@ -49,13 +49,13 @@
         <label for="phone" class="block text-sm font-medium text-slate-700 mb-1">Teléfono</label>
         <input id="phone" name="phone" type="text" maxlength="30"
                value="{{ old('phone', $creador->phone) }}"
-               class="w-full rounded-xl border-slate-300 focus:border-marca-500 focus:ring-marca-500">
+               class="w-full rounded-xl border border-slate-300 focus:border-marca-500 focus:ring-marca-500">
       </div>
       <div>
         <label for="city" class="block text-sm font-medium text-slate-700 mb-1">Ciudad</label>
         <input id="city" name="city" type="text" maxlength="100"
                value="{{ old('city', $creador->city) }}"
-               class="w-full rounded-xl border-slate-300 focus:border-marca-500 focus:ring-marca-500">
+               class="w-full rounded-xl border border-slate-300 focus:border-marca-500 focus:ring-marca-500">
       </div>
     </div>
 
@@ -64,13 +64,13 @@
         <label for="payment_term_days" class="block text-sm font-medium text-slate-700 mb-1">Plazo de pago (días)</label>
         <input id="payment_term_days" name="payment_term_days" type="number" min="0" max="180" required
                value="{{ old('payment_term_days', $creador->payment_term_days) }}"
-               class="w-full rounded-xl border-slate-300 focus:border-marca-500 focus:ring-marca-500">
+               class="w-full rounded-xl border border-slate-300 focus:border-marca-500 focus:ring-marca-500">
         <p class="text-xs text-slate-400 mt-1">Visible para el creador (BR-FIN-012).</p>
       </div>
       <div>
         <label for="preferred_currency_code" class="block text-sm font-medium text-slate-700 mb-1">Moneda preferida</label>
         <select id="preferred_currency_code" name="preferred_currency_code" required
-                class="w-full rounded-xl border-slate-300 focus:border-marca-500 focus:ring-marca-500">
+                class="w-full rounded-xl border border-slate-300 focus:border-marca-500 focus:ring-marca-500">
           @foreach ($monedas as $moneda)
             <option value="{{ $moneda->code }}"
               @selected(old('preferred_currency_code', $creador->preferred_currency_code) === $moneda->code)>
@@ -82,7 +82,7 @@
       <div>
         <label for="locale" class="block text-sm font-medium text-slate-700 mb-1">Idioma</label>
         <select id="locale" name="locale" required
-                class="w-full rounded-xl border-slate-300 focus:border-marca-500 focus:ring-marca-500">
+                class="w-full rounded-xl border border-slate-300 focus:border-marca-500 focus:ring-marca-500">
           @foreach ($idiomas as $idioma)
             <option value="{{ $idioma->code }}" @selected(old('locale', $creador->locale) === $idioma->code)>
               {{ $idioma->name }}
@@ -96,7 +96,7 @@
       <label for="timezone" class="block text-sm font-medium text-slate-700 mb-1">Zona horaria</label>
       <input id="timezone" name="timezone" type="text" required maxlength="64"
              value="{{ old('timezone', $creador->timezone) }}"
-             class="w-full rounded-xl border-slate-300 focus:border-marca-500 focus:ring-marca-500">
+             class="w-full rounded-xl border border-slate-300 focus:border-marca-500 focus:ring-marca-500">
       <p class="text-xs text-slate-400 mt-1">Identificador IANA, por ejemplo <code>America/Lima</code>.</p>
     </div>
 

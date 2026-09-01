@@ -298,7 +298,7 @@
                sale Fulano?» sin abrir la base de datos. --}}
           <label class="flex items-center gap-2 text-xs text-slate-600">
             <input type="checkbox" name="descartados" value="1" @checked($verDescartados)
-                   class="rounded border-slate-300">
+                   class="rounded border border-slate-300">
             Ver también los descartados, con el motivo
           </label>
           <a href="{{ route('campanas.candidatos', $campana->uuid) }}"

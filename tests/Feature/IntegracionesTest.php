@@ -278,13 +278,24 @@ final class IntegracionesTest extends TestCase
             ->assertSee('e-factura.sunat.gob.pe');
     }
 
-    /** Y dice dónde va el certificado, que no va aquí. */
-    public function test_la_pantalla_dice_donde_va_el_certificado(): void
+    /**
+     * El certificado ESTÁ aquí, y ya no hay que decir dónde va.
+     *
+     * Esta prueba nació en `9.17e`, cuando el certificado vivía en otra pantalla
+     * y lo único que se podía hacer era enseñar el camino. Desde `9.17f` está en
+     * esta misma pestaña, así que lo que hay que defender es lo contrario: que
+     * las tres cosas de emitir se vean juntas. Se cambia el enunciado en vez de
+     * borrarla porque la pregunta de fondo —«¿me entero aquí de con qué se
+     * firma?»— sigue siendo la misma.
+     */
+    public function test_las_tres_cosas_de_emitir_estan_en_la_misma_pestana(): void
     {
         $this->actingAs($this->usuarioCon('admin'))
             ->get(route('integraciones.index'))
             ->assertOk()
-            ->assertSee('Certificados de firma');
+            ->assertSee('Conexión con el emisor', false)
+            ->assertSee('Certificado de firma digital')
+            ->assertSee('Series y folios');
     }
 
     // ------------------------------------------------------------- el permiso

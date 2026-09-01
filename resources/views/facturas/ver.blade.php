@@ -127,16 +127,16 @@
           <h2 class="text-sm font-semibold">Añadir una línea</h2>
           <label class="block text-xs text-slate-500">Concepto
             <input name="description" required maxlength="300" value="{{ old('description') }}"
-                   class="mt-1 w-full rounded border-slate-300 text-sm">
+                   class="mt-1 w-full rounded border border-slate-300 text-sm">
           </label>
           <div class="grid gap-3 sm:grid-cols-2">
             <label class="block text-xs text-slate-500">Cantidad
               <input type="number" name="quantity" step="0.0001" min="0.0001" required value="{{ old('quantity', '1') }}"
-                     class="mt-1 w-full rounded border-slate-300 text-sm">
+                     class="mt-1 w-full rounded border border-slate-300 text-sm">
             </label>
             <label class="block text-xs text-slate-500">Precio unitario
               <input type="number" name="unit_price" step="0.0001" min="0" required value="{{ old('unit_price') }}"
-                     class="mt-1 w-full rounded border-slate-300 text-sm">
+                     class="mt-1 w-full rounded border border-slate-300 text-sm">
             </label>
           </div>
           <button class="rounded bg-slate-800 px-3 py-2 text-sm text-white">Añadir</button>
@@ -166,7 +166,7 @@
             <strong>No hay vuelta atrás</strong>: a partir de este momento sólo se puede anular.
           </p>
           <label class="block text-xs text-slate-500">Serie
-            <select name="document_series_id" required class="mt-1 w-full rounded border-slate-300 text-sm">
+            <select name="document_series_id" required class="mt-1 w-full rounded border border-slate-300 text-sm">
               @forelse ($series as $s)
                 <option value="{{ $s->id }}">
                   {{ $s->series }} — {{ $s->tipo }} (siguiente: {{ $s->next_number }}, {{ $s->environment }})
@@ -195,7 +195,7 @@
           <h2 class="text-sm font-semibold text-rose-700">Anular</h2>
           <label class="block text-xs text-slate-500">Motivo
             <textarea name="motivo" required minlength="10" maxlength="255" rows="3"
-                      class="mt-1 w-full rounded border-slate-300 text-sm">{{ old('motivo') }}</textarea>
+                      class="mt-1 w-full rounded border border-slate-300 text-sm">{{ old('motivo') }}</textarea>
             <span class="text-[11px] text-slate-400">Una anulación muda no se puede defender.</span>
           </label>
           <button class="w-full rounded bg-rose-600 px-3 py-2 text-sm text-white">Anular</button>

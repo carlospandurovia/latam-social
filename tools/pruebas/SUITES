@@ -113,6 +113,7 @@
 # nada de eso es evidencia mientras no cuelgue de ello una factura emitida.
 9.17d-integraciones
 9.17e-extremos
+9.17g-correo
 
 # 9.12 crea sus tipos (`x912b`) y sus series (`F912`, `F913`, `F915`, `X912`) y
 # borra lo que puede: las series que ya dieron numeros no se pueden borrar

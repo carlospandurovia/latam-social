@@ -125,7 +125,7 @@
               <div class="grow">
                 <label class="block text-xs text-slate-600 mb-1" for="rt{{ $m->id }}">Motivo para retirarla</label>
                 <input id="rt{{ $m->id }}" name="motivo" required minlength="10" maxlength="255"
-                       class="w-full rounded-lg border-slate-300 text-sm" placeholder="El creador cambió de banco y trajo la constancia nueva.">
+                       class="w-full rounded-lg border border-slate-300 text-sm" placeholder="El creador cambió de banco y trajo la constancia nueva.">
               </div>
               <button class="px-3 py-2 rounded-lg border border-rose-300 text-rose-700 text-sm font-medium hover:bg-rose-50">Retirar</button>
             </form>
@@ -153,7 +153,7 @@
 
         <div>
           <label class="block text-sm text-slate-700 mb-1" for="method_type">Tipo</label>
-          <select id="method_type" name="method_type" class="w-full rounded-lg border-slate-300 text-sm">
+          <select id="method_type" name="method_type" class="w-full rounded-lg border border-slate-300 text-sm">
             <option value="bank_account">Cuenta bancaria</option>
             <option value="wallet">Billetera</option>
             <option value="paypal">PayPal</option>
@@ -163,7 +163,7 @@
 
         <div>
           <label class="block text-sm text-slate-700 mb-1" for="account_type">Modalidad</label>
-          <select id="account_type" name="account_type" class="w-full rounded-lg border-slate-300 text-sm">
+          <select id="account_type" name="account_type" class="w-full rounded-lg border border-slate-300 text-sm">
             <option value="">—</option>
             <option value="savings">Ahorros</option>
             <option value="checking">Corriente</option>
@@ -174,7 +174,7 @@
         <div>
           <label class="block text-sm text-slate-700 mb-1" for="bank_name">Banco</label>
           <input id="bank_name" name="bank_name" maxlength="80" value="{{ old('bank_name') }}"
-                 class="w-full rounded-lg border-slate-300 text-sm">
+                 class="w-full rounded-lg border border-slate-300 text-sm">
         </div>
 
         <div>
@@ -183,27 +183,27 @@
                guarde y lo reofrezca en la máquina de otro operador. --}}
           <input id="account_number" name="account_number" required minlength="6" maxlength="40"
                  autocomplete="off" spellcheck="false"
-                 class="w-full rounded-lg border-slate-300 text-sm font-mono">
+                 class="w-full rounded-lg border border-slate-300 text-sm font-mono">
           <p class="mt-1 text-xs text-slate-500">Se guarda cifrado. En pantalla solo se verán los cuatro últimos dígitos.</p>
         </div>
 
         <div>
           <label class="block text-sm text-slate-700 mb-1" for="country_id">País de la cuenta</label>
-          <select id="country_id" name="country_id" class="w-full rounded-lg border-slate-300 text-sm">
+          <select id="country_id" name="country_id" class="w-full rounded-lg border border-slate-300 text-sm">
             @foreach ($paises as $p)<option value="{{ $p->id }}">{{ $p->name }}</option>@endforeach
           </select>
         </div>
 
         <div>
           <label class="block text-sm text-slate-700 mb-1" for="currency_code">Moneda</label>
-          <select id="currency_code" name="currency_code" class="w-full rounded-lg border-slate-300 text-sm">
+          <select id="currency_code" name="currency_code" class="w-full rounded-lg border border-slate-300 text-sm">
             @foreach ($monedas as $mo)<option value="{{ $mo->code }}">{{ $mo->code }} — {{ $mo->name }}</option>@endforeach
           </select>
         </div>
 
         <div>
           <label class="block text-sm text-slate-700 mb-1" for="owner_type">¿De quién es la cuenta?</label>
-          <select id="owner_type" name="owner_type" class="w-full rounded-lg border-slate-300 text-sm">
+          <select id="owner_type" name="owner_type" class="w-full rounded-lg border border-slate-300 text-sm">
             <option value="creator">Del creador</option>
             <option value="guardian" @selected($esMenor)>De su tutor</option>
           </select>
@@ -214,7 +214,7 @@
 
         <div>
           <label class="block text-sm text-slate-700 mb-1" for="owner_guardian_id">¿Qué tutor?</label>
-          <select id="owner_guardian_id" name="owner_guardian_id" class="w-full rounded-lg border-slate-300 text-sm">
+          <select id="owner_guardian_id" name="owner_guardian_id" class="w-full rounded-lg border border-slate-300 text-sm">
             <option value="">—</option>
             @foreach ($tutores as $t)<option value="{{ $t->id }}">{{ $t->full_name }}</option>@endforeach
           </select>
@@ -226,19 +226,19 @@
         <div>
           <label class="block text-sm text-slate-700 mb-1" for="holder_name">Titular según el banco</label>
           <input id="holder_name" name="holder_name" required maxlength="160" value="{{ old('holder_name') }}"
-                 class="w-full rounded-lg border-slate-300 text-sm">
+                 class="w-full rounded-lg border border-slate-300 text-sm">
         </div>
 
         <div class="grid grid-cols-2 gap-3">
           <div>
             <label class="block text-sm text-slate-700 mb-1" for="holder_document_type">Documento</label>
             <input id="holder_document_type" name="holder_document_type" required maxlength="20"
-                   value="{{ old('holder_document_type', 'DNI') }}" class="w-full rounded-lg border-slate-300 text-sm">
+                   value="{{ old('holder_document_type', 'DNI') }}" class="w-full rounded-lg border border-slate-300 text-sm">
           </div>
           <div>
             <label class="block text-sm text-slate-700 mb-1" for="holder_document_number">Número</label>
             <input id="holder_document_number" name="holder_document_number" required maxlength="40"
-                   value="{{ old('holder_document_number') }}" class="w-full rounded-lg border-slate-300 text-sm">
+                   value="{{ old('holder_document_number') }}" class="w-full rounded-lg border border-slate-300 text-sm">
           </div>
         </div>
 

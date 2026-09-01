@@ -64,24 +64,24 @@
 
         <label class="block text-xs text-slate-500">Titular
           <input name="headline" required minlength="10" maxlength="160" value="{{ old('headline', $p->headline) }}"
-                 class="mt-1 w-full rounded border-slate-300 text-sm">
+                 class="mt-1 w-full rounded border border-slate-300 text-sm">
         </label>
 
         <label class="block text-xs text-slate-500">Debajo del titular
           <textarea name="subheadline" rows="2" maxlength="320"
-                    class="mt-1 w-full rounded border-slate-300 text-sm">{{ old('subheadline', $p->subheadline) }}</textarea>
+                    class="mt-1 w-full rounded border border-slate-300 text-sm">{{ old('subheadline', $p->subheadline) }}</textarea>
         </label>
 
         <div class="grid gap-4 sm:grid-cols-2">
           <label class="block text-xs text-slate-500">Texto del botón
             <input name="cta_label" required maxlength="60" value="{{ old('cta_label', $p->cta_label) }}"
-                   class="mt-1 w-full rounded border-slate-300 text-sm">
+                   class="mt-1 w-full rounded border border-slate-300 text-sm">
           </label>
 
           <label class="block text-xs text-slate-500">A dónde lleva
             <input name="cta_url" maxlength="255" placeholder="vacío = el formulario de la página"
                    value="{{ old('cta_url', $p->cta_url) }}"
-                   class="mt-1 w-full rounded border-slate-300 text-sm">
+                   class="mt-1 w-full rounded border border-slate-300 text-sm">
             <span class="text-[11px] text-slate-400">Con https, o una ruta propia que empiece por «/».</span>
           </label>
         </div>
@@ -89,18 +89,18 @@
         <div class="grid gap-4 sm:grid-cols-2">
           <label class="block text-xs text-slate-500">Título para buscadores
             <input name="meta_title" maxlength="70" value="{{ old('meta_title', $p->meta_title) }}"
-                   class="mt-1 w-full rounded border-slate-300 text-sm">
+                   class="mt-1 w-full rounded border border-slate-300 text-sm">
           </label>
 
           <label class="block text-xs text-slate-500">Descripción para buscadores
             <input name="meta_description" maxlength="180" value="{{ old('meta_description', $p->meta_description) }}"
-                   class="mt-1 w-full rounded border-slate-300 text-sm">
+                   class="mt-1 w-full rounded border border-slate-300 text-sm">
             <span class="text-[11px] text-slate-400">Es lo que sale al compartir el enlace.</span>
           </label>
         </div>
 
         <label class="flex items-center gap-2 text-xs text-slate-600">
-          <input type="checkbox" name="is_published" value="1" @checked($p->is_published) class="rounded border-slate-300">
+          <input type="checkbox" name="is_published" value="1" @checked($p->is_published) class="rounded border border-slate-300">
           Publicada — si se apaga, quien entre verá la pantalla de acceso
         </label>
 
@@ -140,7 +140,7 @@
               class="grid gap-3 sm:grid-cols-6 items-end border-t border-slate-100 pt-4">
           @csrf
           <label class="block text-xs text-slate-500 sm:col-span-1">Tipo
-            <select name="kind" class="mt-1 w-full rounded border-slate-300 text-sm">
+            <select name="kind" class="mt-1 w-full rounded border border-slate-300 text-sm">
               @foreach ($tipos as $clave => $texto)
                 <option value="{{ $clave }}">{{ $clave }}</option>
               @endforeach
@@ -148,17 +148,17 @@
           </label>
 
           <label class="block text-xs text-slate-500 sm:col-span-2">Título
-            <input name="heading" required minlength="3" maxlength="120" class="mt-1 w-full rounded border-slate-300 text-sm">
+            <input name="heading" required minlength="3" maxlength="120" class="mt-1 w-full rounded border border-slate-300 text-sm">
           </label>
 
           <label class="block text-xs text-slate-500 sm:col-span-2">Texto
-            <input name="body" maxlength="600" class="mt-1 w-full rounded border-slate-300 text-sm">
+            <input name="body" maxlength="600" class="mt-1 w-full rounded border border-slate-300 text-sm">
           </label>
 
           <div class="flex items-end gap-2 sm:col-span-1">
             <label class="block text-xs text-slate-500 w-20">Orden
               <input type="number" name="sort_order" value="100" min="0" max="9999"
-                     class="mt-1 w-full rounded border-slate-300 text-sm">
+                     class="mt-1 w-full rounded border border-slate-300 text-sm">
             </label>
             <input type="hidden" name="is_visible" value="1">
             <button class="rounded bg-slate-700 px-3 py-2 text-sm text-white">Añadir</button>

@@ -76,7 +76,7 @@
             <form method="POST" action="{{ route('prospectos.mover', $p->uuid) }}" class="flex flex-wrap items-end gap-2">
               @csrf
               <label class="block text-xs text-slate-500">Mover a
-                <select name="estado" class="mt-1 rounded border-slate-300 text-sm">
+                <select name="estado" class="mt-1 rounded border border-slate-300 text-sm">
                   @foreach ($estados as $clave => $texto)
                     @continue($clave === 'new' || $clave === 'converted')
                     <option value="{{ $clave }}">{{ \Illuminate\Support\Str::before($texto, ' —') }}</option>
@@ -85,7 +85,7 @@
               </label>
               <label class="block text-xs text-slate-500 flex-1 min-w-48">Nota
                 <input name="nota" maxlength="500" placeholder="Obligatoria si se descarta"
-                       class="mt-1 w-full rounded border-slate-300 text-sm">
+                       class="mt-1 w-full rounded border border-slate-300 text-sm">
               </label>
               <button class="rounded bg-slate-700 px-3 py-2 text-sm text-white">Mover</button>
             </form>
@@ -93,7 +93,7 @@
             <form method="POST" action="{{ route('prospectos.convertir', $p->uuid) }}" class="flex flex-wrap items-end gap-2">
               @csrf
               <label class="block text-xs text-slate-500 flex-1 min-w-48">Ya es este cliente
-                <select name="client_organization_id" class="mt-1 w-full rounded border-slate-300 text-sm">
+                <select name="client_organization_id" class="mt-1 w-full rounded border border-slate-300 text-sm">
                   @foreach ($clientes as $c)
                     <option value="{{ $c->id }}">{{ $c->commercial_name }}</option>
                   @endforeach

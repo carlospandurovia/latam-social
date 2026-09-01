@@ -66,7 +66,7 @@
           <label class="flex items-center gap-2 text-sm text-slate-700">
             <input type="checkbox" name="categorias[]" value="{{ $c->id }}"
                    @checked(in_array((int) $c->id, old('categorias', $elegidas), true))
-                   class="rounded border-slate-300">
+                   class="rounded border border-slate-300">
             {{ $c->code }}
           </label>
         @endforeach

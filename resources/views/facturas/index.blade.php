@@ -103,7 +103,7 @@
           </p>
 
           <label class="block text-xs text-slate-500">Campaña
-            <select name="campaign_id" required class="mt-1 w-full rounded border-slate-300 text-sm">
+            <select name="campaign_id" required class="mt-1 w-full rounded border border-slate-300 text-sm">
               @forelse ($facturables as $c)
                 <option value="{{ $c->id }}">
                   {{ $c->code }} — {{ $c->name }} ({{ $c->currency_code }} {{ number_format((float) $c->revenue_amount, 2) }})

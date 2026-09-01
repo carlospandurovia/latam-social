@@ -6,6 +6,7 @@ namespace App\Modules\Core\Providers;
 
 use App\Modules\Core\Console\PublicarTerminosCommand;
 use App\Modules\Core\Console\TraerTiposDeCambioCommand;
+use App\Modules\Core\Http\Controllers\IntegracionesController;
 use App\Modules\Core\Services\Certificados;
 use App\Modules\Core\Services\Cobertura;
 use App\Modules\Core\Services\Correlativos;
@@ -19,6 +20,7 @@ use App\Modules\Core\Services\Politica;
 use App\Modules\Core\Services\Terminos;
 use App\Modules\Core\Services\TraidaDeCambio;
 use App\Shared\Config\Aviso;
+use App\Shared\Config\Pestanas;
 use App\Shared\Config\Preparacion;
 use App\Shared\Files\Vigilante;
 use Illuminate\Console\Scheduling\Schedule;
@@ -93,6 +95,7 @@ final class CoreServiceProvider extends ServiceProvider
         // logotipo es anotar cada carga de cada pantalla.
         Vigilante::regla(Marca::PROPOSITO, static fn (object $archivo, int $usuarioId): bool => $usuarioId > 0);
 
+        $this->registrarPestanas();
         $this->registrarPreparacion();
 
         if (!$this->app->runningInConsole()) {
@@ -132,6 +135,36 @@ final class CoreServiceProvider extends ServiceProvider
      * un creador, sin cobertura no se le puede facturar a un cliente, y los
      * tipos de cambio se tocan dos veces al año.
      */
+    /**
+     * Las pestañas de Integraciones que alimenta este módulo (9.17g).
+     *
+     * La del correo no está aquí: la registra `Communication`, que es de quien
+     * son esos parámetros. `Core` no puede depender de `Communication`.
+     */
+    private function registrarPestanas(): void
+    {
+        Pestanas::registrar(
+            'fel',
+            'Facturación electrónica',
+            datos: static fn (): array => IntegracionesController::datosDeFacturacion(),
+            avisos: static fn (): array => array_merge(
+                Integraciones::avisos(),
+                Certificados::avisos(),
+                Correlativos::avisos(),
+            ),
+            orden: 10,
+        );
+
+        // 9.17h se la lleva a esta pestaña de verdad. Hoy dice dónde vive.
+        Pestanas::registrar(
+            'fx',
+            'Tipos de cambio',
+            datos: static fn (): array => [],
+            avisos: static fn (): array => [],
+            orden: 20,
+        );
+    }
+
     private function registrarPreparacion(): void
     {
         Preparacion::area('Marca', 'brand.manage', 'marca.index',

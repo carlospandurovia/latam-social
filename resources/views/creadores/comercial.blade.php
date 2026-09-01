@@ -78,28 +78,28 @@
       @csrf
       <div class="sm:col-span-2">
         <label class="block text-sm text-slate-700 mb-1" for="content_format_id">Formato</label>
-        <select id="content_format_id" name="content_format_id" class="w-full rounded-lg border-slate-300 text-sm">
+        <select id="content_format_id" name="content_format_id" class="w-full rounded-lg border border-slate-300 text-sm">
           @foreach ($formatos as $f)<option value="{{ $f->id }}">{{ $f->plataforma }} · {{ $f->code }}</option>@endforeach
         </select>
       </div>
       <div>
         <label class="block text-sm text-slate-700 mb-1" for="currency_code">Moneda</label>
-        <select id="currency_code" name="currency_code" class="w-full rounded-lg border-slate-300 text-sm">
+        <select id="currency_code" name="currency_code" class="w-full rounded-lg border border-slate-300 text-sm">
           @foreach ($monedas as $m)<option value="{{ $m->code }}">{{ $m->code }}</option>@endforeach
         </select>
       </div>
       <div>
         <label class="block text-sm text-slate-700 mb-1" for="amount">Importe</label>
         <input id="amount" name="amount" type="number" step="0.01" min="0.01" value="{{ old('amount') }}"
-               class="w-full rounded-lg border-slate-300 text-sm">
+               class="w-full rounded-lg border border-slate-300 text-sm">
         <label class="mt-2 flex items-center gap-2 text-xs text-slate-600">
-          <input type="checkbox" name="is_gratis" value="1" class="rounded border-slate-300" @checked(old('is_gratis'))>
+          <input type="checkbox" name="is_gratis" value="1" class="rounded border border-slate-300" @checked(old('is_gratis'))>
           Colaboración gratuita (canje, primera vez)
         </label>
       </div>
       <div>
         <label class="block text-sm text-slate-700 mb-1" for="source">¿De dónde sale el precio?</label>
-        <select id="source" name="source" class="w-full rounded-lg border-slate-300 text-sm">
+        <select id="source" name="source" class="w-full rounded-lg border border-slate-300 text-sm">
           <option value="self_declared">Lo declaró el creador</option>
           <option value="negotiated">Negociado</option>
           <option value="estimated">Estimado por nosotros</option>
@@ -108,7 +108,7 @@
       <div>
         <label class="block text-sm text-slate-700 mb-1" for="valid_from">Vigente desde</label>
         <input id="valid_from" name="valid_from" type="date" value="{{ old('valid_from', $hoy) }}"
-               class="w-full rounded-lg border-slate-300 text-sm">
+               class="w-full rounded-lg border border-slate-300 text-sm">
       </div>
       <div class="sm:col-span-3">
         <button class="px-4 py-2 rounded-xl bg-marca-600 text-white text-sm font-medium hover:bg-marca-700">Registrar tarifa</button>
@@ -154,45 +154,45 @@
       @csrf
       <div>
         <label class="block text-sm text-slate-700 mb-1" for="travel_scope">¿Viaja?</label>
-        <select id="travel_scope" name="travel_scope" class="w-full rounded-lg border-slate-300 text-sm">
+        <select id="travel_scope" name="travel_scope" class="w-full rounded-lg border border-slate-300 text-sm">
           <option value="">No viaja</option>
           <option value="local">Sí, local</option>
           <option value="national">Sí, nacional</option>
           <option value="international">Sí, internacional</option>
         </select>
         <label class="mt-2 flex items-center gap-2 text-xs text-slate-600">
-          <input type="checkbox" name="accepts_travel" value="1" class="rounded border-slate-300">
+          <input type="checkbox" name="accepts_travel" value="1" class="rounded border border-slate-300">
           Marcar si viaja (y elige el alcance arriba)
         </label>
       </div>
       <div>
         <label class="block text-sm text-slate-700 mb-1" for="max_campaigns_per_month">Máx. campañas/mes</label>
         <input id="max_campaigns_per_month" name="max_campaigns_per_month" type="number" min="1" max="200"
-               value="{{ old('max_campaigns_per_month') }}" class="w-full rounded-lg border-slate-300 text-sm"
+               value="{{ old('max_campaigns_per_month') }}" class="w-full rounded-lg border border-slate-300 text-sm"
                placeholder="sin límite">
       </div>
       <div>
         <label class="block text-sm text-slate-700 mb-1" for="min_lead_time_days">Antelación mínima (días)</label>
         <input id="min_lead_time_days" name="min_lead_time_days" type="number" min="0" max="365"
-               value="{{ old('min_lead_time_days', 3) }}" class="w-full rounded-lg border-slate-300 text-sm">
+               value="{{ old('min_lead_time_days', 3) }}" class="w-full rounded-lg border border-slate-300 text-sm">
       </div>
       <div class="sm:col-span-2">
         <label class="block text-sm text-slate-700 mb-1" for="notes">Notas</label>
         <input id="notes" name="notes" maxlength="255" value="{{ old('notes') }}"
-               class="w-full rounded-lg border-slate-300 text-sm">
+               class="w-full rounded-lg border border-slate-300 text-sm">
       </div>
       <div>
         <label class="block text-sm text-slate-700 mb-1" for="disp_valid_from">Vigente desde</label>
         <input id="disp_valid_from" name="valid_from" type="date" value="{{ old('valid_from', $hoy) }}"
-               class="w-full rounded-lg border-slate-300 text-sm">
+               class="w-full rounded-lg border border-slate-300 text-sm">
       </div>
       <div class="sm:col-span-3 flex flex-wrap gap-4 items-center">
         <label class="flex items-center gap-2 text-sm text-slate-700">
-          <input type="checkbox" name="accepts_in_person" value="1" class="rounded border-slate-300" checked>
+          <input type="checkbox" name="accepts_in_person" value="1" class="rounded border border-slate-300" checked>
           Acepta trabajo presencial
         </label>
         <label class="flex items-center gap-2 text-sm text-slate-700">
-          <input type="checkbox" name="accepts_product_only" value="1" class="rounded border-slate-300">
+          <input type="checkbox" name="accepts_product_only" value="1" class="rounded border border-slate-300">
           Acepta canje por producto
         </label>
         <button class="ml-auto px-4 py-2 rounded-xl bg-marca-600 text-white text-sm font-medium hover:bg-marca-700">
@@ -249,17 +249,17 @@
       <div>
         <label class="block text-sm text-slate-700 mb-1" for="starts_on">Desde</label>
         <input id="starts_on" name="starts_on" type="date" value="{{ old('starts_on', $hoy) }}"
-               class="w-full rounded-lg border-slate-300 text-sm">
+               class="w-full rounded-lg border border-slate-300 text-sm">
       </div>
       <div>
         <label class="block text-sm text-slate-700 mb-1" for="ends_on">Hasta</label>
         <input id="ends_on" name="ends_on" type="date" value="{{ old('ends_on', $hoy) }}"
-               class="w-full rounded-lg border-slate-300 text-sm">
+               class="w-full rounded-lg border border-slate-300 text-sm">
       </div>
       <div>
         <label class="block text-sm text-slate-700 mb-1" for="reason">Motivo</label>
         <input id="reason" name="reason" maxlength="120" value="{{ old('reason') }}"
-               class="w-full rounded-lg border-slate-300 text-sm" placeholder="Vacaciones, viaje, salud…">
+               class="w-full rounded-lg border border-slate-300 text-sm" placeholder="Vacaciones, viaje, salud…">
       </div>
       <div>
         <button class="w-full px-4 py-2 rounded-xl bg-marca-600 text-white text-sm font-medium hover:bg-marca-700">Bloquear</button>

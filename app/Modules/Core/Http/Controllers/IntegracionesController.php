@@ -7,7 +7,7 @@ namespace App\Modules\Core\Http\Controllers;
 use App\Modules\Core\Services\Certificados;
 use App\Modules\Core\Services\Correlativos;
 use App\Modules\Core\Services\Integraciones;
-use App\Shared\Config\Aviso;
+use App\Shared\Config\Pestanas;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -64,23 +64,35 @@ final class IntegracionesController
      * salen de la misma plantilla parcial, y sus pantallas sueltas redirigen
      * aquí — dos puertas a lo mismo es lo que `9.20` vino a quitar.
      */
+    /**
+     * Las integraciones, por PESTAÑAS y no en un formulario para todo (9.17f).
+     *
+     * Reportado por el negocio: *«cada proveedor de integración tiene diferentes
+     * parámetros, sobre todo si es para diferentes fines»*. Tenía razón — el
+     * formulario único pedía lo mismo a un servidor de correo y a un emisor
+     * electrónico, y no le servía bien a ninguno.
+     *
+     * **Qué pestañas hay no lo decide este controlador**: cada módulo registra
+     * la suya en `Pestanas` (`9.17g`). La del correo la alimenta `Communication`,
+     * y `Core` no puede depender de `Communication` —ni debe—. Es el mismo
+     * patrón que `Preparacion` usa para las áreas del panel desde `9.17b`.
+     */
     public function index(Request $peticion): View
     {
-        $pestana = (string) $peticion->query('p', self::FEL);
+        $pestana = (string) $peticion->query('p', Pestanas::primera());
 
-        if (!array_key_exists($pestana, self::PESTANAS)) {
-            $pestana = self::FEL;
+        if (!Pestanas::existe($pestana)) {
+            $pestana = Pestanas::primera();
         }
 
         return view('integraciones.index', array_merge(
             [
-                'pestanas' => self::PESTANAS,
+                'pestanas' => Pestanas::rotulos(),
                 'pestana' => $pestana,
-                'pendientes' => self::pendientes(),
-                'avisos' => self::avisosDe($pestana),
-                'transporteDeCorreo' => (string) config('mail.default'),
+                'pendientes' => Pestanas::pendientes(),
+                'avisos' => Pestanas::avisosDe($pestana),
             ],
-            $pestana === self::FEL ? self::datosDeFacturacion() : [],
+            Pestanas::datosDe($pestana),
         ));
     }
 
@@ -89,15 +101,32 @@ final class IntegracionesController
      *
      * @return array<string, mixed>
      */
-    private static function datosDeFacturacion(): array
+    public static function datosDeFacturacion(): array
     {
         $series = Correlativos::series();
         $verId = (int) request()->query('serie', (string) ($series->first()->id ?? 0));
+        $conexiones = Integraciones::conexiones()->where('purpose', 'invoicing')->values();
+        $certificados = Certificados::todos();
 
         return [
             // La conexion.
             'extremos' => Integraciones::extremos(),
-            'conexiones' => Integraciones::conexiones()->where('purpose', 'invoicing')->values(),
+            'conexiones' => $conexiones,
+            // 9.17i: cada tarjeta lleva SU estado y SUS avisos. Se calculan
+            // aqui y no en la plantilla: una chapa que dice «activo» es una
+            // afirmacion sobre el sistema, no una decision de maquetacion.
+            'estadoConexion' => self::chapa($conexiones->contains(
+                static fn (object $c): bool => $c->status === 'active',
+            )),
+            'estadoCertificado' => self::chapa($certificados->contains(
+                static fn (object $c): bool => $c->status === 'active',
+            )),
+            'estadoSerie' => self::chapa($series->contains(
+                static fn (object $s): bool => (int) $s->is_active === 1,
+            )),
+            'avisosConexion' => Integraciones::avisos(),
+            'avisosCertificado' => Certificados::avisos(),
+            'avisosSerie' => Correlativos::avisos(),
             'proveedores' => Integraciones::proveedores()->where('purpose', 'invoicing')->values(),
             'sociedades' => DB::table('legal_entities')->where('status', 'active')
                 ->orderBy('code')->get(['id', 'code', 'legal_name', 'tax_id_number']),
@@ -110,7 +139,7 @@ final class IntegracionesController
                 ])->all(),
 
             // Con que se firma.
-            'certificados' => Certificados::todos(),
+            'certificados' => $certificados,
             'estadosCertificado' => Certificados::ESTADOS,
 
             // Que numeros salen.
@@ -126,35 +155,19 @@ final class IntegracionesController
     }
 
     /**
-     * Cuántas cosas rojas tiene cada pestaña, para la chapa del rótulo.
+     * La chapa de estado de una tarjeta (9.17i).
      *
-     * @return array<string, int>
+     * Dos estados y no cuatro a proposito: para lo que hace falta EMITIR, o hay
+     * uno en uso o no lo hay. «A medias» seria decirle a quien mira que puede
+     * facturar a medias, y no se puede.
+     *
+     * @return array{nivel: string, texto: string}
      */
-    private static function pendientes(): array
+    private static function chapa(bool $enUso): array
     {
-        $rojos = static fn (array $avisos): int => count(array_filter(
-            $avisos, static fn (object $a): bool => $a->nivel === Aviso::ROJO,
-        ));
-
-        return [
-            self::FEL => $rojos(self::avisosDe(self::FEL)),
-            self::FX => 0,
-            self::CORREO => in_array((string) config('mail.default'), ['log', 'array', 'null'], true) ? 1 : 0,
-        ];
-    }
-
-    /** @return list<Aviso> */
-    private static function avisosDe(string $pestana): array
-    {
-        if ($pestana !== self::FEL) {
-            return [];
-        }
-
-        return array_merge(
-            Integraciones::avisos(),
-            Certificados::avisos(),
-            Correlativos::avisos(),
-        );
+        return $enUso
+            ? ['nivel' => 'activo', 'texto' => 'Activo']
+            : ['nivel' => 'falta', 'texto' => 'Falta configurar'];
     }
 
     public function store(Request $peticion): RedirectResponse

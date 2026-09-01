@@ -72,7 +72,7 @@
       <label class="flex items-start gap-2 text-sm text-slate-700">
         <input type="checkbox" name="is_primary" value="1"
                @checked(old('is_primary', (bool) ($contacto->is_primary ?? false)))
-               class="mt-0.5 rounded border-slate-300">
+               class="mt-0.5 rounded border border-slate-300">
         <span>
           <span class="font-medium">Contacto principal de su tipo</span>
           <span class="block text-xs text-slate-500">

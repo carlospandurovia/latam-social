@@ -13,6 +13,7 @@ use App\Modules\Client\Http\Controllers\MarcasController;
 use App\Modules\Client\Http\Controllers\PerfilesFiscalesController;
 use App\Modules\Client\Http\Controllers\ProspectosController;
 use App\Modules\Communication\Http\Controllers\CorreosController;
+use App\Modules\Communication\Http\Controllers\CuentaDeCorreoController;
 use App\Modules\Content\Http\Controllers\AprobacionController;
 use App\Modules\Content\Http\Controllers\EntregablesController;
 use App\Modules\Content\Http\Controllers\MisEntregasController;
@@ -961,6 +962,27 @@ Route::middleware('auth')->prefix('backoffice')->group(function (): void {
         ->middleware('permiso:brand.manage')
         ->whereNumber('pagina')->whereNumber('bloque')
         ->name('landing.bloque.borrar');
+
+    // 9.17g -- La cuenta de correo. `integration.manage` y no `comms.view`:
+    // aquella abre la bandeja de lo que salio y la tiene mas gente; poner la
+    // cuenta con la que sale TODO el correo del sistema es la misma decision
+    // que cargar la credencial de SUNAT.
+    Route::post('/integraciones/correo', [CuentaDeCorreoController::class, 'guardar'])
+        ->middleware('permiso:integration.manage')
+        ->name('correo.guardar');
+
+    // Mandar la prueba es lo que convierte «creo que esta bien» en «funciona»,
+    // y deja escrito el resultado en la conexion.
+    Route::post('/integraciones/correo/probar', [CuentaDeCorreoController::class, 'probar'])
+        ->middleware('permiso:integration.manage')
+        ->name('correo.probar');
+
+    // 9.17i -- Encender y apagar la cuenta sin borrarla. `9.17g` guardaba y
+    // activaba en el mismo gesto y no dejaba camino de vuelta al `.env`; una
+    // integracion que se puede encender tiene que poder apagarse.
+    Route::post('/integraciones/correo/conmutar', [CuentaDeCorreoController::class, 'conmutar'])
+        ->middleware('permiso:integration.manage')
+        ->name('correo.conmutar');
 
     // 9.9c -- Los certificados de firma. `integration.manage` y no un permiso
     // nuevo: es la misma persona que carga la credencial de SUNAT en `9.17d`.

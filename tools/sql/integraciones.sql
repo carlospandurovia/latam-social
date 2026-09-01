@@ -179,10 +179,18 @@ BEGIN
      WHERE integration_provider_id = NEW.integration_provider_id
        AND environment = NEW.environment;
 
-    IF (NEW.base_url IS NULL OR NEW.base_url NOT LIKE 'https://%')
-       AND v_delProveedor = 0 THEN
+    -- 9.17g: partida en las dos cosas que de verdad decia. Escrita como «tiene
+    -- una URL https» era mirar solo a SUNAT: un servidor de CORREO no tiene
+    -- URL, tiene servidor y puerto, y con la regla anterior una cuenta de
+    -- correo no se podia activar.
+    IF (NEW.base_url IS NULL OR TRIM(NEW.base_url) = '') AND v_delProveedor = 0 THEN
       SIGNAL SQLSTATE '45000'
         SET MESSAGE_TEXT = 'Esa conexion no sabe a donde llamar: el proveedor no declara direccion para ese entorno.';
+    END IF;
+
+    IF NEW.base_url LIKE 'http://%' THEN
+      SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'Una direccion web sin cifrar manda las claves en claro: use https.';
     END IF;
 
     IF NEW.purpose_snapshot = 'invoicing' AND NEW.legal_entity_id IS NULL THEN
@@ -210,10 +218,18 @@ BEGIN
      WHERE integration_provider_id = NEW.integration_provider_id
        AND environment = NEW.environment;
 
-    IF (NEW.base_url IS NULL OR NEW.base_url NOT LIKE 'https://%')
-       AND v_delProveedor = 0 THEN
+    -- 9.17g: partida en las dos cosas que de verdad decia. Escrita como «tiene
+    -- una URL https» era mirar solo a SUNAT: un servidor de CORREO no tiene
+    -- URL, tiene servidor y puerto, y con la regla anterior una cuenta de
+    -- correo no se podia activar.
+    IF (NEW.base_url IS NULL OR TRIM(NEW.base_url) = '') AND v_delProveedor = 0 THEN
       SIGNAL SQLSTATE '45000'
         SET MESSAGE_TEXT = 'Esa conexion no sabe a donde llamar: el proveedor no declara direccion para ese entorno.';
+    END IF;
+
+    IF NEW.base_url LIKE 'http://%' THEN
+      SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'Una direccion web sin cifrar manda las claves en claro: use https.';
     END IF;
 
     IF NEW.purpose_snapshot = 'invoicing' AND NEW.legal_entity_id IS NULL THEN

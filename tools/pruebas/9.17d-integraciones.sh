@@ -83,10 +83,13 @@ porque "pero activarla sin URL, no" \
   "UPDATE integration_connections SET status='active' WHERE name='X917D-A';" \
   "tg_iconn_activa_upd|no sabe a donde llamar"
 
+# 9.17g: el motivo cambio de nombre, no de fondo. La regla se partio en dos
+# --«tiene alguna direccion» y «si es web, cifrada»-- porque escrita como «tiene
+# una URL https» era mirar solo a SUNAT: un servidor de correo no tiene URL.
 porque "ni con una URL sin cifrar" \
   "UPDATE integration_connections SET status='active', base_url='http://api.ejemplo.com'
     WHERE name='X917D-A';" \
-  "tg_iconn_activa_upd|no sabe a donde llamar"
+  "tg_iconn_activa_upd|en claro"
 
 probar "con https si" \
   "UPDATE integration_connections SET status='active', base_url='https://api.ejemplo.com'

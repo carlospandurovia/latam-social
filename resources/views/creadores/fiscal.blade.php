@@ -125,7 +125,7 @@
                        placeholder="Por qué no debió aprobarse (mínimo 10 caracteres)"
                        class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm">
                 <label class="flex items-center gap-2 text-xs text-slate-600">
-                  <input type="checkbox" name="confirma" value="1" class="rounded border-slate-300">
+                  <input type="checkbox" name="confirma" value="1" class="rounded border border-slate-300">
                   Entiendo que el creador se queda sin perfil fiscal vigente.
                 </label>
                 <button class="px-4 py-2 rounded-xl border border-rose-300 text-rose-700 text-sm font-medium hover:bg-rose-50">

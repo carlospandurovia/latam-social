@@ -125,7 +125,7 @@
                como respuesta y no como silencio. --}}
           <label class="mt-2 flex items-start gap-2 text-xs text-slate-600">
             <input type="hidden" name="is_gratis" value="0">
-            <input type="checkbox" name="is_gratis" value="1" class="mt-0.5 rounded border-slate-300"
+            <input type="checkbox" name="is_gratis" value="1" class="mt-0.5 rounded border border-slate-300"
                    @checked((int) old('is_gratis', $campana->is_gratis ?? 0) === 1)>
             <span>
               Campana gratuita (canje o cortesia).

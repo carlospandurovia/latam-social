@@ -160,4 +160,25 @@ valor "el proposito se copia del proveedor, no se teclea" \
   "SELECT purpose_snapshot FROM integration_connections
     WHERE uuid='e17e0000-0000-4000-8000-000000000005';" "invoicing"
 
+echo ""
+echo "-- La direccion, partida en sus dos reglas (9.17g) --"
+
+# 9.17g: escrita como «tiene una URL https» era mirar solo a SUNAT. Un servidor
+# de CORREO no tiene URL: tiene servidor y puerto, y con la regla anterior una
+# cuenta de correo NO SE PODIA ACTIVAR. Ahora son dos reglas separadas.
+# Con sociedad: la puerta por proposito ya tiene ocupadas (email, produccion,
+# plataforma) y (email, pruebas, plataforma) de las aserciones de arriba.
+probar "una direccion que no es web --un servidor de correo-- si activa" \
+  "INSERT INTO integration_connections (uuid,integration_provider_id,legal_entity_id,name,base_url,
+     environment,status,created_at)
+   VALUES ('e17e0000-0000-4000-8000-000000000006',$SMTP,$LE,'Correo SMTP','smtp://correo.example.test:587',
+     'production','active',NOW(3));" "OK"
+
+porque "pero una direccion web sin cifrar, no" \
+  "INSERT INTO integration_connections (uuid,integration_provider_id,name,base_url,
+     environment,status,created_at)
+   VALUES (UUID(),$SMTP,'Correo en claro','http://correo.example.test',
+     'sandbox','active',NOW(3));" \
+  "tg_iconn_activa_ins|en claro"
+
 resumen

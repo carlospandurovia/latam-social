@@ -43,66 +43,28 @@
     @endforeach
   </div>
 
-  @foreach ($avisos as $aviso)
-    <div class="mb-3 rounded-lg border px-4 py-3 text-sm
-      {{ $aviso->nivel === 'rojo' ? 'bg-rose-50 border-rose-200 text-rose-800'
-         : 'bg-amber-50 border-amber-200 text-amber-800' }}">
-      {{ $aviso->texto }}
-    </div>
-  @endforeach
+  {{-- 9.17i: los avisos YA NO se pintan aquí sueltos.
 
+       Crítica del negocio, con la pantalla de otro producto suyo delante:
+       *«esta pantalla no se compara a la que me hiciste para LOTEALO»*. Una de
+       las cosas que le faltaban era exactamente ésta: el aviso salía DOS VECES
+       --arriba en la lista de la pestaña y otra vez dentro-- y arriba no decía
+       a qué integración se refería. Ahora cada aviso vive en su tarjeta.
+
+       La lista de la pestaña sigue existiendo en `Pestanas`, y sigue siendo la
+       que cuenta la chapa roja del rótulo: eso no cambia. Lo que cambia es
+       DÓNDE se pinta. --}}
   @if ($pestana === 'fel')
-    <p class="mb-5 rounded-xl border border-slate-200 bg-white p-5 text-sm text-slate-600">
-      Para emitir hacen falta <strong>tres cosas</strong>, y están las tres aquí abajo: con
-      <strong>quién</strong> se habla (la conexión y su clave), <strong>con qué se firma</strong>
-      (el certificado, que va con la sociedad porque lleva su RUC) y <strong>qué números</strong>
-      salen (las series y sus folios). Sólo puede haber <strong>un emisor activo</strong> por
-      sociedad y entorno: se pueden dejar otros configurados, apagados.
-    </p>
-
     @include('parciales.panel-conexiones')
-
-    <h2 class="mt-8 mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
-      Con qué se firma
-    </h2>
     @include('parciales.panel-certificados')
-
-    <h2 class="mt-8 mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
-      Qué números salen — series y folios
-    </h2>
     @include('parciales.panel-series')
   @endif
 
   @if ($pestana === 'fx')
-    <div class="rounded-xl border border-slate-200 bg-white p-5 text-sm text-slate-600">
-      <p class="font-semibold text-slate-800 mb-1">Los tipos de cambio se configuran en su pantalla</p>
-      <p>
-        Sus fuentes, la clave de la API y el registro de cada traída viven en
-        <a href="{{ route('cambio.index') }}" class="text-marca-700 hover:underline">Tipos de cambio</a>
-        desde la iteración 9.2, y funcionan. <strong>Se traen a esta pestaña en la iteración
-        siguiente</strong>: moverlos es una migración de datos sobre algo que hoy va bien, y eso se
-        hace con su prueba, no de paso.
-      </p>
-    </div>
+    @include('parciales.panel-cambio')
   @endif
 
   @if ($pestana === 'correo')
-    <div class="rounded-xl border border-slate-200 bg-white p-5 text-sm text-slate-600">
-      <p class="font-semibold text-slate-800 mb-1">Hoy el correo se configura en el servidor</p>
-      <p class="mb-2">
-        Transporte actual: <strong class="font-mono">{{ $transporteDeCorreo }}</strong>.
-        @if (in_array($transporteDeCorreo, ['log', 'array', 'null'], true))
-          <span class="text-rose-700">Nada sale de este servidor: los correos se escriben en el registro.</span>
-        @endif
-      </p>
-      <p>
-        Se cambia en el <span class="font-mono">.env</span> (<span class="font-mono">MAIL_HOST</span>,
-        <span class="font-mono">MAIL_PORT</span>, <span class="font-mono">MAIL_USERNAME</span>,
-        <span class="font-mono">MAIL_PASSWORD</span>) y exige entrar a la máquina.
-        <strong>Se trae a esta pestaña en la iteración siguiente</strong>, para poder cambiarlo sin
-        desplegar. Lo que ya salió se ve en
-        <a href="{{ route('correos.index') }}" class="text-marca-700 hover:underline">Correos</a>.
-      </p>
-    </div>
+    @include('parciales.panel-correo')
   @endif
 @endsection

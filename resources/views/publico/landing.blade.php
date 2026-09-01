@@ -97,17 +97,17 @@
 
         <label class="block text-sm text-slate-600">Nombre y apellido
           <input name="full_name" required maxlength="160" value="{{ old('full_name') }}"
-                 class="mt-1 w-full rounded-lg border-slate-300">
+                 class="mt-1 w-full rounded-lg border border-slate-300">
         </label>
 
         <label class="block text-sm text-slate-600">Correo
           <input type="email" name="email" required maxlength="255" value="{{ old('email') }}"
-                 class="mt-1 w-full rounded-lg border-slate-300">
+                 class="mt-1 w-full rounded-lg border border-slate-300">
         </label>
 
         <div class="grid gap-4 sm:grid-cols-2">
           <label class="block text-sm text-slate-600">País
-            <select name="country_id" required class="mt-1 w-full rounded-lg border-slate-300">
+            <select name="country_id" required class="mt-1 w-full rounded-lg border border-slate-300">
               @foreach ($paises as $p)
                 <option value="{{ $p->id }}" @selected((string) old('country_id') === (string) $p->id)>{{ $p->name }}</option>
               @endforeach
@@ -116,7 +116,7 @@
 
           <label class="block text-sm text-slate-600">Teléfono <span class="text-slate-400">(opcional)</span>
             <input name="phone" maxlength="30" value="{{ old('phone') }}"
-                   class="mt-1 w-full rounded-lg border-slate-300">
+                   class="mt-1 w-full rounded-lg border border-slate-300">
           </label>
         </div>
 
@@ -179,30 +179,30 @@
         <div class="grid gap-4 sm:grid-cols-2">
           <label class="block text-sm text-slate-600">Empresa o marca
             <input name="company_name" required maxlength="160" value="{{ old('company_name') }}"
-                   class="mt-1 w-full rounded-lg border-slate-300">
+                   class="mt-1 w-full rounded-lg border border-slate-300">
           </label>
 
           <label class="block text-sm text-slate-600">Tu nombre
             <input name="contact_name" required maxlength="160" value="{{ old('contact_name') }}"
-                   class="mt-1 w-full rounded-lg border-slate-300">
+                   class="mt-1 w-full rounded-lg border border-slate-300">
           </label>
         </div>
 
         <div class="grid gap-4 sm:grid-cols-2">
           <label class="block text-sm text-slate-600">Correo
             <input type="email" name="email" required maxlength="255" value="{{ old('email') }}"
-                   class="mt-1 w-full rounded-lg border-slate-300">
+                   class="mt-1 w-full rounded-lg border border-slate-300">
           </label>
 
           <label class="block text-sm text-slate-600">Teléfono <span class="text-slate-400">(opcional)</span>
             <input name="phone" maxlength="30" value="{{ old('phone') }}"
-                   class="mt-1 w-full rounded-lg border-slate-300">
+                   class="mt-1 w-full rounded-lg border border-slate-300">
           </label>
         </div>
 
         <div class="grid gap-4 sm:grid-cols-2">
           <label class="block text-sm text-slate-600">País
-            <select name="country_id" required class="mt-1 w-full rounded-lg border-slate-300">
+            <select name="country_id" required class="mt-1 w-full rounded-lg border border-slate-300">
               @foreach ($paises as $p)
                 <option value="{{ $p->id }}" @selected((string) old('country_id') === (string) $p->id)>{{ $p->name }}</option>
               @endforeach
@@ -211,13 +211,13 @@
 
           <label class="block text-sm text-slate-600">Web <span class="text-slate-400">(opcional)</span>
             <input name="website" maxlength="255" placeholder="https://…" value="{{ old('website') }}"
-                   class="mt-1 w-full rounded-lg border-slate-300">
+                   class="mt-1 w-full rounded-lg border border-slate-300">
           </label>
         </div>
 
         <label class="block text-sm text-slate-600">Qué tienes en mente
           <textarea name="message" rows="4" maxlength="1000"
-                    class="mt-1 w-full rounded-lg border-slate-300">{{ old('message') }}</textarea>
+                    class="mt-1 w-full rounded-lg border border-slate-300">{{ old('message') }}</textarea>
         </label>
 
         {{-- El campo trampa, con otro nombre que el de la postulación: dos

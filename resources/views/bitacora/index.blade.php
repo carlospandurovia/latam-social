@@ -7,7 +7,7 @@
 <form method="GET" class="bg-white rounded-2xl border border-slate-200 p-4 mb-5 grid grid-cols-1 sm:grid-cols-5 gap-3 text-sm">
   <div>
     <label for="tipo" class="block text-xs text-slate-500 mb-1">Entidad</label>
-    <select id="tipo" name="tipo" class="w-full rounded-lg border-slate-300 text-sm">
+    <select id="tipo" name="tipo" class="w-full rounded-lg border border-slate-300 text-sm">
       <option value="">Todas</option>
       @foreach ($tipos as $t)
         <option value="{{ $t }}" @selected($filtros['tipo'] === $t)>{{ $t }}</option>
@@ -16,7 +16,7 @@
   </div>
   <div>
     <label for="actor" class="block text-xs text-slate-500 mb-1">Quién</label>
-    <select id="actor" name="actor" class="w-full rounded-lg border-slate-300 text-sm">
+    <select id="actor" name="actor" class="w-full rounded-lg border border-slate-300 text-sm">
       <option value="">Cualquiera</option>
       @foreach ($actores as $id => $nombre)
         <option value="{{ $id }}" @selected((int) $filtros['actor'] === (int) $id)>{{ $nombre }}</option>
@@ -26,18 +26,18 @@
   <div>
     <label for="accion" class="block text-xs text-slate-500 mb-1">Acción empieza por</label>
     <input id="accion" name="accion" value="{{ $filtros['accion'] }}" placeholder="creator."
-           class="w-full rounded-lg border-slate-300 text-sm">
+           class="w-full rounded-lg border border-slate-300 text-sm">
   </div>
   <div>
     <label for="desde" class="block text-xs text-slate-500 mb-1">Desde</label>
     <input id="desde" name="desde" type="date" value="{{ $filtros['desde'] }}"
-           class="w-full rounded-lg border-slate-300 text-sm">
+           class="w-full rounded-lg border border-slate-300 text-sm">
   </div>
   <div class="flex gap-2 items-end">
     <div class="flex-1">
       <label for="hasta" class="block text-xs text-slate-500 mb-1">Hasta</label>
       <input id="hasta" name="hasta" type="date" value="{{ $filtros['hasta'] }}"
-             class="w-full rounded-lg border-slate-300 text-sm">
+             class="w-full rounded-lg border border-slate-300 text-sm">
     </div>
     <button class="px-4 py-2 rounded-lg bg-marca-500 text-white font-medium">Filtrar</button>
   </div>
