@@ -37,6 +37,17 @@ ven cuando de verdad se intenta emitir.
   exige motivo y el número no vuelve a la serie.
 
 ### Arreglado
+- **`T-81`** — la causa de verdad del «404 al entrar»: `bootstrap/app.php` tenía
+  **dos URLs escritas a mano**, y `redirectUsersTo('/panel')` llevaba rota desde
+  `9.21a`. Quien ya tenía sesión y pulsaba «Entrar» caía en el middleware
+  `guest`, que lo mandaba a una dirección que ya no existe. Las dos salen ahora
+  del enrutador.
+- **`sincronizar` no copiaba `stage/bootstrap/`**, así que ese directorio llevaba
+  desde el 25 de agosto sin actualizarse —`providers.php` sin los proveedores de
+  Campaign, Content y Finance— y nada de lo que hay dentro se probaba nunca.
+- Una prueba recorre `bootstrap/` y `config/` y exige que **toda dirección
+  escrita a mano la reconozca el enrutador**, con sus excepciones escritas una a
+  una.
 - **`T-80`** — entrar con la contraseña correcta terminaba en «404 NOT FOUND».
   `redirect()->intended()` obedecía a una dirección guardada en la sesión
   **desde antes de la mudanza a `/backoffice`**. Ahora la dirección guardada

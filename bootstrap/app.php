@@ -14,10 +14,28 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
-        // A dónde va quien no ha iniciado sesión.
-        $middleware->redirectGuestsTo('/entrar');
-        // Y a dónde va quien ya la inició e intenta volver al formulario.
-        $middleware->redirectUsersTo('/panel');
+        // A dónde va quien no ha iniciado sesión, y a dónde quien ya la inició
+        // e intenta volver al formulario.
+        //
+        // ### `T-81`: aquí había DOS direcciones escritas a mano
+        //
+        // Y una de ellas estuvo rota desde `9.21a`. La mudanza a `/backoffice`
+        // presumía de costar «una línea y ni una URL que corregir», y era casi
+        // verdad: `docs/08` prohíbe escribir URLs en las **vistas**, así que las
+        // 149 pantallas se mudaron solas. Lo que nadie miró fue `bootstrap/`,
+        // que no es una vista y por eso no lo cubría ni la regla ni la búsqueda
+        // que se hizo entonces —`app/`, `resources/` y `config/`—.
+        //
+        // El resultado, reportado así: *«el entrar me lleva a NOT FOUND»*. Quien
+        // YA tenía sesión y pulsaba «Entrar» caía en `guest`, que lo mandaba a
+        // `/panel`, que desde `9.21a` no existe.
+        //
+        // Ahora salen del enrutador. Un cierre que acepta `Request` es lo que
+        // permite usar `route()` aquí: en el momento de configurar el
+        // middleware todavía no hay rutas cargadas, así que la cadena literal no
+        // era pereza —era la forma obvia—, y el cierre es la que no se rompe.
+        $middleware->redirectGuestsTo(fn (): string => route('acceso'));
+        $middleware->redirectUsersTo(fn (): string => route('panel'));
         // `->middleware('permiso:creator.view')` en las rutas.
         $middleware->alias(['permiso' => ExigirPermiso::class]);
 
