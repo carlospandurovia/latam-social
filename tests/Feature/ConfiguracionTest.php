@@ -213,15 +213,16 @@ final class ConfiguracionTest extends TestCase
     public function test_las_areas_que_existen_estan_registradas(): void
     {
         $this->assertSame(
-            // 9.18 anadio «Politica de precios», 9.19b «Creadores», 9.17d
-            // «Integraciones», 9.12 «Series y correlativos», 9.20 «Catalogos»,
-            // 9.21b «Portada publica» y 9.9c «Certificados de firma»; las siete
-            // veces esta prueba se puso roja: es exactamente para lo que esta.
-            // La lista se actualiza a mano y a proposito, para que anadir un
-            // area sea una decision y no un descuido.
-            ['Catálogos', 'Certificados de firma', 'Correo', 'Creadores', 'Entidades legales',
-                'Impuestos', 'Integraciones', 'Marca', 'Política de precios', 'Portada pública',
-                'Series y correlativos', 'Tipos de cambio', 'Términos'],
+            // Esta prueba se ha puesto roja SIETE veces al anadir un area, y
+            // la octava --9.17f-- al QUITAR dos: «Series y correlativos» y
+            // «Certificados de firma» dejaron de ser areas sueltas porque ahora
+            // viven dentro de las pestanas de Integraciones. Sus avisos no se
+            // perdieron: el revisor de Integraciones los suma, y hay una prueba
+            // que lo afirma --sin ella, meterlos dentro habria apagado en
+            // silencio el «sin certificado» del panel--.
+            ['Catálogos', 'Correo', 'Creadores', 'Entidades legales', 'Impuestos',
+                'Integraciones', 'Marca', 'Política de precios', 'Portada pública',
+                'Tipos de cambio', 'Términos'],
             Preparacion::areasRegistradas(),
         );
     }

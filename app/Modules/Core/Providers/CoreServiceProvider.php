@@ -234,7 +234,15 @@ final class CoreServiceProvider extends ServiceProvider
         // 9.17d: delante de los tipos de cambio porque de aqui depende poder
         // facturar, y aquello se toca dos veces al ano.
         Preparacion::area('Integraciones', 'integration.manage', 'integraciones.index',
-            static fn (): array => Integraciones::avisos(), orden: 35,
+            // 9.17f: el area cubre lo que hay DENTRO de sus pestanas. Al
+            // meter el certificado y las series en Integraciones dejaron de ser
+            // areas sueltas, y sin esto sus avisos --«sin certificado», «sin
+            // serie»-- habrian desaparecido del panel sin que nadie lo notara.
+            static fn (): array => array_merge(
+                Integraciones::avisos(),
+                Certificados::avisos(),
+                Correlativos::avisos(),
+            ), orden: 35,
             grupo: Preparacion::CONEXIONES);
 
         // 9.12: detras de Integraciones y delante de los tipos de cambio. Sin
@@ -247,19 +255,6 @@ final class CoreServiceProvider extends ServiceProvider
         // hubiera decidido.
         Preparacion::area('Impuestos', 'pricing.manage', 'impuestos.index',
             static fn (): array => Impuestos::avisos(), orden: 34,
-            grupo: Preparacion::FISCAL);
-
-        Preparacion::area('Series y correlativos', 'legal_entity.manage', 'series.index',
-            static fn (): array => Correlativos::avisos(), orden: 36,
-            grupo: Preparacion::FISCAL);
-
-        // 9.9c: detras de las series, que es el orden en que hacen falta --sin
-        // serie no hay numero y sin certificado no hay firma-- y delante de
-        // nada, porque es lo ultimo que queda para poder emitir de verdad. El
-        // permiso es el de `9.17d`: quien pone con que se conecta el sistema al
-        // exterior es quien carga el certificado.
-        Preparacion::area('Certificados de firma', 'integration.manage', 'certificados.index',
-            static fn (): array => Certificados::avisos(), orden: 37,
             grupo: Preparacion::FISCAL);
 
         // 9.21b: lo que ve quien todavia no es cliente. Con Marca y Terminos

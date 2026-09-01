@@ -191,12 +191,26 @@ final class CorrelativosTest extends TestCase
             ->get(route('series.index'))->assertStatus(403);
     }
 
+    /**
+     * Las series y el libro se ven **dentro de Integraciones** desde `9.17f`.
+     *
+     * Reportado por el negocio: *«tampoco veo dónde configuro los folios»*. No
+     * los veía porque estaban en otra pantalla, y para emitir hacen falta a la
+     * vez que la conexión y el certificado. La ruta vieja se queda y redirige:
+     * los enlaces compartidos siguen funcionando.
+     */
     public function test_el_admin_ve_las_series_y_el_libro(): void
     {
         $numero = Correlativos::reservar($this->serieId);
 
         $this->actingAs($this->usuarioCon('admin'))
             ->get(route('series.index', ['serie' => $this->serieId]))
+            ->assertRedirect(route('integraciones.index', [
+                'p' => 'fel', 'serie' => $this->serieId,
+            ]));
+
+        $this->actingAs($this->usuarioCon('admin'))
+            ->get(route('integraciones.index', ['p' => 'fel', 'serie' => $this->serieId]))
             ->assertOk()
             ->assertSee('F900')
             ->assertSee($numero->completo);
@@ -281,11 +295,20 @@ final class CorrelativosTest extends TestCase
     }
 
     /** El área está registrada en el panel de configuración de `9.17b`. */
-    public function test_el_panel_de_configuracion_la_incluye(): void
+    /**
+     * El aviso sigue llegando al panel aunque el área ya no exista (`9.17f`).
+     *
+     * Es la mitad que no se puede olvidar al mover algo dentro de otra cosa: si
+     * el «sin serie» se hubiera apagado, nadie lo habría notado hasta el día que
+     * no se pudiera emitir.
+     */
+    public function test_el_aviso_sigue_llegando_al_panel_de_configuracion(): void
     {
+        DB::table('document_series')->delete();
+
         $this->actingAs($this->usuarioCon('admin'))
             ->get(route('configuracion'))
             ->assertOk()
-            ->assertSee('Series y correlativos');
+            ->assertSee('Integraciones');
     }
 }

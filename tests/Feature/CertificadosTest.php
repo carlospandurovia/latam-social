@@ -312,13 +312,33 @@ final class CertificadosTest extends TestCase
         $this->assertNotNull(Certificados::vigente($this->sociedadId));
     }
 
-    /** El área está en el panel de configuración, en el grupo fiscal. */
-    public function test_el_panel_de_configuracion_la_incluye(): void
+    /**
+     * **La que protege el traslado de `9.17f`.**
+     *
+     * Los certificados dejaron de ser un área suelta del panel: viven dentro de
+     * la pestaña de facturación electrónica. Lo que NO puede perderse es el
+     * aviso — si al meterlos dentro se hubiera apagado el «sin certificado» del
+     * panel, nadie lo habría notado hasta el día que no se pudiera emitir.
+     */
+    public function test_el_aviso_sigue_llegando_al_panel_de_configuracion(): void
     {
         $this->actingAs($this->usuarioCon('admin'))
             ->get(route('configuracion'))
             ->assertOk()
-            ->assertSee('Certificados de firma');
+            ->assertSee('Sin certificado de firma');
+    }
+
+    /** Y se configuran dentro de Integraciones, no en una pantalla aparte. */
+    public function test_se_configuran_dentro_de_integraciones(): void
+    {
+        $this->actingAs($this->usuarioCon('admin'))
+            ->get(route('certificados.index'))
+            ->assertRedirect(route('integraciones.index', ['p' => 'fel']));
+
+        $this->actingAs($this->usuarioCon('admin'))
+            ->get(route('integraciones.index', ['p' => 'fel']))
+            ->assertOk()
+            ->assertSee('Cargar un certificado');
     }
 
     // ----------------------------------------------------------- ayudantes

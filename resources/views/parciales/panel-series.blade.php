@@ -1,37 +1,3 @@
-@extends('layouts.panel')
-@section('titulo', 'Series y correlativos')
-@section('subtitulo', 'Un número sale una sola vez, y lo que sale queda escrito')
-
-@section('contenido')
-  @include('parciales.miga', ['aqui' => 'Series y correlativos'])
-
-  @if (session('exito'))
-    <div class="mb-4 rounded-lg bg-emerald-50 border border-emerald-200 px-4 py-3 text-sm text-emerald-800">
-      {{ session('exito') }}
-    </div>
-  @endif
-  @if (session('aviso'))
-    <div class="mb-4 rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
-      {{ session('aviso') }}
-    </div>
-  @endif
-  @if ($errors->any())
-    <div class="mb-4 rounded-lg bg-rose-50 border border-rose-200 px-4 py-3 text-sm text-rose-800">
-      <ul class="list-disc pl-5">@foreach ($errors->all() as $e)<li>{{ $e }}</li>@endforeach</ul>
-    </div>
-  @endif
-
-  @foreach ($avisos as $aviso)
-    <div class="mb-3 rounded-lg border px-4 py-3 text-sm
-      {{ $aviso->nivel === 'rojo' ? 'bg-rose-50 border-rose-200 text-rose-800'
-         : 'bg-amber-50 border-amber-200 text-amber-800' }}">
-      <span class="font-semibold uppercase text-xs mr-2">
-        {{ $aviso->nivel === 'rojo' ? 'Prioridad alta' : 'Conviene revisar' }}
-      </span>
-      {{ $aviso->texto }}
-    </div>
-  @endforeach
-
   <div class="mb-5 rounded-xl border border-slate-200 bg-white p-5 text-sm text-slate-600">
     <p class="font-semibold text-slate-800 mb-1">Aquí se configura; el número lo pide quien emite</p>
     <p>
@@ -86,7 +52,7 @@
                     <td class="px-4 py-2 text-right font-mono">
                       {{ $s->series }}-{{ str_pad((string) $s->next_number, (int) $s->number_length, '0', STR_PAD_LEFT) }}
                     </td>
-                    <td class="px-4 py-2 text-xs">{{ $entornos[$s->environment] ?? $s->environment }}</td>
+                    <td class="px-4 py-2 text-xs">{{ $entornosSerie[$s->environment] ?? $s->environment }}</td>
                     <td class="px-4 py-2 text-right">
                       <a class="text-xs text-marca-700 underline"
                          href="{{ route('series.index', ['serie' => $s->id]) }}">ver el libro</a>
@@ -125,7 +91,7 @@
                       <span class="rounded px-2 py-0.5
                         {{ $n->status === 'used' ? 'bg-emerald-100 text-emerald-800'
                            : ($n->status === 'voided' ? 'bg-slate-200 text-slate-700' : 'bg-amber-100 text-amber-800') }}">
-                        {{ $estados[$n->status] ?? $n->status }}
+                        {{ $estadosNumero[$n->status] ?? $n->status }}
                       </span>
                     </td>
                     <td class="px-4 py-2 text-xs text-slate-500">
@@ -241,7 +207,7 @@
 
         <label class="block text-xs text-slate-500">Entorno
           <select name="environment" required class="mt-1 w-full rounded border-slate-300 text-sm">
-            @foreach ($entornos as $clave => $texto)
+            @foreach ($entornosSerie as $clave => $texto)
               <option value="{{ $clave }}" @selected($clave === 'production')>{{ $texto }}</option>
             @endforeach
           </select>
@@ -316,4 +282,3 @@
       </form>
     </div>
   </div>
-@endsection

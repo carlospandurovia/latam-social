@@ -1,34 +1,3 @@
-@extends('layouts.panel')
-@section('titulo', 'Certificados de firma')
-@section('subtitulo', 'Con qué firma cada sociedad sus comprobantes')
-
-@section('contenido')
-  @include('parciales.miga', ['aqui' => 'Certificados de firma'])
-
-  @if (session('exito'))
-    <div class="mb-4 rounded-lg bg-emerald-50 border border-emerald-200 px-4 py-3 text-sm text-emerald-800">
-      {{ session('exito') }}
-    </div>
-  @endif
-  @if (session('aviso'))
-    <div class="mb-4 rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
-      {{ session('aviso') }}
-    </div>
-  @endif
-  @if ($errors->any())
-    <div class="mb-4 rounded-lg bg-rose-50 border border-rose-200 px-4 py-3 text-sm text-rose-800">
-      <ul class="list-disc pl-5">@foreach ($errors->all() as $e)<li>{{ $e }}</li>@endforeach</ul>
-    </div>
-  @endif
-
-  @foreach ($avisos as $aviso)
-    <div class="mb-3 rounded-lg border px-4 py-3 text-sm
-      {{ $aviso->nivel === 'rojo' ? 'bg-rose-50 border-rose-200 text-rose-800'
-         : 'bg-amber-50 border-amber-200 text-amber-800' }}">
-      {{ $aviso->texto }}
-    </div>
-  @endforeach
-
   <div class="mb-5 rounded-xl border border-slate-200 bg-white p-5 text-sm text-slate-600">
     <p class="font-semibold text-slate-800 mb-1">Si el archivo de SUNAT no se deja abrir</p>
     <p>
@@ -74,7 +43,7 @@
                 </td>
                 <td class="px-4 py-2 text-xs">{{ $c->valid_to }}</td>
                 <td class="px-4 py-2 text-xs">
-                  {{ $estados[$c->status] ?? $c->status }}
+                  {{ $estadosCertificado[$c->status] ?? $c->status }}
                   @if ($c->status === 'revoked' && $c->revoked_reason)
                     <span class="block text-[11px] text-slate-400">{{ $c->revoked_reason }}</span>
                   @endif
@@ -136,4 +105,3 @@
       <button class="w-full rounded bg-marca-500 px-3 py-2 text-sm text-white">Cargar</button>
     </form>
   </div>
-@endsection

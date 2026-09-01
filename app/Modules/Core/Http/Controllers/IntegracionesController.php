@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 namespace App\Modules\Core\Http\Controllers;
 
+use App\Modules\Core\Services\Certificados;
+use App\Modules\Core\Services\Correlativos;
 use App\Modules\Core\Services\Integraciones;
+use App\Shared\Config\Aviso;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -30,23 +33,128 @@ use RuntimeException;
  */
 final class IntegracionesController
 {
-    public function index(): View
+    public const FEL = 'fel';
+
+    public const FX = 'fx';
+
+    public const CORREO = 'correo';
+
+    /**
+     * Las pestañas, por propósito.
+     *
+     * @var array<string, string>
+     */
+    public const PESTANAS = [
+        self::FEL => 'Facturación electrónica',
+        self::FX => 'Tipos de cambio',
+        self::CORREO => 'Servidor de correo',
+    ];
+
+    /**
+     * Las integraciones, por PESTAÑAS y no en un formulario para todo (9.17f).
+     *
+     * Reportado por el negocio: *«cada proveedor de integración tiene diferentes
+     * parámetros, sobre todo si es para diferentes fines»*. Tenía razón — el
+     * formulario único pedía lo mismo a un servidor de correo y a un emisor
+     * electrónico, y no le servía bien a ninguno.
+     *
+     * La de facturación electrónica junta **las tres cosas que hacen falta para
+     * emitir** y que hasta hoy estaban en tres pantallas distintas: la conexión,
+     * el certificado (`9.9c`) y las series (`9.12`). No se duplican: las tres
+     * salen de la misma plantilla parcial, y sus pantallas sueltas redirigen
+     * aquí — dos puertas a lo mismo es lo que `9.20` vino a quitar.
+     */
+    public function index(Request $peticion): View
     {
-        return view('integraciones.index', [
+        $pestana = (string) $peticion->query('p', self::FEL);
+
+        if (!array_key_exists($pestana, self::PESTANAS)) {
+            $pestana = self::FEL;
+        }
+
+        return view('integraciones.index', array_merge(
+            [
+                'pestanas' => self::PESTANAS,
+                'pestana' => $pestana,
+                'pendientes' => self::pendientes(),
+                'avisos' => self::avisosDe($pestana),
+                'transporteDeCorreo' => (string) config('mail.default'),
+            ],
+            $pestana === self::FEL ? self::datosDeFacturacion() : [],
+        ));
+    }
+
+    /**
+     * Lo que necesita la pestaña de facturación electrónica.
+     *
+     * @return array<string, mixed>
+     */
+    private static function datosDeFacturacion(): array
+    {
+        $series = Correlativos::series();
+        $verId = (int) request()->query('serie', (string) ($series->first()->id ?? 0));
+
+        return [
+            // La conexion.
             'extremos' => Integraciones::extremos(),
-            'conexiones' => Integraciones::conexiones(),
-            'proveedores' => Integraciones::proveedores(),
+            'conexiones' => Integraciones::conexiones()->where('purpose', 'invoicing')->values(),
+            'proveedores' => Integraciones::proveedores()->where('purpose', 'invoicing')->values(),
             'sociedades' => DB::table('legal_entities')->where('status', 'active')
-                ->orderBy('code')->get(['id', 'code', 'legal_name']),
+                ->orderBy('code')->get(['id', 'code', 'legal_name', 'tax_id_number']),
             'entornos' => Integraciones::ENTORNOS,
             'estados' => Integraciones::ESTADOS,
             'clases' => Integraciones::CLASES,
-            // Por conexion, que credenciales VIVAS tiene. Nunca su valor.
-            'credenciales' => Integraciones::conexiones()
+            'credenciales' => Integraciones::conexiones()->where('purpose', 'invoicing')
                 ->mapWithKeys(fn (object $c): array => [
                     (int) $c->id => Integraciones::estado((int) $c->id),
                 ])->all(),
-        ]);
+
+            // Con que se firma.
+            'certificados' => Certificados::todos(),
+            'estadosCertificado' => Certificados::ESTADOS,
+
+            // Que numeros salen.
+            'series' => $series,
+            'tipos' => Correlativos::tipos(),
+            'paises' => DB::table('countries')->where('is_active', 1)
+                ->orderBy('name')->get(['id', 'name', 'iso2']),
+            'entornosSerie' => Correlativos::ENTORNOS,
+            'estadosNumero' => Correlativos::ESTADOS,
+            'verId' => $verId,
+            'ultimos' => $verId > 0 ? Correlativos::ultimos($verId) : collect(),
+        ];
+    }
+
+    /**
+     * Cuántas cosas rojas tiene cada pestaña, para la chapa del rótulo.
+     *
+     * @return array<string, int>
+     */
+    private static function pendientes(): array
+    {
+        $rojos = static fn (array $avisos): int => count(array_filter(
+            $avisos, static fn (object $a): bool => $a->nivel === Aviso::ROJO,
+        ));
+
+        return [
+            self::FEL => $rojos(self::avisosDe(self::FEL)),
+            self::FX => 0,
+            self::CORREO => in_array((string) config('mail.default'), ['log', 'array', 'null'], true) ? 1 : 0,
+        ];
+    }
+
+    /** @return list<Aviso> */
+    private static function avisosDe(string $pestana): array
+    {
+        if ($pestana !== self::FEL) {
+            return [];
+        }
+
+        return array_merge(
+            Integraciones::avisos(),
+            Certificados::avisos(),
+            Correlativos::avisos(),
+        );
     }
 
     public function store(Request $peticion): RedirectResponse

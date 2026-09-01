@@ -9,8 +9,6 @@ use App\Shared\Database\Choque;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
-use Illuminate\View\View;
 use Throwable;
 
 /**
@@ -30,16 +28,18 @@ use Throwable;
  */
 final class CertificadosController
 {
-    public function index(): View
+    /**
+     * Los certificados viven DENTRO de Integraciones desde `9.17f`.
+     *
+     * La ruta se queda —los enlaces viejos y los favoritos siguen funcionando—
+     * pero no pinta una segunda pantalla: dos puertas a lo mismo es lo que
+     * `9.20` vino a quitar, y aquí la puerta es la pestaña de facturación
+     * electrónica, donde el certificado está junto a lo demás que hace falta
+     * para emitir.
+     */
+    public function index(): RedirectResponse
     {
-        return view('certificados.index', [
-            'certificados' => Certificados::todos(),
-            'sociedades' => DB::table('legal_entities')->where('status', 'active')
-                ->orderBy('code')->get(['id', 'code', 'legal_name', 'tax_id_number']),
-            'entornos' => Certificados::ENTORNOS,
-            'estados' => Certificados::ESTADOS,
-            'avisos' => Certificados::avisos(),
-        ]);
+        return redirect()->route('integraciones.index', ['p' => IntegracionesController::FEL]);
     }
 
     public function cargar(Request $peticion): RedirectResponse

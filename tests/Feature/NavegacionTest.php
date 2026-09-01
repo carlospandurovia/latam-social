@@ -36,9 +36,16 @@ final class NavegacionTest extends TestCase
     use RefreshDatabase;
 
     /** Las rutas que son configuración y que por tanto NO van en el menú. */
+    /**
+     * Las pantallas de configuración que se pintan solas.
+     *
+     * `series.index` y `certificados.index` NO están: desde `9.17f` redirigen a
+     * la pestaña de facturación electrónica de Integraciones, que sí está. La
+     * miga la pone ella; ellas ya no pintan nada.
+     */
     private const CONFIGURACION = [
         'marca.index', 'terminos.index', 'politica.index', 'integraciones.index',
-        'entidades.index', 'series.index', 'cambio.index', 'catalogos.index',
+        'entidades.index', 'cambio.index', 'catalogos.index',
         'landing.index', 'impuestos.index',
     ];
 
@@ -137,7 +144,8 @@ final class NavegacionTest extends TestCase
     public function test_dentro_de_una_pantalla_de_configuracion_el_menu_la_marca(): void
     {
         $menu = $this->soloElMenu(
-            (string) $this->actingAs($this->usuarioCon('admin'))->get(route('series.index'))->getContent(),
+            (string) $this->actingAs($this->usuarioCon('admin'))
+                ->get(route('integraciones.index', ['p' => 'fel']))->getContent(),
         );
 
         // La clase que marca la entrada activa, en la línea de Configuración.

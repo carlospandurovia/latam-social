@@ -9,8 +9,6 @@ use App\Shared\Database\Choque;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
-use Illuminate\View\View;
 use RuntimeException;
 use Throwable;
 
@@ -33,24 +31,21 @@ use Throwable;
  */
 final class SeriesController
 {
-    public function index(Request $peticion): View
+    /**
+     * Las series viven DENTRO de Integraciones desde `9.17f`.
+     *
+     * Reportado por el negocio: *«tampoco veo dónde configuro los folios»*. No
+     * los veía porque estaban en otra pantalla, y para emitir hacen falta a la
+     * vez que la conexión y el certificado. La ruta se queda —los enlaces viejos
+     * siguen funcionando— pero no pinta una segunda pantalla: dos puertas a lo
+     * mismo es lo que `9.20` vino a quitar.
+     */
+    public function index(Request $peticion): RedirectResponse
     {
-        $series = Correlativos::series();
-        $verId = (int) $peticion->query('serie', (string) ($series->first()->id ?? 0));
-
-        return view('series.index', [
-            'series' => $series,
-            'tipos' => Correlativos::tipos(),
-            'sociedades' => DB::table('legal_entities')->where('status', 'active')
-                ->orderBy('code')->get(['id', 'code', 'legal_name', 'country_id']),
-            'paises' => DB::table('countries')->where('is_active', 1)
-                ->orderBy('name')->get(['id', 'name', 'iso2']),
-            'entornos' => Correlativos::ENTORNOS,
-            'estados' => Correlativos::ESTADOS,
-            'verId' => $verId,
-            'ultimos' => $verId > 0 ? Correlativos::ultimos($verId) : collect(),
-            'avisos' => Correlativos::avisos(),
-        ]);
+        return redirect()->route('integraciones.index', array_filter([
+            'p' => IntegracionesController::FEL,
+            'serie' => $peticion->query('serie'),
+        ]));
     }
 
     public function guardarTipo(Request $peticion): RedirectResponse

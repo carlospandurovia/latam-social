@@ -129,4 +129,35 @@ probar "el correo si puede ser de toda la plataforma" \
    VALUES ('e17e0000-0000-4000-8000-000000000004',$SMTP,'Correo plataforma',
      'https://correo.example.test','sandbox','active',NOW(3));" "OK"
 
+echo ""
+echo "-- Una activa por PROPOSITO, no por proveedor (9.17f) --"
+
+# Un SEGUNDO proveedor del mismo proposito. El caso que trajo el negocio: «dos
+# proveedores de FEL, se configuran pero se activa solo 1».
+$CLIENTE $DB -e "
+INSERT INTO integration_providers (code,name,purpose,created_at)
+VALUES ('x917e_fe2','Otro emisor de prueba','invoicing',NOW(3));
+INSERT INTO integration_provider_endpoints (integration_provider_id,environment,base_url,created_at)
+SELECT id,'sandbox','https://beta2.x917e.test/billService',NOW(3)
+  FROM integration_providers WHERE code='x917e_fe2';" 2>/dev/null
+SUNAT2=$($CLIENTE $DB -sN -e "SELECT id FROM integration_providers WHERE code='x917e_fe2';" | tr -d '\r')
+
+porque "un segundo emisor activo, de OTRO proveedor, misma sociedad y entorno" \
+  "INSERT INTO integration_connections (uuid,integration_provider_id,legal_entity_id,name,
+     environment,status,created_at)
+   VALUES (UUID(),$SUNAT2,$LE,'Otro emisor','sandbox','active',NOW(3));" \
+  "uq_iconn_activa|Duplicate"
+
+# Y dejarlo CONFIGURADO pero apagado si se puede: es justo lo que se pidio.
+probar "pero dejarlo configurado y apagado si" \
+  "INSERT INTO integration_connections (uuid,integration_provider_id,legal_entity_id,name,
+     environment,status,created_at)
+   VALUES ('e17e0000-0000-4000-8000-000000000005',$SUNAT2,$LE,'Otro emisor','sandbox','disabled',NOW(3));" "OK"
+
+# El proposito se COPIA del proveedor: no se admite el que venga en la sentencia,
+# porque seria un sitio donde alguien podria partir la puerta en dos.
+valor "el proposito se copia del proveedor, no se teclea" \
+  "SELECT purpose_snapshot FROM integration_connections
+    WHERE uuid='e17e0000-0000-4000-8000-000000000005';" "invoicing"
+
 resumen

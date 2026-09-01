@@ -2,6 +2,36 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 
+## [9.17f · Integraciones por pestañas] — 2026-09-01
+
+Crítica del negocio a mi diseño. Al ir a comprobarla, tenía más razón de la que
+creía.
+
+### Añadido
+- **Pestañas por propósito** en `/backoffice/integraciones`: Facturación
+  electrónica · Tipos de cambio · Servidor de correo, con chapa de pendientes.
+- La pestaña de facturación junta **conexión + certificado + series y folios**,
+  las tres cosas que hacen falta para emitir.
+- `integration_connections.purpose_snapshot` y la puerta `uq_iconn_activa`, por
+  **(propósito, entorno, sociedad)**.
+
+### Cambiado
+- `/backoffice/certificados` y `/backoffice/series` **redirigen** a la pestaña.
+  Los enlaces viejos siguen funcionando; la plantilla es una sola.
+- «Series y correlativos» y «Certificados de firma» dejan de ser áreas del panel.
+  Sus avisos los suma el área de Integraciones, con dos pruebas que lo afirman.
+- El desplegable de proveedores sólo ofrece los del propósito de la pestaña.
+
+### Decidido
+- `DEC-257`: el esqueleto compartido se queda; lo propio de cada propósito, en su
+  tabla — y para facturación ya existían.
+- `DEC-258`: una activa por **propósito**, no por proveedor.
+- `DEC-259`: las tres cosas de emitir, en la misma pestaña y sin duplicar.
+
+### Sabido y dicho
+- Mover el correo y los tipos de cambio a la base va en **`9.17g`** y **`9.17h`**:
+  son migraciones sobre cosas que hoy funcionan.
+
 ## [9.17e · La dirección de un proveedor no se teclea] — 2026-09-01
 
 Tres preguntas desde la instalación sobre la misma pantalla, y las tres eran

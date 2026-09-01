@@ -68,6 +68,13 @@ CREATE TABLE integration_connections (
   id            BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
   uuid          CHAR(36)      NOT NULL,
   integration_provider_id BIGINT UNSIGNED NOT NULL,
+  -- 9.17f: copia del proposito del proveedor. Una columna generada solo puede
+  -- leer columnas de SU PROPIA fila, y la puerta tiene que ser por PROPOSITO
+  -- --no por proveedor--: con dos emisores electronicos dados de alta, los dos
+  -- podian estar activos y nadie sabria cual emite. Lo mantiene el mismo
+  -- disparador que valida la activacion, y por eso la garantia puede ser un
+  -- INDICE UNICO y no un COUNT(*) dentro de un disparador, que no bloquea nada.
+  purpose_snapshot VARCHAR(30) NULL,
   -- NULL = de la plataforma entera. Con sociedad = de esa sociedad, que es el
   -- caso del emisor electronico: va con el RUC y el certificado de quien factura.
   legal_entity_id BIGINT UNSIGNED NULL,
@@ -86,13 +93,14 @@ CREATE TABLE integration_connections (
   last_error_message VARCHAR(255) NULL,
   created_at    DATETIME(3)   NULL,
   updated_at    DATETIME(3)   NULL,
-  -- La puerta: UNA sola conexion activa por (proveedor, entorno, sociedad).
+  -- La puerta: UNA sola integracion activa por (PROPOSITO, entorno, sociedad).
+  -- Lo que tiene que ser unico es QUIEN HACE ESTE TRABAJO --un emisor
+  -- electronico, un servidor de correo-- y no de quien se contrato.
   -- `COALESCE(legal_entity_id, 0)` porque en un indice unico dos NULL NO
-  -- colisionan, y sin eso se podrian tener dos conexiones de plataforma activas
-  -- del mismo proveedor, que es justo lo que se quiere impedir.
-  active_gate   VARCHAR(70) GENERATED ALWAYS AS (CASE WHEN status = 'active' THEN CONCAT(integration_provider_id, ':', environment, ':', COALESCE(legal_entity_id, 0)) ELSE NULL END) STORED,
+  -- colisionan, y sin eso se podrian tener dos de plataforma activas a la vez.
+  active_gate   VARCHAR(70) GENERATED ALWAYS AS (CASE WHEN status = 'active' THEN CONCAT(purpose_snapshot, ':', environment, ':', COALESCE(legal_entity_id, 0)) ELSE NULL END) STORED,
   UNIQUE KEY uq_iconn_uuid (uuid),
-  UNIQUE KEY uq_iconn_active (active_gate),
+  UNIQUE KEY uq_iconn_activa (active_gate),
   KEY ix_iconn_provider (integration_provider_id, status),
   KEY ix_iconn_entity (legal_entity_id),
   CONSTRAINT fk_iconn_provider FOREIGN KEY (integration_provider_id) REFERENCES integration_providers(id) ON DELETE RESTRICT,
@@ -156,13 +164,16 @@ DELIMITER //
 CREATE TRIGGER tg_iconn_activa_ins BEFORE INSERT ON integration_connections
 FOR EACH ROW
 BEGIN
-  DECLARE v_proposito VARCHAR(30);
   DECLARE v_delProveedor INT DEFAULT 0;
 
-  IF NEW.status = 'active' THEN
-    SELECT purpose INTO v_proposito
-      FROM integration_providers WHERE id = NEW.integration_provider_id;
+  -- 9.17f: el proposito se COPIA del proveedor, siempre. No se admite el que
+  -- venga en la sentencia: seria un sitio donde alguien podria poner otro y
+  -- partir la puerta en dos.
+  SET NEW.purpose_snapshot = (
+    SELECT purpose FROM integration_providers WHERE id = NEW.integration_provider_id
+  );
 
+  IF NEW.status = 'active' THEN
     SELECT COUNT(*) INTO v_delProveedor
       FROM integration_provider_endpoints
      WHERE integration_provider_id = NEW.integration_provider_id
@@ -174,7 +185,7 @@ BEGIN
         SET MESSAGE_TEXT = 'Esa conexion no sabe a donde llamar: el proveedor no declara direccion para ese entorno.';
     END IF;
 
-    IF v_proposito = 'invoicing' AND NEW.legal_entity_id IS NULL THEN
+    IF NEW.purpose_snapshot = 'invoicing' AND NEW.legal_entity_id IS NULL THEN
       SIGNAL SQLSTATE '45000'
         SET MESSAGE_TEXT = 'Un emisor electronico va con una sociedad: es su RUC el que firma.';
     END IF;
@@ -184,13 +195,16 @@ END//
 CREATE TRIGGER tg_iconn_activa_upd BEFORE UPDATE ON integration_connections
 FOR EACH ROW
 BEGIN
-  DECLARE v_proposito VARCHAR(30);
   DECLARE v_delProveedor INT DEFAULT 0;
 
-  IF NEW.status = 'active' THEN
-    SELECT purpose INTO v_proposito
-      FROM integration_providers WHERE id = NEW.integration_provider_id;
+  -- 9.17f: el proposito se COPIA del proveedor, siempre. No se admite el que
+  -- venga en la sentencia: seria un sitio donde alguien podria poner otro y
+  -- partir la puerta en dos.
+  SET NEW.purpose_snapshot = (
+    SELECT purpose FROM integration_providers WHERE id = NEW.integration_provider_id
+  );
 
+  IF NEW.status = 'active' THEN
     SELECT COUNT(*) INTO v_delProveedor
       FROM integration_provider_endpoints
      WHERE integration_provider_id = NEW.integration_provider_id
@@ -202,7 +216,7 @@ BEGIN
         SET MESSAGE_TEXT = 'Esa conexion no sabe a donde llamar: el proveedor no declara direccion para ese entorno.';
     END IF;
 
-    IF v_proposito = 'invoicing' AND NEW.legal_entity_id IS NULL THEN
+    IF NEW.purpose_snapshot = 'invoicing' AND NEW.legal_entity_id IS NULL THEN
       SIGNAL SQLSTATE '45000'
         SET MESSAGE_TEXT = 'Un emisor electronico va con una sociedad: es su RUC el que firma.';
     END IF;
