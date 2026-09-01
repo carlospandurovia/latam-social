@@ -25,6 +25,18 @@ ajuste del sistema exige ya entrar a la máquina.**
   enlace en cada dirección (`DEC-265`).
 - Retirar una clave la **revoca con su motivo**; ya no la pone a `NULL`.
 
+### Arreglado
+
+- 🔴 **La dirección de Decolecta estaba guardada como `http://api.decolecta.com`
+  —sin la `s`—, así que la clave de la API salía cada madrugada en la cabecera
+  `Authorization` sin cifrar.** Lo descubrió el `migrate` real, parado por el
+  disparador de `9.17g`. La migración descarta una dirección sin cifrar en vez
+  de arrastrarla, y a partir de ahora la dirección la declara el catálogo.
+  **Hay que rotar esa clave.**
+- La migración se puede volver a correr: la pasada rota dejó la columna nueva
+  puesta y las viejas también, y se probó el arranque desde cero **y** desde la
+  base a medias, con una copia de los datos reales.
+
 ### Quitado
 
 - `fx_sources.api_key_cipher`, `.api_key_last4`, `.credential_set_at`,

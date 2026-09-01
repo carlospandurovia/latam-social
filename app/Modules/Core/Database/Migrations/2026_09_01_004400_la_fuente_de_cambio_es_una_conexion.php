@@ -22,9 +22,7 @@ use Illuminate\Support\Str;
  * clave. Lo que **se queda** en la pantalla de Tipos de cambio son las tasas,
  * las fuentes oficiales por par, el registro de cada traída y la carga a mano:
  * eso no es configuración de una integración, es el trabajo diario con los
- * tipos de cambio. Meterlo todo en la pestaña sería repetir al revés el error
- * que el negocio señaló en `9.17f` —un formulario que sirve para todo y no le
- * sirve bien a nadie—.
+ * tipos de cambio (`DEC-265`).
  *
  * ### Por qué `fx_sources` no puede quedarse con la clave
  *
@@ -35,7 +33,7 @@ use Illuminate\Support\Str;
  * (`9.17d`) hace las tres cosas, y `DEC-257` dice exactamente esto: el
  * esqueleto —cifrar, ROTAR, auditar— se comparte; lo propio del propósito se
  * queda en su tabla. Lo propio de una fuente es su código, su nombre y si está
- * en uso. La clave nunca lo fue.
+ * en uso. La clave nunca lo fue (`DEC-266`).
  *
  * ### El secreto se muda SIN pasar por texto claro
  *
@@ -44,13 +42,13 @@ use Illuminate\Support\Str;
  * en el que la clave exista en claro en memoria, y no hace falta `APP_KEY`
  * válida para que la mudanza salga bien.
  *
- * ### Y la URL tampoco se teclea (`DEC-255` otra vez)
+ * ### Se puede volver a correr
  *
- * `https://api.decolecta.com` estaba en una **constante de PHP** y además en una
- * columna que se podía teclear. Es la dirección fija y pública del proveedor,
- * así que va donde van las de SUNAT desde `9.17e`:
- * `integration_provider_endpoints`. La columna de la conexión sigue existiendo
- * como excepción —vacía significa «la del proveedor»—.
+ * Cada paso comprueba si ya está hecho. **No es una precaución teórica:** la
+ * primera pasada de esta migración en la instalación real se rompió a la mitad
+ * —ver abajo— y dejó la columna puesta y las viejas también. Una migración que
+ * sólo funciona sobre una base intacta obliga a arreglar a mano justo cuando
+ * algo acaba de salir mal.
  */
 return new class extends Migration
 {
@@ -59,12 +57,14 @@ return new class extends Migration
 
     public function up(): void
     {
-        Schema::table('fx_sources', function (Blueprint $tabla): void {
-            $tabla->unsignedBigInteger('integration_connection_id')->nullable()->after('description');
-            $tabla->unique('integration_connection_id', 'uq_fxs_conexion');
-            $tabla->foreign('integration_connection_id', 'fk_fxs_conn')
-                ->references('id')->on('integration_connections')->restrictOnDelete();
-        });
+        if (!Schema::hasColumn('fx_sources', 'integration_connection_id')) {
+            Schema::table('fx_sources', function (Blueprint $tabla): void {
+                $tabla->unsignedBigInteger('integration_connection_id')->nullable()->after('description');
+                $tabla->unique('integration_connection_id', 'uq_fxs_conexion');
+                $tabla->foreign('integration_connection_id', 'fk_fxs_conn')
+                    ->references('id')->on('integration_connections')->restrictOnDelete();
+            });
+        }
 
         $this->sembrarExtremo();
         $this->mudarLasClaves();
@@ -80,7 +80,7 @@ return new class extends Migration
      */
     private function sembrarExtremo(): void
     {
-        $proveedorId = DB::table('integration_providers')->where('code', 'decolecta')->value('id');
+        $proveedorId = $this->proveedor();
 
         if ($proveedorId === null) {
             return;
@@ -95,7 +95,7 @@ return new class extends Migration
         }
 
         DB::table('integration_provider_endpoints')->insert([
-            'integration_provider_id' => (int) $proveedorId,
+            'integration_provider_id' => $proveedorId,
             'environment' => 'production',
             'base_url' => self::URL_DECOLECTA,
             'label' => 'API de Decolecta',
@@ -115,13 +115,14 @@ return new class extends Migration
      */
     private function mudarLasClaves(): void
     {
-        $proveedorId = DB::table('integration_providers')->where('code', 'decolecta')->value('id');
+        $proveedorId = $this->proveedor();
 
-        if ($proveedorId === null) {
+        if ($proveedorId === null || !Schema::hasColumn('fx_sources', 'api_key_cipher')) {
             return;
         }
 
         $fuentes = DB::table('fx_sources')
+            ->whereNull('integration_connection_id')
             ->whereNotNull('api_key_cipher')->where('api_key_cipher', '<>', '')
             ->orderBy('id')
             ->get(['id', 'code', 'name', 'api_base_url', 'api_key_cipher', 'api_key_last4',
@@ -132,12 +133,12 @@ return new class extends Migration
         // tuviera dos con clave, la primera queda en uso y las demas apagadas:
         // apagada conserva su clave y se puede encender, que es lo que 9.17i
         // dejo hecho para el correo.
-        $primera = true;
+        $primera = DB::table('integration_connections')
+            ->where('purpose_snapshot', 'fx')->where('status', 'active')->doesntExist();
 
         foreach ($fuentes as $fuente) {
-            $autor = $fuente->credential_set_by_user_id === null
-                ? DB::table('users')->orderBy('id')->value('id')
-                : $fuente->credential_set_by_user_id;
+            $autor = $fuente->credential_set_by_user_id
+                ?? DB::table('users')->orderBy('id')->value('id');
 
             if ($autor === null) {
                 // Sin ningun usuario en la base no hay a quien atribuir la
@@ -148,13 +149,11 @@ return new class extends Migration
 
             $conexionId = (int) DB::table('integration_connections')->insertGetId([
                 'uuid' => (string) Str::uuid(),
-                'integration_provider_id' => (int) $proveedorId,
+                'integration_provider_id' => $proveedorId,
                 'legal_entity_id' => null,
-                'name' => (string) $fuente->name,
+                'name' => mb_substr($fuente->name.' — tipos de cambio', 0, 120),
                 'environment' => 'production',
-                // Vacia = la del proveedor. Solo se copia si era DISTINTA de la
-                // publica, que es lo unico que esa columna deberia haber tenido.
-                'base_url' => $this->urlPropia($fuente->api_base_url),
+                'base_url' => $this->urlPropia($fuente->api_base_url, $proveedorId),
                 'username' => null,
                 'status' => $primera ? 'active' : 'disabled',
                 'created_at' => now(),
@@ -183,11 +182,48 @@ return new class extends Migration
         }
     }
 
-    private function urlPropia(?string $url): ?string
+    /**
+     * Qué URL se arrastra a la conexión, y cuál NO.
+     *
+     * **La primera pasada real se rompió justo aquí, y el valor que la rompió
+     * es el mejor argumento de `DEC-255` que ha dado este proyecto:** la columna
+     * decía `http://api.decolecta.com`. Alguien tecleó a mano una dirección que
+     * es una constante, y se le fue el segundo carácter. El disparador de
+     * `9.17g` lo paró —«una direccion web sin cifrar manda las claves en
+     * claro»—, que es exactamente lo que estaba pasando: la clave de la API iba
+     * en la cabecera `Authorization`, por HTTP, cada madrugada.
+     *
+     * Así que:
+     *
+     * - **Mismo servidor que el del catálogo** → se descarta y manda la del
+     *   proveedor. `http://api.decolecta.com` y `https://api.decolecta.com` son
+     *   la misma dirección escrita mal, y la buena ya está declarada.
+     * - **Otro servidor, con `https`** → se conserva: es una excepción legítima.
+     * - **Otro servidor, sin cifrar** → **no se arrastra.** Traerla sería
+     *   hacerse cargo de seguir mandando la clave en claro, y ascenderla a
+     *   `https` por mi cuenta sería adivinar que ese servidor escucha ahí. Se
+     *   queda la del proveedor y quien administre lo corrige viéndolo.
+     */
+    private function urlPropia(?string $url, int $proveedorId): ?string
     {
         $url = trim((string) $url);
 
-        return $url === '' || rtrim($url, '/') === rtrim(self::URL_DECOLECTA, '/') ? null : $url;
+        if ($url === '') {
+            return null;
+        }
+
+        $delProveedor = (string) (DB::table('integration_provider_endpoints')
+            ->where('integration_provider_id', $proveedorId)
+            ->where('environment', 'production')
+            ->value('base_url') ?: self::URL_DECOLECTA);
+
+        $host = parse_url($url, PHP_URL_HOST);
+
+        if ($host === false || $host === null || $host === parse_url($delProveedor, PHP_URL_HOST)) {
+            return null;
+        }
+
+        return str_starts_with($url, 'https://') ? $url : null;
     }
 
     /**
@@ -198,6 +234,21 @@ return new class extends Migration
      */
     private function tirarLaCajaFuerteVieja(): void
     {
+        if (!Schema::hasColumn('fx_sources', 'api_key_cipher')) {
+            return;
+        }
+
+        // Quedaria una clave sin mudar --por ejemplo, una base sin ningun
+        // usuario--. Tirar la columna ahora la perderia.
+        $sinMudar = DB::table('fx_sources')
+            ->whereNull('integration_connection_id')
+            ->whereNotNull('api_key_cipher')->where('api_key_cipher', '<>', '')
+            ->exists();
+
+        if ($sinMudar) {
+            return;
+        }
+
         DB::statement('DROP TRIGGER IF EXISTS `tg_fxs_credencial_firmada`');
         Restriccion::quitar('fx_sources', 'ck_fxs_last4');
 
@@ -213,6 +264,13 @@ return new class extends Migration
                 'api_base_url',
             ]);
         });
+    }
+
+    private function proveedor(): ?int
+    {
+        $id = DB::table('integration_providers')->where('code', 'decolecta')->value('id');
+
+        return $id === null ? null : (int) $id;
     }
 
     public function down(): void
