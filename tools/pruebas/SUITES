@@ -118,3 +118,7 @@
 # --`fk_dn_serie` es RESTRICT y `tg_dn_no_delete` protege el libro--, y eso es
 # correcto: un numero emitido es un hecho. La suite lo comprueba al empezar.
 9.12-correlativos
+
+# 9.21b crea sus portadas (`X921B...`) y las borra: un texto de marketing SI se
+# borra --no sostiene ninguna cifra-- y eso es justo lo que afirma la ultima.
+9.21b-landing

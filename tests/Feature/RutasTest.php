@@ -34,12 +34,17 @@ final class RutasTest extends TestCase
         $this->withoutVite();
     }
 
-    public function test_la_raiz_redirige_al_panel(): void
+    /**
+     * La raíz es la calle, no la trastienda (9.21b).
+     *
+     * `9.21a` mudó el back-office a `/backoffice` y `9.21b` puso aquí la portada
+     * de las marcas. Sin portada sembrada —que es el caso de esta prueba, que no
+     * siembra nada— lleva al acceso, **no a un 404**: una instalación sin
+     * contenido que enseñar tiene que dejar entrar igual.
+     */
+    public function test_la_raiz_lleva_a_la_portada_o_al_acceso(): void
     {
-        // 9.21a: el back-office se mudo a `/backoffice` para dejar libre
-        // `/creadores`, que tiene que ser la puerta publica de los creadores.
-        // La raiz seguira llevando aqui hasta que `9.21b` ponga la portada.
-        $this->get('/')->assertRedirect('/backoffice/panel');
+        $this->get('/')->assertRedirect(route('acceso'));
     }
 
     /** Sin sesión no se ve el panel. */

@@ -71,6 +71,17 @@ INSERT INTO legal_entities (uuid,platform_brand_id,code,legal_name,country_id,ta
 -- palabras peruanas en un CHECK del codigo. Se siembran los dos de Peru --que
 -- es donde se factura-- y uno de Colombia, que hace falta para poder afirmar
 -- que una serie no cruza de pais.
+-- 9.21b: la portada publica. Se siembra la de CREADORES porque la suite necesita
+-- una pagina existente para probar los bloques, y porque `uq_lp_code` solo se
+-- puede afirmar si ya hay una de marcas.
+INSERT INTO landing_pages (platform_brand_id,code,headline,subheadline,cta_label,is_published,created_at)
+ SELECT id,'marcas','Campanas con creadores, de principio a fin','Texto de prueba.','Quiero lanzar una campana',1,NOW(3)
+ FROM platform_brands WHERE code='LATAM';
+
+INSERT INTO landing_pages (platform_brand_id,code,headline,subheadline,cta_label,is_published,created_at)
+ SELECT id,'creadores','Trabaja con marcas y cobra sin perseguir a nadie','Texto de prueba.','Quiero postular',1,NOW(3)
+ FROM platform_brands WHERE code='LATAM';
+
 INSERT INTO document_types (country_id,code,name,official_code,series_pattern,series_label,
    number_length,requires_customer_tax_id,is_active,sort_order,created_at)
  SELECT id,'invoice','Factura electronica','01','^F[A-Z0-9]{3}$','Serie: F y tres mas',8,1,1,10,NOW(3)

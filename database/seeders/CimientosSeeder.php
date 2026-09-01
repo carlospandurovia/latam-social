@@ -733,6 +733,84 @@ final class CimientosSeeder extends Seeder
             }
         }
 
+        // 9.21b: las dos portadas publicas, con texto DE PARTIDA.
+        //
+        // Se siembran porque una instalacion recien montada tiene que poder
+        // ensenarse a alguien el primer dia: sin esto, `/` lleva al acceso y no
+        // hay nada que mirar. Y se siembran con `sembrarSiFalta` --`T-77`--:
+        // volver a sembrar despues de una migracion NO puede devolver el texto
+        // de marketing a los valores de fabrica.
+        //
+        // El texto es de fabrica y se nota a proposito: dice lo que hace el
+        // sistema, sin promesas que nadie ha decidido todavia. Se cambia entero
+        // desde `/backoffice/landing` sin desplegar (`DEC-190`).
+        if ($marcaId !== null) {
+            $portadas = [
+                [
+                    'code' => 'marcas',
+                    'headline' => 'Campañas con creadores, de principio a fin y con todo a la vista',
+                    'subheadline' => 'Elegimos a los creadores, gestionamos el contenido y las publicaciones, '
+                        .'y te entregamos cada campaña con su comprobante y sus métricas.',
+                    'cta_label' => 'Quiero lanzar una campaña',
+                    'meta_title' => 'Marketing con creadores en LATAM',
+                    'meta_description' => 'Campañas con creadores en Perú y LATAM: selección, contenido, '
+                        .'publicación y facturación en un solo sitio.',
+                    'bloques' => [
+                        ['feature', 'Creadores verificados', 'Identidad, cuentas y métricas comprobadas antes de proponerte a nadie.', 10],
+                        ['feature', 'Un precio cerrado', 'Sabes lo que cuesta la campaña antes de empezarla, y qué recibe cada creador.', 20],
+                        ['feature', 'Todo queda registrado', 'Cada entrega, cada publicación y cada pago, con su evidencia y su fecha.', 30],
+                        ['step', '1. Nos cuentas la campaña', 'Marca, objetivo, países y presupuesto.', 40],
+                        ['step', '2. Te proponemos creadores', 'Con sus métricas y su tarifa, para que elijas.', 50],
+                        ['step', '3. Producimos y publicamos', 'Revisamos el contenido contigo antes de que salga.', 60],
+                        ['step', '4. Te entregamos resultados', 'Publicaciones verificadas, métricas y comprobante.', 70],
+                    ],
+                ],
+                [
+                    'code' => 'creadores',
+                    'headline' => 'Trabaja con marcas y cobra sin perseguir a nadie',
+                    'subheadline' => 'Postula una vez. Cuando haya una campaña que encaje contigo te '
+                        .'escribimos con el trabajo y el monto en claro, antes de aceptar nada.',
+                    'cta_label' => 'Quiero postular',
+                    'meta_title' => 'Creadores: trabaja con marcas',
+                    'meta_description' => 'Postula para trabajar con marcas en campañas pagadas: sabes qué '
+                        .'tienes que hacer y cuánto recibes antes de aceptar.',
+                    'bloques' => [
+                        ['feature', 'Sabes cuánto recibes', 'El monto que ves es el que te queda a ti, con la retención ya descontada.', 10],
+                        ['feature', 'Sin perseguir el pago', 'Cada campaña tiene su plazo, y el pago sale por lote con su comprobante.', 20],
+                        ['feature', 'Tú decides', 'Recibes la propuesta con el trabajo y el monto; aceptas o la rechazas.', 30],
+                        ['step', '1. Postulas', 'Nombre, correo y país. Nada más para empezar.', 40],
+                        ['step', '2. Revisamos tu perfil', 'Tus cuentas y tus métricas.', 50],
+                        ['step', '3. Te llega una propuesta', 'Con el trabajo, las fechas y el monto.', 60],
+                        ['faq', '¿Cuánto tarda?', 'Revisar una postulación toma unos días. Te escribimos igual si no encaja todavía.', 70],
+                        ['faq', '¿Tengo que emitir comprobante?', 'Depende de tu país y de tu situación tributaria. Te lo decimos antes del primer pago.', 80],
+                    ],
+                ],
+            ];
+
+            foreach ($portadas as $portada) {
+                $bloques = $portada['bloques'];
+                unset($portada['bloques']);
+
+                self::sembrarSiFalta(
+                    'landing_pages',
+                    ['platform_brand_id' => $marcaId, 'code' => $portada['code']],
+                    $portada + ['is_published' => true, 'updated_at' => $ahora, 'created_at' => $ahora],
+                );
+
+                $paginaId = DB::table('landing_pages')
+                    ->where('platform_brand_id', $marcaId)->where('code', $portada['code'])->value('id');
+
+                foreach ($bloques as [$tipo, $titulo, $texto, $orden]) {
+                    self::sembrarSiFalta(
+                        'landing_blocks',
+                        ['landing_page_id' => $paginaId, 'heading' => $titulo],
+                        ['kind' => $tipo, 'body' => $texto, 'sort_order' => $orden,
+                            'is_visible' => true, 'updated_at' => $ahora, 'created_at' => $ahora],
+                    );
+                }
+            }
+        }
+
         // admin recibe todo; el resto se configura desde el back-office.
         $adminId = DB::table('roles')->where('code', 'admin')->value('id');
         foreach (DB::table('permissions')->pluck('id') as $permisoId) {

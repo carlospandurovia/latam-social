@@ -241,6 +241,54 @@ CREATE TABLE document_numbers (
   CONSTRAINT ck_dn_reservado CHECK (status <> 'reserved' OR (used_at IS NULL AND voided_at IS NULL))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+
+-- ============================ D2 Core: la portada publica (9.21b)
+-- El contenido de la landing es un DATO, no una plantilla: esto es white label
+-- (`DEC-190`), y un titular escrito en un .blade.php es «LATAM Social» escrito
+-- en tres plantillas otra vez, pero peor: aqui lo ve quien todavia no es
+-- cliente. Cuelga de la marca porque el dia que haya una segunda instalacion su
+-- portada no puede ser la misma.
+CREATE TABLE landing_pages (
+  id                BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  platform_brand_id BIGINT UNSIGNED NOT NULL,
+  code              VARCHAR(20)   NOT NULL,
+  headline          VARCHAR(160)  NOT NULL,
+  subheadline       VARCHAR(320)  NULL,
+  cta_label         VARCHAR(60)   NOT NULL,
+  cta_url           VARCHAR(255)  NULL,
+  hero_image_file_id BIGINT UNSIGNED NULL,
+  meta_title        VARCHAR(70)   NULL,
+  meta_description  VARCHAR(180)  NULL,
+  is_published      TINYINT(1)    NOT NULL DEFAULT 1,
+  created_at        DATETIME(3)   NULL,
+  updated_at        DATETIME(3)   NULL,
+  UNIQUE KEY uq_lp_code (platform_brand_id, code),
+  CONSTRAINT fk_lp_brand FOREIGN KEY (platform_brand_id) REFERENCES platform_brands(id) ON DELETE RESTRICT,
+  CONSTRAINT fk_lp_hero FOREIGN KEY (hero_image_file_id) REFERENCES files(id) ON DELETE RESTRICT,
+  CONSTRAINT ck_lp_code CHECK (code IN ('marcas','creadores')),
+  CONSTRAINT ck_lp_titular CHECK (CHAR_LENGTH(TRIM(headline)) >= 10),
+  CONSTRAINT ck_lp_boton CHECK (CHAR_LENGTH(TRIM(cta_label)) >= 2),
+  CONSTRAINT ck_lp_url CHECK (cta_url IS NULL OR cta_url LIKE 'https://%' OR cta_url LIKE '/%')
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Los bloques de debajo del titular. Una tabla y no seis columnas porque el
+-- numero de bloques es del contenido, no del programa.
+CREATE TABLE landing_blocks (
+  id               BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  landing_page_id  BIGINT UNSIGNED NOT NULL,
+  kind             VARCHAR(20)   NOT NULL DEFAULT 'feature',
+  heading          VARCHAR(120)  NOT NULL,
+  body             VARCHAR(600)  NULL,
+  sort_order       SMALLINT UNSIGNED NOT NULL DEFAULT 100,
+  is_visible       TINYINT(1)    NOT NULL DEFAULT 1,
+  created_at       DATETIME(3)   NULL,
+  updated_at       DATETIME(3)   NULL,
+  KEY ix_lb_pagina (landing_page_id, is_visible, sort_order),
+  CONSTRAINT fk_lb_page FOREIGN KEY (landing_page_id) REFERENCES landing_pages(id) ON DELETE RESTRICT,
+  CONSTRAINT ck_lb_kind CHECK (kind IN ('feature','step','faq')),
+  CONSTRAINT ck_lb_heading CHECK (CHAR_LENGTH(TRIM(heading)) >= 3)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- ===========================================================================
 -- 3.10 -- El historico no se solapa
 --

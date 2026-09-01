@@ -23,9 +23,11 @@ use App\Modules\Core\Http\Controllers\CatalogosController;
 use App\Modules\Core\Http\Controllers\ConfiguracionController;
 use App\Modules\Core\Http\Controllers\EntidadesLegalesController;
 use App\Modules\Core\Http\Controllers\IntegracionesController;
+use App\Modules\Core\Http\Controllers\LandingController;
 use App\Modules\Core\Http\Controllers\MarcaController;
 use App\Modules\Core\Http\Controllers\PanelController;
 use App\Modules\Core\Http\Controllers\PoliticaController;
+use App\Modules\Core\Http\Controllers\PortadaController;
 use App\Modules\Core\Http\Controllers\SeriesController;
 use App\Modules\Core\Http\Controllers\TerminosController;
 use App\Modules\Core\Http\Controllers\TiposDeCambioController;
@@ -35,6 +37,7 @@ use App\Modules\Creator\Http\Controllers\MediosPagoController;
 use App\Modules\Creator\Http\Controllers\MisTerminosController;
 use App\Modules\Creator\Http\Controllers\PerfilComercialController;
 use App\Modules\Creator\Http\Controllers\PerfilFiscalController;
+use App\Modules\Creator\Http\Controllers\PostulacionController;
 use App\Modules\Creator\Http\Controllers\RedesSocialesController;
 use App\Modules\Creator\Http\Controllers\SolicitudesController;
 use App\Modules\Finance\Http\Controllers\CostosController;
@@ -53,10 +56,27 @@ use Illuminate\Support\Facades\Route;
  | una de las reglas no negociables de docs/08.
  */
 
-// 9.21a: la raiz sigue llevando al panel mientras no haya landing. Con la
-// sesion cerrada, el middleware `auth` manda al acceso, que es lo que pasaba
-// antes. En `9.21b` esto se convierte en la portada publica.
-Route::redirect('/', '/backoffice/panel');
+// ---- La calle (9.21b) -----------------------------------------------------
+//
+// `/` habla a las MARCAS --el lado que paga-- y `/creadores` es la puerta de los
+// creadores, que es el enlace que se comparte en redes (`DEC-238`). Las dos se
+// enlazan entre si y `/entrar` queda para quien ya tiene cuenta.
+//
+// Sin portada publicada estas rutas llevan al acceso, no a un 404: una
+// instalacion recien migrada no tiene contenido que ensenar, y eso no puede ser
+// un error en la cara de un visitante.
+Route::get('/', [PortadaController::class, 'marcas'])->name('portada.marcas');
+Route::get('/creadores', [PortadaController::class, 'creadores'])->name('portada.creadores');
+Route::get('/creadores/gracias', [PortadaController::class, 'gracias'])->name('portada.gracias');
+
+// La postulacion. `throttle` porque es un formulario publico que ESCRIBE en la
+// base: sin el, esta URL es una forma comoda de llenarle la bandeja a alguien.
+// Vive en Creator y no en Core porque escribe en `creator_applications`, y
+// `deptrac` dice `Core: [Framework, Shared]` --la leccion de `T-74` aplicada
+// antes de romperla--.
+Route::post('/creadores/postular', [PostulacionController::class, 'postular'])
+    ->middleware('throttle:5,1')
+    ->name('postular');
 
 Route::middleware('guest')->group(function (): void {
     Route::get('/entrar', [AccesoController::class, 'formulario'])->name('acceso');
@@ -832,6 +852,28 @@ Route::middleware('auth')->prefix('backoffice')->group(function (): void {
     // nuevo: una serie pertenece a la sociedad que emite (`BR-LE-008`), asi que
     // quien administra sociedades administra sus series. Un permiso mas para lo
     // mismo solo anade un sitio donde olvidarse de darlo.
+    // 9.21b -- El texto de la portada publica. `brand.manage` y no un permiso
+    // nuevo: quien decide como nos llamamos decide que dice la portada.
+    Route::get('/landing', [LandingController::class, 'index'])
+        ->middleware('permiso:brand.manage')
+        ->name('landing.index');
+
+    Route::put('/landing/{pagina}', [LandingController::class, 'update'])
+        ->middleware('permiso:brand.manage')
+        ->whereNumber('pagina')
+        ->name('landing.update');
+
+    Route::post('/landing/{pagina}/bloques', [LandingController::class, 'guardarBloque'])
+        ->middleware('permiso:brand.manage')
+        ->whereNumber('pagina')
+        ->name('landing.bloque');
+
+    // Un bloque SI se borra: es texto de marketing, no sostiene ninguna cifra.
+    Route::delete('/landing/{pagina}/bloques/{bloque}', [LandingController::class, 'borrarBloque'])
+        ->middleware('permiso:brand.manage')
+        ->whereNumber('pagina')->whereNumber('bloque')
+        ->name('landing.bloque.borrar');
+
     Route::get('/series', [SeriesController::class, 'index'])
         ->middleware('permiso:legal_entity.manage')
         ->name('series.index');

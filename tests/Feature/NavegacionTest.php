@@ -39,6 +39,7 @@ final class NavegacionTest extends TestCase
     private const CONFIGURACION = [
         'marca.index', 'terminos.index', 'politica.index', 'integraciones.index',
         'entidades.index', 'series.index', 'cambio.index', 'catalogos.index',
+        'landing.index',
     ];
 
     protected function setUp(): void
@@ -221,6 +222,9 @@ final class NavegacionTest extends TestCase
             'aprobacion.ver', 'aprobacion.pieza', 'aprobacion.responder',
             'aprobacion.gracias', 'aprobacion.caducada',
             'marca.logo', 'marca.favicon',
+            // 9.21b: las dos portadas y la postulación. Son la calle: si
+            // pidieran sesión no servirían para nada.
+            'portada.marcas', 'portada.creadores', 'portada.gracias', 'postular',
         ];
 
         $fuera = [];

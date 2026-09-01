@@ -2,6 +2,42 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 
+## [9.21b · La puerta de la calle] — 2026-08-31
+
+Hasta hoy la única puerta era el acceso al back-office: no había forma de
+enseñarle esto a nadie que no tuviera ya una cuenta.
+
+### Añadido
+- **`/`** para las marcas y **`/creadores`** para los creadores, enlazadas entre
+  sí. `/entrar` queda para quien ya tiene cuenta.
+- **El texto es un dato**: `landing_pages` y `landing_blocks`. Titular, bloques
+  —ventajas, pasos, preguntas—, botón y lo que sale en buscadores se editan en
+  `/backoffice/landing`. Cuelgan de la marca.
+- **Postulación pública** que escribe en `creator_applications` y aparece en la
+  bandeja de siempre. Con `throttle:5,1` y **campo trampa**; sin CAPTCHA.
+- Área «Portada pública» en el panel de configuración, con sus avisos: sin
+  publicar, sin descripción para buscadores, sin ningún bloque visible.
+- `tools/pruebas/9.21b-landing.sh` y `LandingTest` — 15 pruebas, incluida la que
+  se pone roja el día que alguien escriba un titular en la plantilla.
+
+### Decidido
+- `DEC-238`: la home es de las **marcas** — el lado que paga se pone en la
+  puerta. Con el argumento en contra escrito.
+- `DEC-239`: el texto es un dato y cuelga de la marca. Dos páginas, no un CMS.
+- `DEC-240`: la postulación escribe en la tabla que existía desde la Fase 2 con
+  `source='landing'` y sin nadie que escribiera.
+- `DEC-241`: sin portada se va al acceso, **no a un 404**.
+
+### Sabido y dicho
+- **Un compositor de vistas no alcanza a la vista que extiende la plantilla**: la
+  portada salió con un 500 diciendo «Undefined variable $marca». El atajo era un
+  comodín `publico.*` y `verificar-pantallas.py` lo rechazó con razón — esconde
+  de quien lee el controlador que la vista necesita ese dato.
+- El muro creció a **31 rutas abiertas**, todas escritas con su motivo.
+- La portada de marcas **todavía termina en el correo de soporte**: el formulario
+  que crea un prospecto es `9.21c`. Un botón que no lleva a ninguna parte es peor
+  que decir la verdad.
+
 ## [9.21a · La trastienda se muda a /backoffice] — 2026-08-31
 
 Lo vio el negocio antes de escribir una línea de la landing: `/creadores` era la

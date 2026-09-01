@@ -89,6 +89,11 @@ final class MuroTest extends TestCase
         // 9.19: la pantalla a la que lleva el muro de los terminos y su envio.
         // Sin permiso porque es la unica salida de un creador bloqueado.
         'terminos.mios', 'terminos.aceptar',
+        // 9.21b: la calle. Son publicas porque ese es su trabajo. Lo que
+        // protege a `postular` no es un permiso --no puede tenerlo-- sino el
+        // `throttle:5,1` y el campo trampa; y lo que escribe queda en
+        // `creator_applications`, en estado `submitted`, sin tocar nada mas.
+        'portada.marcas', 'portada.creadores', 'portada.gracias', 'postular',
     ];
 
     protected function setUp(): void

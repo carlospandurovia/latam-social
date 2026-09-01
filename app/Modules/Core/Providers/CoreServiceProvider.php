@@ -11,6 +11,7 @@ use App\Modules\Core\Services\Correlativos;
 use App\Modules\Core\Services\CredencialFuente;
 use App\Modules\Core\Services\Decolecta;
 use App\Modules\Core\Services\Integraciones;
+use App\Modules\Core\Services\Landing;
 use App\Modules\Core\Services\Marca;
 use App\Modules\Core\Services\Politica;
 use App\Modules\Core\Services\Terminos;
@@ -63,7 +64,17 @@ final class CoreServiceProvider extends ServiceProvider
         // `errors.403` registrado, el compositor no corria, `$marca` no existia
         // y la pantalla de «sin permiso» respondia **500 en vez de 403**. Lo
         // encontro `MarcaPlataformaTest`, que comprobaba un 403 y recibio un 500.
-        View::composer(['layouts.panel', 'layouts.acceso', 'errors.403', 'errors::403'],
+        // 9.21b: `layouts.publico` entra aqui el mismo dia que existe: la marca
+        // de la calle es la misma que la de dentro, o son dos empresas.
+        //
+        // Un compositor sobre la PLANTILLA no alcanza a la vista que la extiende
+        // --la portada salio con un 500 diciendo «Undefined variable $marca»--.
+        // La tentacion era un comodin `publico.*`, y `verificar-pantallas.py` lo
+        // rechazo con razon: esconde de quien lee el controlador que la vista
+        // necesita ese dato. `publico.landing` la recibe de su controlador; aqui
+        // se queda solo `publico.gracias`, que no tiene mas que la plantilla.
+        View::composer(['layouts.panel', 'layouts.acceso', 'layouts.publico', 'publico.gracias',
+            'errors.403', 'errors::403'],
             static function (\Illuminate\View\View $vista): void {
                 $vista->with('marca', Marca::datos());
             });
@@ -232,6 +243,13 @@ final class CoreServiceProvider extends ServiceProvider
         Preparacion::area('Series y correlativos', 'legal_entity.manage', 'series.index',
             static fn (): array => Correlativos::avisos(), orden: 36,
             grupo: Preparacion::FISCAL);
+
+        // 9.21b: lo que ve quien todavia no es cliente. Con Marca y Terminos
+        // porque es la misma pregunta --como nos presentamos-- y lo toca la
+        // misma persona.
+        Preparacion::area('Portada pública', 'brand.manage', 'landing.index',
+            static fn (): array => Landing::avisos(), orden: 12,
+            grupo: Preparacion::IDENTIDAD);
 
         // 9.20: los catalogos eran seis entradas sueltas debajo de un titulo del
         // menu lateral, que es una etiqueta y no un sitio. Ahora son un area de

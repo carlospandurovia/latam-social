@@ -60,3 +60,10 @@ aprobacion.pieza        # la pieza, sin un solo importe
 aprobacion.responder    # throttle:10,1
 aprobacion.gracias      # pantalla final
 aprobacion.caducada     # y la del enlace vencido
+
+# 9.21b -- La calle. Son publicas porque ese es su trabajo: si pidieran sesion
+# no servirian para nada.
+portada.marcas          # la portada, para marcas
+portada.creadores       # la portada, para creadores
+portada.gracias         # el «gracias» de la postulacion
+postular                # 9.21b, throttle:5,1 + campo trampa; escribe en creator_applications
