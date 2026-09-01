@@ -6,6 +6,7 @@ namespace App\Modules\Core\Providers;
 
 use App\Modules\Core\Console\PublicarTerminosCommand;
 use App\Modules\Core\Console\TraerTiposDeCambioCommand;
+use App\Modules\Core\Services\Certificados;
 use App\Modules\Core\Services\Cobertura;
 use App\Modules\Core\Services\Correlativos;
 use App\Modules\Core\Services\CredencialFuente;
@@ -250,6 +251,15 @@ final class CoreServiceProvider extends ServiceProvider
 
         Preparacion::area('Series y correlativos', 'legal_entity.manage', 'series.index',
             static fn (): array => Correlativos::avisos(), orden: 36,
+            grupo: Preparacion::FISCAL);
+
+        // 9.9c: detras de las series, que es el orden en que hacen falta --sin
+        // serie no hay numero y sin certificado no hay firma-- y delante de
+        // nada, porque es lo ultimo que queda para poder emitir de verdad. El
+        // permiso es el de `9.17d`: quien pone con que se conecta el sistema al
+        // exterior es quien carga el certificado.
+        Preparacion::area('Certificados de firma', 'integration.manage', 'certificados.index',
+            static fn (): array => Certificados::avisos(), orden: 37,
             grupo: Preparacion::FISCAL);
 
         // 9.21b: lo que ve quien todavia no es cliente. Con Marca y Terminos

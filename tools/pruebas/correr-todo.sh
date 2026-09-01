@@ -70,6 +70,18 @@ python3 tools/verificar-periodos.py "$SIN" --cliente "$CLIENTE" || tot_fail=$((t
 # desarrollo perdona y el de produccion no. Cuatro mensajes llevaban rotos
 # desde 7.4 sin que ninguna suite lo viera, porque todas comprobaban «esto
 # falla» y 1648 tambien es fallar.
+# 9.9c: que ninguna regla se caiga en silencio ante un NULL.
+#
+# Un CHECK rechaza SOLO cuando la expresion es FALSA; cuando es NULL, deja pasar.
+# Y `CHAR_LENGTH(TRIM(NULL))` es NULL, asi que «anular exige motivo» escrito sin
+# cuidado no impide anular sin motivo: la regla parece estar y no esta. Este
+# proyecto lo cometio CUATRO veces --9.12, 9.21c, 9.9b y 9.9c-- y las cuatro lo
+# descubrio una suite por casualidad. La quinta no hace falta descubrirla.
+#
+# Va contra `$CON`: en la base de disparadores no hay CHECKs que leer.
+echo ""; echo "===== CHECKs que se apoyan en un NULL ====="
+python3 tools/verificar-nulos.py "$CON" --cliente "$CLIENTE" || tot_fail=$((tot_fail+1))
+
 echo ""; echo "===== mensajes de la base: caben en 128 ====="
 python3 tools/verificar-mensajes.py "$SIN" --cliente "$CLIENTE" || tot_fail=$((tot_fail+1))
 python3 tools/verificar-mensajes.py "$CON" --cliente "$CLIENTE" || tot_fail=$((tot_fail+1))

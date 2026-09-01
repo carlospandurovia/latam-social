@@ -79,6 +79,13 @@ SIN_REGLA_A_PROPOSITO = {
     'creator_guardians':
         '`uq_creator_guardians_active` ya garantiza un solo tutor activo por creador, '
         'asi que dos periodos activos no pueden existir. La regla seria redundante.',
+    'signing_certificates':
+        '9.9c: `valid_from`/`valid_to` NO son un periodo que decida este sistema: los '
+        'escribe la entidad certificadora dentro del archivo, y dos certificados de la '
+        'misma sociedad SE SOLAPAN a proposito --se compra el nuevo antes de que venza '
+        'el viejo, que es justo lo que hay que hacer--. Prohibir el solape impediria '
+        'renovar sin cortar la facturacion. Lo que si tiene que ser unico es CUAL SE '
+        'USA, y eso lo impone `uq_cert_activo`, que es una puerta y no un rango.',
 }
 
 

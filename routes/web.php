@@ -22,6 +22,7 @@ use App\Modules\Content\Http\Controllers\VerificacionController;
 use App\Modules\Core\Http\Controllers\ArchivosController;
 use App\Modules\Core\Http\Controllers\BitacoraController;
 use App\Modules\Core\Http\Controllers\CatalogosController;
+use App\Modules\Core\Http\Controllers\CertificadosController;
 use App\Modules\Core\Http\Controllers\ConfiguracionController;
 use App\Modules\Core\Http\Controllers\EntidadesLegalesController;
 use App\Modules\Core\Http\Controllers\ImpuestosController;
@@ -960,6 +961,22 @@ Route::middleware('auth')->prefix('backoffice')->group(function (): void {
         ->middleware('permiso:brand.manage')
         ->whereNumber('pagina')->whereNumber('bloque')
         ->name('landing.bloque.borrar');
+
+    // 9.9c -- Los certificados de firma. `integration.manage` y no un permiso
+    // nuevo: es la misma persona que carga la credencial de SUNAT en `9.17d`.
+    Route::get('/certificados', [CertificadosController::class, 'index'])
+        ->middleware('permiso:integration.manage')
+        ->name('certificados.index');
+
+    Route::post('/certificados', [CertificadosController::class, 'cargar'])
+        ->middleware('permiso:integration.manage')
+        ->name('certificados.cargar');
+
+    // Revocar exige motivo, como anular un numero o un comprobante.
+    Route::post('/certificados/{uuid}/revocar', [CertificadosController::class, 'revocar'])
+        ->middleware('permiso:integration.manage')
+        ->whereUuid('uuid')
+        ->name('certificados.revocar');
 
     Route::get('/series', [SeriesController::class, 'index'])
         ->middleware('permiso:legal_entity.manage')

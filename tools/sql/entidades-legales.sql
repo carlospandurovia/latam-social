@@ -155,6 +155,70 @@ CREATE TABLE legal_entity_countries (
 -- declara los suyos: su codigo oficial ('01' factura, '03' boleta en SUNAT), la
 -- forma de la serie y cuantos digitos tiene el correlativo. Mismo patron que el
 -- codigo de localidad de 9.17c: la regla la pone el pais, no el codigo.
+-- ==================== El certificado con el que firma cada sociedad (9.9c)
+-- No cabe en `integration_credentials` (9.17d): aquello son credenciales DE UNA
+-- CONEXION, y un certificado de firma es la identidad de la SOCIEDAD --el mismo
+-- firma tanto si el comprobante sale directo a SUNAT como si sale por un
+-- proveedor, y sigue explicando la firma de lo ya emitido cuando la conexion se
+-- cambia entera--. Y tiene algo que ninguna credencial tiene: vigencia propia,
+-- escrita dentro del archivo, que nadie de aqui decide.
+--
+-- Lo que se guarda es PEM y no el .pfx: es lo que consume quien firma, y asi la
+-- contrasena del .pfx NO se guarda --se usa una vez, al subirlo, y se olvida--.
+CREATE TABLE signing_certificates (
+  id                  BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  uuid                CHAR(36)      NOT NULL,
+  legal_entity_id     BIGINT UNSIGNED NOT NULL,
+  -- DEC-029: el de pruebas y el real conviven y no se pueden confundir.
+  environment         VARCHAR(15)   NOT NULL DEFAULT 'sandbox',
+  -- Lo que dice el propio certificado. NO se teclea: se lee.
+  subject_name        VARCHAR(255)  NOT NULL,
+  issuer_name         VARCHAR(255)  NOT NULL,
+  serial_number       VARCHAR(80)   NOT NULL,
+  -- El RUC que lleva DENTRO, para poder contestar «.es de esta sociedad?».
+  tax_id_number       VARCHAR(40)   NOT NULL,
+  valid_from          DATETIME(3)   NOT NULL,
+  valid_to            DATETIME(3)   NOT NULL,
+  fingerprint_sha256  CHAR(64)      NOT NULL,
+  -- El certificado y su clave privada, en PEM y cifrados con la clave de la
+  -- aplicacion. Lo unico que sale en claro lo pide quien firma, nadie mas.
+  pem_cipher          LONGTEXT      NOT NULL,
+  source              VARCHAR(10)   NOT NULL DEFAULT 'pkcs12',
+  status              VARCHAR(15)   NOT NULL DEFAULT 'active',
+  uploaded_by_user_id BIGINT UNSIGNED NOT NULL,
+  uploaded_at         DATETIME(3)   NOT NULL,
+  replaced_at         DATETIME(3)   NULL,
+  revoked_at          DATETIME(3)   NULL,
+  revoked_reason      VARCHAR(255)  NULL,
+  created_at          DATETIME(3)   NULL,
+  updated_at          DATETIME(3)   NULL,
+  -- La 34.a columna puerta: UN solo certificado activo por sociedad y entorno.
+  -- Con dos, la mitad de los comprobantes iria firmado con uno y la mitad con
+  -- otro, y nadie sabria cual hasta que la administracion rechazara.
+  activo_gate   VARCHAR(45) GENERATED ALWAYS AS (CASE WHEN status = 'active' THEN CONCAT(legal_entity_id, ':', environment) ELSE NULL END) STORED,
+  UNIQUE KEY uq_cert_uuid (uuid),
+  -- Con el entorno dentro: nada impide usar el mismo en beta y en produccion.
+  UNIQUE KEY uq_cert_huella (fingerprint_sha256, environment),
+  UNIQUE KEY uq_cert_activo (activo_gate),
+  KEY ix_cert_sociedad (legal_entity_id, environment, status),
+  KEY ix_cert_vence (valid_to),
+  KEY ix_cert_autor (uploaded_by_user_id),
+  CONSTRAINT fk_cert_entity FOREIGN KEY (legal_entity_id) REFERENCES legal_entities(id) ON DELETE RESTRICT,
+  CONSTRAINT fk_cert_autor FOREIGN KEY (uploaded_by_user_id) REFERENCES users(id) ON DELETE RESTRICT,
+  CONSTRAINT ck_cert_env CHECK (environment IN ('sandbox','production')),
+  CONSTRAINT ck_cert_status CHECK (status IN ('active','replaced','revoked')),
+  CONSTRAINT ck_cert_dates CHECK (valid_to > valid_from),
+  -- Un cifrado vacio es un certificado que no existe disfrazado de uno que si.
+  CONSTRAINT ck_cert_pem CHECK (TRIM(pem_cipher) <> ''),
+  CONSTRAINT ck_cert_huella CHECK (CHAR_LENGTH(fingerprint_sha256) = 64),
+  CONSTRAINT ck_cert_ruc CHECK (TRIM(tax_id_number) <> ''),
+  CONSTRAINT ck_cert_source CHECK (source IN ('pkcs12','pem')),
+  -- `revoked_reason IS NOT NULL` ANTES del largo: CHAR_LENGTH(TRIM(NULL)) es
+  -- NULL, la conjuncion entera es NULL y un CHECK solo rechaza cuando es FALSO.
+  CONSTRAINT ck_cert_revocado CHECK (status <> 'revoked' OR (revoked_at IS NOT NULL AND revoked_reason IS NOT NULL AND CHAR_LENGTH(TRIM(revoked_reason)) >= 10)),
+  CONSTRAINT ck_cert_reemplazado CHECK (status <> 'replaced' OR replaced_at IS NOT NULL)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE document_types (
   id            BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
   country_id    BIGINT UNSIGNED NOT NULL,
@@ -309,6 +373,42 @@ CREATE TABLE landing_blocks (
 -- ===========================================================================
 
 DELIMITER //
+
+-- 9.9c: un certificado caducado o reemplazado explica la firma de las facturas
+-- de entonces. Borrarlo deja esas firmas sin poder explicarse --el mismo
+-- argumento que tg_tax_no_delete en 9.9a--.
+CREATE TRIGGER tg_cert_no_delete BEFORE DELETE ON signing_certificates
+FOR EACH ROW
+BEGIN
+  SIGNAL SQLSTATE '45000'
+    SET MESSAGE_TEXT = 'Un certificado no se borra: explica la firma de lo ya emitido.';
+END//
+
+-- Y lo que dice el propio certificado no lo cambia nadie desde aqui: si el
+-- material cambiara, la huella dejaria de corresponder con lo guardado y no
+-- habria forma de saber CON QUE se firmo.
+CREATE TRIGGER tg_cert_inmutable BEFORE UPDATE ON signing_certificates
+FOR EACH ROW
+BEGIN
+  IF NOT (NEW.uuid <=> OLD.uuid)
+     OR NOT (NEW.legal_entity_id <=> OLD.legal_entity_id)
+     OR NOT (NEW.environment <=> OLD.environment)
+     OR NOT (NEW.subject_name <=> OLD.subject_name)
+     OR NOT (NEW.issuer_name <=> OLD.issuer_name)
+     OR NOT (NEW.serial_number <=> OLD.serial_number)
+     OR NOT (NEW.tax_id_number <=> OLD.tax_id_number)
+     OR NOT (NEW.valid_from <=> OLD.valid_from)
+     OR NOT (NEW.valid_to <=> OLD.valid_to)
+     OR NOT (NEW.fingerprint_sha256 <=> OLD.fingerprint_sha256)
+     OR NOT (NEW.pem_cipher <=> OLD.pem_cipher)
+     OR NOT (NEW.source <=> OLD.source)
+     OR NOT (NEW.uploaded_by_user_id <=> OLD.uploaded_by_user_id)
+     OR NOT (NEW.uploaded_at <=> OLD.uploaded_at)
+  THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'Un certificado no se reescribe: cargue el siguiente o revoquelo.';
+  END IF;
+END//
 
 CREATE TRIGGER `tg_lec_sin_solape_ins`
 BEFORE INSERT ON `legal_entity_countries`

@@ -214,13 +214,14 @@ final class ConfiguracionTest extends TestCase
     {
         $this->assertSame(
             // 9.18 anadio «Politica de precios», 9.19b «Creadores», 9.17d
-            // «Integraciones», 9.12 «Series y correlativos», 9.20 «Catalogos» y
-            // 9.21b «Portada publica»; las seis veces esta prueba se puso roja: es exactamente para lo
-            // que esta. La lista se actualiza a mano y a proposito, para que
-            // anadir un area sea una decision y no un descuido.
-            ['Catálogos', 'Correo', 'Creadores', 'Entidades legales', 'Impuestos', 'Integraciones',
-                'Marca', 'Política de precios', 'Portada pública', 'Series y correlativos',
-                'Tipos de cambio', 'Términos'],
+            // «Integraciones», 9.12 «Series y correlativos», 9.20 «Catalogos»,
+            // 9.21b «Portada publica» y 9.9c «Certificados de firma»; las siete
+            // veces esta prueba se puso roja: es exactamente para lo que esta.
+            // La lista se actualiza a mano y a proposito, para que anadir un
+            // area sea una decision y no un descuido.
+            ['Catálogos', 'Certificados de firma', 'Correo', 'Creadores', 'Entidades legales',
+                'Impuestos', 'Integraciones', 'Marca', 'Política de precios', 'Portada pública',
+                'Series y correlativos', 'Tipos de cambio', 'Términos'],
             Preparacion::areasRegistradas(),
         );
     }

@@ -2,6 +2,40 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 
+## [9.9c · El certificado con el que firma cada sociedad] — 2026-09-01
+
+La decisión que había detrás se puso sobre la mesa antes de escribir una línea:
+**Greenter con certificado propio**, no un PSE.
+
+### Añadido
+- **`signing_certificates`** — cuelga de `legal_entities`, con la vigencia que
+  lleva escrita dentro el propio archivo. Columna puerta **34**
+  (`uq_cert_activo`): uno solo en uso por sociedad y entorno.
+- `Core\Services\Certificados` — carga (`.pfx` o `.pem`), lectura partida en
+  `vigente()` / `material()`, revocación con motivo y avisos.
+- Pantalla `/backoffice/certificados` con `integration.manage`, y área
+  **Certificados de firma** en el grupo fiscal del panel.
+- **`tools/verificar-nulos.py`** — caza los CHECK que se caen en silencio ante un
+  NULL. Corre en `correr-todo.sh`.
+- `tools/pruebas/9.9c-certificados.sh` (21 aserciones) y `CertificadosTest` (18).
+
+### Decidido
+- `DEC-252`: se emite con **Greenter** y certificado propio; irá detrás de una
+  frontera en 9.9d, no antes.
+- `DEC-253`: el certificado es de la **sociedad**, se guarda en PEM cifrado y
+  **la contraseña del `.pfx` no se guarda**.
+- `DEC-254`: el `.pfx` de SUNAT no lo abre OpenSSL 3 — el mensaje trae la orden
+  exacta para convertirlo. Y el RUC ajeno avisa en rojo pero no bloquea (`Q-66`).
+
+### Arreglado
+- **`T-82`** — `ck_cert_revocado` dejaba revocar **sin motivo**: con la columna a
+  NULL la expresión entera es NULL y un CHECK sólo rechaza cuando es FALSO. Es la
+  cuarta vez en el proyecto; ahora hay un verificador que lo caza.
+
+### Sabido y dicho
+- Para `9.9d` hace falta `composer require greenter/lite` y la conexión de SUNAT
+  con el usuario secundario SOL.
+
 ## [9.9b · La factura que sale de una campaña] — 2026-09-01
 
 `invoices` e `invoice_lines` llevaban desde la Fase 2 con la mesa puesta y **sin
