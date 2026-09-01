@@ -268,8 +268,13 @@ CREATE TABLE invoices (
   client_tax_profile_id  BIGINT UNSIGNED NOT NULL,
   campaign_id         BIGINT UNSIGNED NULL,
   document_type       VARCHAR(20)   NOT NULL DEFAULT 'invoice',
-  series              VARCHAR(10)   NOT NULL,
-  number              BIGINT UNSIGNED NOT NULL,
+  -- 9.9b: NULL mientras es borrador. El correlativo es un recurso escaso y
+  -- auditado: se pide al EMITIR, no al empezar a escribir. Con la columna
+  -- obligatoria, cada borrador descartado dejaba un hueco ante SUNAT.
+  series              VARCHAR(10)   NULL,
+  number              BIGINT UNSIGNED NULL,
+  -- De donde salio ese numero (9.12). Unica: un numero se gasta UNA vez.
+  document_number_id  BIGINT UNSIGNED NULL,
   -- DATE, en la zona de la sociedad emisora (2.3 §8).
   issue_date          DATE          NOT NULL,
   due_date            DATE          NOT NULL,
@@ -280,6 +285,11 @@ CREATE TABLE invoices (
   -- solo el importe del impuesto perderia el POR QUE fue ese importe, que es
   -- justo lo que pregunta una fiscalizacion.
   tax_regime          VARCHAR(15)   NOT NULL DEFAULT 'gravado',
+  -- 9.9b: con QUE tasa se calculo (9.9a). La fila para llegar al codigo de
+  -- catalogo que viaja en el XML, y el porcentaje para que la factura se pueda
+  -- explicar sin salir de su propia fila.
+  tax_rate_id         BIGINT UNSIGNED NULL,
+  tax_rate_snapshot   DECIMAL(7,4)  NULL,
   subtotal_amount     DECIMAL(18,4) NOT NULL,
   tax_amount          DECIMAL(18,4) NOT NULL DEFAULT 0,
   total_amount        DECIMAL(18,4) NOT NULL,
@@ -289,6 +299,9 @@ CREATE TABLE invoices (
   issuer_legal_name_snapshot VARCHAR(200) NOT NULL,
   issuer_tax_id_snapshot     VARCHAR(40)  NOT NULL,
   issuer_address_snapshot    VARCHAR(300) NOT NULL,
+  -- 9.9b: el pais del emisor faltaba, y sin el la regla de DEC-047 no se podia
+  -- escribir sin nombrar a Peru dentro de un CHECK.
+  issuer_country_snapshot    CHAR(2)      NULL,
   -- Y del receptor, por lo mismo.
   receiver_legal_name_snapshot VARCHAR(200) NOT NULL,
   receiver_tax_id_snapshot     VARCHAR(40)  NOT NULL,
@@ -302,10 +315,15 @@ CREATE TABLE invoices (
   external_status     VARCHAR(30)   NULL,
   file_id             BIGINT UNSIGNED NULL,
   issued_at           DATETIME(3)   NULL,
+  issued_by_user_id   BIGINT UNSIGNED NULL,
   voided_at           DATETIME(3)   NULL,
+  -- 9.9b: la misma leccion que document_numbers y client_leads. Un hueco
+  -- explicado es defendible; uno mudo, no.
+  void_reason         VARCHAR(255)  NULL,
   created_at          DATETIME(3)   NULL,
   updated_at          DATETIME(3)   NULL,
   UNIQUE KEY uq_inv_uuid2 (uuid),
+  UNIQUE KEY uq_invoice_dnumber (document_number_id),
   -- Serie y correlativo unicos por sociedad: es la exigencia de SUNAT.
   UNIQUE KEY uq_invoice_number (legal_entity_id, document_type, series, number),
   KEY ix_invoice_client (client_organization_id, status),
@@ -314,27 +332,44 @@ CREATE TABLE invoices (
   KEY ix_invoice_profile (client_tax_profile_id),
   KEY ix_invoice_currency (currency_code),
   KEY ix_invoice_file (file_id),
+  KEY ix_invoice_tax_rate (tax_rate_id),
+  KEY ix_invoice_issuer_user (issued_by_user_id),
   CONSTRAINT fk_invoice_entity FOREIGN KEY (legal_entity_id) REFERENCES legal_entities(id) ON DELETE RESTRICT,
   CONSTRAINT fk_invoice_client FOREIGN KEY (client_organization_id) REFERENCES client_organizations(id) ON DELETE RESTRICT,
   CONSTRAINT fk_invoice_profile FOREIGN KEY (client_tax_profile_id) REFERENCES client_tax_profiles(id) ON DELETE RESTRICT,
   CONSTRAINT fk_invoice_campaign FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE RESTRICT,
   CONSTRAINT fk_invoice_currency FOREIGN KEY (currency_code) REFERENCES currencies(code) ON DELETE RESTRICT,
   CONSTRAINT fk_invoice_file FOREIGN KEY (file_id) REFERENCES files(id) ON DELETE RESTRICT,
+  CONSTRAINT fk_invoice_dnumber FOREIGN KEY (document_number_id) REFERENCES document_numbers(id) ON DELETE RESTRICT,
+  CONSTRAINT fk_invoice_tax_rate FOREIGN KEY (tax_rate_id) REFERENCES tax_rates(id) ON DELETE RESTRICT,
+  CONSTRAINT fk_invoice_issuer_user FOREIGN KEY (issued_by_user_id) REFERENCES users(id) ON DELETE RESTRICT,
   CONSTRAINT ck_invoice_status CHECK (status IN ('draft','issued','sent','paid','partially_paid','voided','rejected')),
   CONSTRAINT ck_invoice_type CHECK (document_type IN ('invoice','boleta','credit_note','debit_note')),
   CONSTRAINT ck_invoice_amounts CHECK (subtotal_amount >= 0 AND tax_amount >= 0 AND total_amount >= 0),
   -- La aritmetica la comprueba la base, no quien teclea.
   CONSTRAINT ck_invoice_math CHECK (total_amount = subtotal_amount + tax_amount),
   CONSTRAINT ck_invoice_dates CHECK (due_date >= issue_date),
-  CONSTRAINT ck_invoice_number CHECK (number >= 1),
+  CONSTRAINT ck_invoice_number CHECK (number IS NULL OR number >= 1),
   CONSTRAINT ck_invoice_regime CHECK (tax_regime IN ('gravado','exportacion','exonerado','inafecto')),
   -- Una exportacion de servicios no lleva IGV. Si lleva, o no es exportacion o
   -- alguien se equivoco: las dos cosas hay que pararlas aqui.
   CONSTRAINT ck_invoice_regime_tax CHECK (tax_regime = 'gravado' OR tax_amount = 0),
-  -- Y no se exporta a un cliente domiciliado en Peru.
-  CONSTRAINT ck_invoice_regime_country CHECK (tax_regime <> 'exportacion' OR receiver_country_snapshot <> 'PE'),
+  -- 9.9b: y no se exporta a un cliente domiciliado DONDE SE EMITE. Hasta 9.9b
+  -- decia «en Peru», con el pais escrito dentro del esquema: DEC-190 roto en el
+  -- sitio mas caro. Ahora compara los dos paises congelados en el documento.
+  CONSTRAINT ck_invoice_regime_country CHECK (tax_regime <> 'exportacion' OR issuer_country_snapshot IS NULL OR receiver_country_snapshot <> issuer_country_snapshot),
+  CONSTRAINT ck_invoice_emisor_pais CHECK (status = 'draft' OR issuer_country_snapshot IS NOT NULL),
+  -- Emitida es lo mismo que numerada, y con el numero de 9.12 gastado.
+  CONSTRAINT ck_invoice_numerada CHECK (status = 'draft' OR (series IS NOT NULL AND number IS NOT NULL AND document_number_id IS NOT NULL)),
+  -- Y un borrador NO lo lleva: sin esta mitad se podria seguir reservando el
+  -- numero al empezar a escribir, que es el defecto que 9.9b vino a quitar.
+  CONSTRAINT ck_invoice_borrador_sin_numero CHECK (status <> 'draft' OR (series IS NULL AND number IS NULL AND document_number_id IS NULL)),
+  -- Gravado con impuesto cero es la factura que 9.9a existe para impedir.
+  CONSTRAINT ck_invoice_gravado_con_impuesto CHECK (tax_regime <> 'gravado' OR subtotal_amount = 0 OR tax_amount > 0),
+  CONSTRAINT ck_invoice_gravado_con_tasa CHECK (tax_regime <> 'gravado' OR status = 'draft' OR tax_rate_snapshot IS NOT NULL),
   CONSTRAINT ck_invoice_issued CHECK (status = 'draft' OR issued_at IS NOT NULL),
-  CONSTRAINT ck_invoice_voided CHECK (status <> 'voided' OR voided_at IS NOT NULL)
+  CONSTRAINT ck_invoice_voided CHECK (status <> 'voided' OR voided_at IS NOT NULL),
+  CONSTRAINT ck_invoice_void_reason CHECK (status <> 'voided' OR (void_reason IS NOT NULL AND CHAR_LENGTH(TRIM(void_reason)) >= 10))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE invoice_lines (
@@ -593,6 +628,94 @@ BEGIN
 END//
 
 CREATE TRIGGER tg_iline_no_delete BEFORE DELETE ON invoice_lines
+FOR EACH ROW
+BEGIN
+  IF (SELECT status FROM invoices WHERE id = OLD.invoice_id) <> 'draft' THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'No se alteran las lineas de una factura ya emitida.';
+  END IF;
+END//
+
+-- 9.9b: el instante de emitir, en un solo sitio.
+--
+-- Dos cosas que ningun CHECK puede decir, y las dos hablan del mismo momento:
+-- que las lineas SUMEN lo que dice la cabecera --cruzada, y lo que rechaza
+-- SUNAT-- y que a partir de ahi el nucleo fiscal no se toque. `ledger_entries`
+-- tenia su tg_ledger_no_update desde la Fase 2; `invoices`, que es el documento
+-- que ve la administracion, no tenia ninguno.
+CREATE TRIGGER tg_invoice_emision BEFORE UPDATE ON invoices
+FOR EACH ROW
+BEGIN
+  DECLARE v_lineas INT DEFAULT 0;
+  DECLARE v_sub DECIMAL(18,4) DEFAULT 0;
+  DECLARE v_imp DECIMAL(18,4) DEFAULT 0;
+
+  IF OLD.status = 'draft' AND NEW.status <> 'draft' THEN
+    SELECT COUNT(*), COALESCE(SUM(line_subtotal),0), COALESCE(SUM(line_tax),0)
+      INTO v_lineas, v_sub, v_imp
+      FROM invoice_lines WHERE invoice_id = OLD.id;
+
+    IF v_lineas = 0 THEN
+      SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'Una factura sin lineas no dice que se cobra.';
+    END IF;
+
+    IF v_sub <> NEW.subtotal_amount OR v_imp <> NEW.tax_amount THEN
+      SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'Las lineas no suman el total: la factura no cuadra consigo misma.';
+    END IF;
+  END IF;
+
+  IF OLD.status <> 'draft' THEN
+    IF NOT (NEW.uuid <=> OLD.uuid)
+       OR NOT (NEW.legal_entity_id <=> OLD.legal_entity_id)
+       OR NOT (NEW.client_organization_id <=> OLD.client_organization_id)
+       OR NOT (NEW.client_tax_profile_id <=> OLD.client_tax_profile_id)
+       OR NOT (NEW.campaign_id <=> OLD.campaign_id)
+       OR NOT (NEW.document_type <=> OLD.document_type)
+       OR NOT (NEW.series <=> OLD.series)
+       OR NOT (NEW.number <=> OLD.number)
+       OR NOT (NEW.document_number_id <=> OLD.document_number_id)
+       OR NOT (NEW.issue_date <=> OLD.issue_date)
+       OR NOT (NEW.due_date <=> OLD.due_date)
+       OR NOT (NEW.currency_code <=> OLD.currency_code)
+       OR NOT (NEW.tax_regime <=> OLD.tax_regime)
+       OR NOT (NEW.tax_rate_id <=> OLD.tax_rate_id)
+       OR NOT (NEW.tax_rate_snapshot <=> OLD.tax_rate_snapshot)
+       OR NOT (NEW.subtotal_amount <=> OLD.subtotal_amount)
+       OR NOT (NEW.tax_amount <=> OLD.tax_amount)
+       OR NOT (NEW.total_amount <=> OLD.total_amount)
+       OR NOT (NEW.issuer_legal_name_snapshot <=> OLD.issuer_legal_name_snapshot)
+       OR NOT (NEW.issuer_tax_id_snapshot <=> OLD.issuer_tax_id_snapshot)
+       OR NOT (NEW.issuer_address_snapshot <=> OLD.issuer_address_snapshot)
+       OR NOT (NEW.issuer_country_snapshot <=> OLD.issuer_country_snapshot)
+       OR NOT (NEW.receiver_legal_name_snapshot <=> OLD.receiver_legal_name_snapshot)
+       OR NOT (NEW.receiver_tax_id_snapshot <=> OLD.receiver_tax_id_snapshot)
+       OR NOT (NEW.receiver_address_snapshot <=> OLD.receiver_address_snapshot)
+       OR NOT (NEW.receiver_country_snapshot <=> OLD.receiver_country_snapshot)
+       OR NOT (NEW.issued_at <=> OLD.issued_at)
+       OR NOT (NEW.issued_by_user_id <=> OLD.issued_by_user_id)
+       OR NOT (NEW.created_at <=> OLD.created_at)
+    THEN
+      SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'Una factura emitida no se corrige: se anula y se emite otra.';
+    END IF;
+  END IF;
+END//
+
+-- Anadir una linea a una factura ya emitida cambia lo que dice el documento sin
+-- tocar el documento. tg_iline_no_delete cubria el borrado desde la Fase 2 y
+-- dejaba abiertas las otras dos puertas.
+CREATE TRIGGER tg_iline_solo_borrador BEFORE INSERT ON invoice_lines
+FOR EACH ROW
+BEGIN
+  IF (SELECT status FROM invoices WHERE id = NEW.invoice_id) <> 'draft' THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'No se anaden lineas a una factura ya emitida.';
+  END IF;
+END//
+
+CREATE TRIGGER tg_iline_no_update BEFORE UPDATE ON invoice_lines
 FOR EACH ROW
 BEGIN
   IF (SELECT status FROM invoices WHERE id = OLD.invoice_id) <> 'draft' THEN

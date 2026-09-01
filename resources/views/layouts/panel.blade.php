@@ -57,6 +57,10 @@
             ['Verificación', 'verificacion.cola', 'verificacion', 'content.deliverable.view'],
           ]],
           ['Finanzas', [
+            // 9.9b: primera del grupo porque es donde empieza el dinero que
+            // entra. Lo demas --lotes y conciliacion-- es el que sale y el
+            // que llega.
+            ['Comprobantes', 'facturas.index', 'facturas', 'finance.view'],
             ['Lotes de pago', 'lotes.index', 'lotes', 'finance.view'],
             ['Conciliación', 'pagos.conciliar', 'pagos', 'finance.view'],
             // 9.10: permiso PROPIO y distinto de los otros dos. Quien concilia

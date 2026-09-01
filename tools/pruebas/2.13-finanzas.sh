@@ -37,7 +37,10 @@ PC="(SELECT id FROM campaign_creators ORDER BY id LIMIT 1)"
 CO="(SELECT id FROM client_organizations ORDER BY id LIMIT 1)"
 TP="(SELECT id FROM client_tax_profiles ORDER BY id LIMIT 1)"
 FI="(SELECT id FROM files ORDER BY id LIMIT 1)"
-SNAP="'CTS SAC','20603203896','Lima','Marca Demo','20123456789','Av. Demo 100','PE'"
+# 9.9b: el pais del EMISOR entra en el snapshot. Sin el, `ck_invoice_regime_country`
+# no puede decir «no se exporta a quien vive donde se emite» sin nombrar a Peru.
+SNAP="'CTS SAC','20603203896','Lima','PE','Marca Demo','20123456789','Av. Demo 100','PE'"
+COLSNAP="issuer_legal_name_snapshot,issuer_tax_id_snapshot,issuer_address_snapshot,issuer_country_snapshot,receiver_legal_name_snapshot,receiver_tax_id_snapshot,receiver_address_snapshot,receiver_country_snapshot"
 
 echo ""
 echo "--- Costos de campana (margen reconstruible) ---"
@@ -239,24 +242,45 @@ probar "mayor: reescribir la tasa de una retencion ya asentada" \
 
 echo ""
 echo "--- Facturas ---"
-probar "factura: borrador coherente" \
- "INSERT INTO invoices (uuid,legal_entity_id,client_organization_id,client_tax_profile_id,campaign_id,document_type,series,number,issue_date,due_date,currency_code,subtotal_amount,tax_amount,total_amount,status,issuer_legal_name_snapshot,issuer_tax_id_snapshot,issuer_address_snapshot,receiver_legal_name_snapshot,receiver_tax_id_snapshot,receiver_address_snapshot,receiver_country_snapshot,created_at) VALUES (UUID(),$LE,$CO,$TP,$CA,'invoice','F001',1,'2026-09-30','2026-10-30','PEN',10000.0000,1800.0000,11800.0000,'draft',$SNAP,NOW(3));" OK
+
+# 9.9b: un borrador NO lleva serie ni correlativo --el numero se pide al emitir,
+# para que descartar un borrador no deje un hueco ante SUNAT-- y una factura
+# emitida lleva ADEMAS el numero del libro de `9.12`. Se reservan aqui los que
+# usan las aserciones de abajo, como haria `Correlativos::reservar`.
+DS="(SELECT id FROM document_series WHERE series='F001' ORDER BY id LIMIT 1)"
+$CLIENTE $DB -e "INSERT INTO document_numbers (document_series_id,number,full_number,status,reserved_at,created_at)
+  SELECT $DS, n, CONCAT('F001-', LPAD(n,8,'0')), 'reserved', NOW(3), NOW(3)
+  FROM (SELECT 900 n UNION SELECT 901 UNION SELECT 902 UNION SELECT 903
+        UNION SELECT 904 UNION SELECT 905 UNION SELECT 906) x;" 2>/dev/null
+dn() { echo "(SELECT id FROM (SELECT id FROM document_numbers WHERE number=$1) t)"; }
+
+CAB="uuid,legal_entity_id,client_organization_id,client_tax_profile_id,document_type,issue_date,due_date,currency_code,subtotal_amount,tax_amount,total_amount,status,$COLSNAP,created_at"
+CABN="uuid,legal_entity_id,client_organization_id,client_tax_profile_id,document_type,series,number,document_number_id,issue_date,due_date,currency_code,tax_regime,subtotal_amount,tax_amount,total_amount,status,issued_at,$COLSNAP,created_at"
+
+probar "factura: borrador coherente, y SIN correlativo" \
+ "INSERT INTO invoices (uuid,legal_entity_id,client_organization_id,client_tax_profile_id,campaign_id,document_type,issue_date,due_date,currency_code,tax_rate_snapshot,subtotal_amount,tax_amount,total_amount,status,$COLSNAP,created_at) VALUES (UUID(),$LE,$CO,$TP,$CA,'invoice','2026-09-30','2026-10-30','PEN',18.0000,10000.0000,1800.0000,11800.0000,'draft',$SNAP,NOW(3));" OK
+probar "factura: un borrador que ya gasta correlativo" \
+ "INSERT INTO invoices ($CABN) VALUES (UUID(),$LE,$CO,$TP,'invoice','F001',901,$(dn 901),'2026-09-30','2026-10-30','PEN','inafecto',100.0000,0,100.0000,'draft',NULL,$SNAP,NOW(3));" RECHAZO
 probar "factura: total distinto de subtotal + impuesto" \
- "INSERT INTO invoices (uuid,legal_entity_id,client_organization_id,client_tax_profile_id,document_type,series,number,issue_date,due_date,currency_code,subtotal_amount,tax_amount,total_amount,status,issuer_legal_name_snapshot,issuer_tax_id_snapshot,issuer_address_snapshot,receiver_legal_name_snapshot,receiver_tax_id_snapshot,receiver_address_snapshot,receiver_country_snapshot,created_at) VALUES (UUID(),$LE,$CO,$TP,'invoice','F001',2,'2026-09-30','2026-10-30','PEN',10000.0000,1800.0000,11000.0000,'draft',$SNAP,NOW(3));" RECHAZO
+ "INSERT INTO invoices ($CAB) VALUES (UUID(),$LE,$CO,$TP,'invoice','2026-09-30','2026-10-30','PEN',10000.0000,1800.0000,11000.0000,'draft',$SNAP,NOW(3));" RECHAZO
 probar "factura: vence antes de emitirse" \
- "INSERT INTO invoices (uuid,legal_entity_id,client_organization_id,client_tax_profile_id,document_type,series,number,issue_date,due_date,currency_code,subtotal_amount,tax_amount,total_amount,status,issuer_legal_name_snapshot,issuer_tax_id_snapshot,issuer_address_snapshot,receiver_legal_name_snapshot,receiver_tax_id_snapshot,receiver_address_snapshot,receiver_country_snapshot,created_at) VALUES (UUID(),$LE,$CO,$TP,'invoice','F001',3,'2026-09-30','2026-09-01','PEN',100.0000,0,100.0000,'draft',$SNAP,NOW(3));" RECHAZO
+ "INSERT INTO invoices (uuid,legal_entity_id,client_organization_id,client_tax_profile_id,document_type,issue_date,due_date,currency_code,tax_regime,subtotal_amount,tax_amount,total_amount,status,$COLSNAP,created_at) VALUES (UUID(),$LE,$CO,$TP,'invoice','2026-09-30','2026-09-01','PEN','inafecto',100.0000,0,100.0000,'draft',$SNAP,NOW(3));" RECHAZO
 probar "factura: correlativo cero" \
- "INSERT INTO invoices (uuid,legal_entity_id,client_organization_id,client_tax_profile_id,document_type,series,number,issue_date,due_date,currency_code,subtotal_amount,tax_amount,total_amount,status,issuer_legal_name_snapshot,issuer_tax_id_snapshot,issuer_address_snapshot,receiver_legal_name_snapshot,receiver_tax_id_snapshot,receiver_address_snapshot,receiver_country_snapshot,created_at) VALUES (UUID(),$LE,$CO,$TP,'invoice','F001',0,'2026-09-30','2026-10-30','PEN',100.0000,0,100.0000,'draft',$SNAP,NOW(3));" RECHAZO
+ "INSERT INTO invoices ($CABN) VALUES (UUID(),$LE,$CO,$TP,'invoice','F001',0,$(dn 900),'2026-09-30','2026-10-30','PEN','inafecto',100.0000,0,100.0000,'issued',NOW(3),$SNAP,NOW(3));" RECHAZO
+probar "factura: emitida de verdad, con su numero del libro" \
+ "INSERT INTO invoices ($CABN) VALUES (UUID(),$LE,$CO,$TP,'invoice','F001',1,$(dn 901),'2026-09-30','2026-10-30','PEN','inafecto',100.0000,0,100.0000,'issued',NOW(3),$SNAP,NOW(3));" OK
 probar "factura: serie y correlativo repetidos en la misma sociedad" \
- "INSERT INTO invoices (uuid,legal_entity_id,client_organization_id,client_tax_profile_id,document_type,series,number,issue_date,due_date,currency_code,subtotal_amount,tax_amount,total_amount,status,issuer_legal_name_snapshot,issuer_tax_id_snapshot,issuer_address_snapshot,receiver_legal_name_snapshot,receiver_tax_id_snapshot,receiver_address_snapshot,receiver_country_snapshot,created_at) VALUES (UUID(),$LE,$CO,$TP,'invoice','F001',1,'2026-09-30','2026-10-30','PEN',100.0000,0,100.0000,'draft',$SNAP,NOW(3));" RECHAZO
+ "INSERT INTO invoices ($CABN) VALUES (UUID(),$LE,$CO,$TP,'invoice','F001',1,$(dn 902),'2026-09-30','2026-10-30','PEN','inafecto',100.0000,0,100.0000,'issued',NOW(3),$SNAP,NOW(3));" RECHAZO
 probar "factura: mismo correlativo en otro tipo de documento" \
- "INSERT INTO invoices (uuid,legal_entity_id,client_organization_id,client_tax_profile_id,document_type,series,number,issue_date,due_date,currency_code,subtotal_amount,tax_amount,total_amount,status,issuer_legal_name_snapshot,issuer_tax_id_snapshot,issuer_address_snapshot,receiver_legal_name_snapshot,receiver_tax_id_snapshot,receiver_address_snapshot,receiver_country_snapshot,created_at) VALUES (UUID(),$LE,$CO,$TP,'credit_note','F001',1,'2026-09-30','2026-10-30','PEN',100.0000,0,100.0000,'draft',$SNAP,NOW(3));" OK
+ "INSERT INTO invoices ($CABN) VALUES (UUID(),$LE,$CO,$TP,'credit_note','F001',1,$(dn 902),'2026-09-30','2026-10-30','PEN','inafecto',100.0000,0,100.0000,'issued',NOW(3),$SNAP,NOW(3));" OK
+probar "factura: dos comprobantes gastando el MISMO numero del libro" \
+ "INSERT INTO invoices ($CABN) VALUES (UUID(),$LE,$CO,$TP,'debit_note','F001',1,$(dn 902),'2026-09-30','2026-10-30','PEN','inafecto',100.0000,0,100.0000,'issued',NOW(3),$SNAP,NOW(3));" RECHAZO
 probar "factura: emitida sin sello de emision" \
- "INSERT INTO invoices (uuid,legal_entity_id,client_organization_id,client_tax_profile_id,document_type,series,number,issue_date,due_date,currency_code,subtotal_amount,tax_amount,total_amount,status,issuer_legal_name_snapshot,issuer_tax_id_snapshot,issuer_address_snapshot,receiver_legal_name_snapshot,receiver_tax_id_snapshot,receiver_address_snapshot,receiver_country_snapshot,created_at) VALUES (UUID(),$LE,$CO,$TP,'invoice','F001',4,'2026-09-30','2026-10-30','PEN',100.0000,0,100.0000,'issued',$SNAP,NOW(3));" RECHAZO
+ "INSERT INTO invoices ($CABN) VALUES (UUID(),$LE,$CO,$TP,'invoice','F001',904,$(dn 903),'2026-09-30','2026-10-30','PEN','inafecto',100.0000,0,100.0000,'issued',NULL,$SNAP,NOW(3));" RECHAZO
 probar "factura: anulada sin fecha de anulacion" \
- "INSERT INTO invoices (uuid,legal_entity_id,client_organization_id,client_tax_profile_id,document_type,series,number,issue_date,due_date,currency_code,subtotal_amount,tax_amount,total_amount,status,issued_at,issuer_legal_name_snapshot,issuer_tax_id_snapshot,issuer_address_snapshot,receiver_legal_name_snapshot,receiver_tax_id_snapshot,receiver_address_snapshot,receiver_country_snapshot,created_at) VALUES (UUID(),$LE,$CO,$TP,'invoice','F001',5,'2026-09-30','2026-10-30','PEN',100.0000,0,100.0000,'voided',NOW(3),$SNAP,NOW(3));" RECHAZO
+ "INSERT INTO invoices (uuid,legal_entity_id,client_organization_id,client_tax_profile_id,document_type,series,number,document_number_id,issue_date,due_date,currency_code,tax_regime,subtotal_amount,tax_amount,total_amount,status,issued_at,void_reason,$COLSNAP,created_at) VALUES (UUID(),$LE,$CO,$TP,'invoice','F001',905,$(dn 903),'2026-09-30','2026-10-30','PEN','inafecto',100.0000,0,100.0000,'voided',NOW(3),'El cliente rechazo el alcance.',$SNAP,NOW(3));" RECHAZO
 probar "factura: importes negativos" \
- "INSERT INTO invoices (uuid,legal_entity_id,client_organization_id,client_tax_profile_id,document_type,series,number,issue_date,due_date,currency_code,subtotal_amount,tax_amount,total_amount,status,issuer_legal_name_snapshot,issuer_tax_id_snapshot,issuer_address_snapshot,receiver_legal_name_snapshot,receiver_tax_id_snapshot,receiver_address_snapshot,receiver_country_snapshot,created_at) VALUES (UUID(),$LE,$CO,$TP,'invoice','F001',6,'2026-09-30','2026-10-30','PEN',-100.0000,0,-100.0000,'draft',$SNAP,NOW(3));" RECHAZO
+ "INSERT INTO invoices (uuid,legal_entity_id,client_organization_id,client_tax_profile_id,document_type,issue_date,due_date,currency_code,tax_regime,subtotal_amount,tax_amount,total_amount,status,$COLSNAP,created_at) VALUES (UUID(),$LE,$CO,$TP,'invoice','2026-09-30','2026-10-30','PEN','inafecto',-100.0000,0,-100.0000,'draft',$SNAP,NOW(3));" RECHAZO
 
 # NOTA DE PORTABILIDAD: la subconsulta va envuelta en una tabla derivada
 # `(SELECT x FROM (SELECT ...) t)` a proposito. MySQL 8 rechaza con el error 1093
@@ -264,30 +288,41 @@ probar "factura: importes negativos" \
 # la MISMA tabla que la sentencia esta modificando. MariaDB lo permite, asi que
 # la version directa pasaba en local y fallaba en CI. La tabla derivada se
 # materializa antes y funciona en los dos motores. No la "simplifique".
-INV="(SELECT id FROM (SELECT id FROM invoices WHERE document_type='invoice' AND number=1) t)"
+#
+# 9.9b: se busca por `campaign_id` y ya no por `number=1`. Un borrador no tiene
+# numero, que es justo lo que esta iteracion vino a arreglar.
+INV="(SELECT id FROM (SELECT id FROM invoices WHERE campaign_id IS NOT NULL ORDER BY id LIMIT 1) t)"
 echo ""
 echo "--- Regimen tributario: se factura todo desde Peru (DEC-047) ---"
 probar "regimen: cliente peruano, gravado con IGV 18%" \
- "INSERT INTO invoices (uuid,legal_entity_id,client_organization_id,client_tax_profile_id,document_type,series,number,issue_date,due_date,currency_code,subtotal_amount,tax_amount,total_amount,status,tax_regime,issuer_legal_name_snapshot,issuer_tax_id_snapshot,issuer_address_snapshot,receiver_legal_name_snapshot,receiver_tax_id_snapshot,receiver_address_snapshot,receiver_country_snapshot,created_at) VALUES (UUID(),$LE,$CO,$TP,'invoice','F001',20,'2026-09-30','2026-10-30','PEN',1000.0000,180.0000,1180.0000,'draft','gravado',$SNAP,NOW(3));" OK
+ "INSERT INTO invoices (uuid,legal_entity_id,client_organization_id,client_tax_profile_id,document_type,issue_date,due_date,currency_code,tax_regime,tax_rate_snapshot,subtotal_amount,tax_amount,total_amount,status,$COLSNAP,created_at) VALUES (UUID(),$LE,$CO,$TP,'invoice','2026-09-30','2026-10-30','PEN','gravado',18.0000,1000.0000,180.0000,1180.0000,'draft',$SNAP,NOW(3));" OK
 probar "regimen: cliente del exterior, exportacion sin IGV" \
- "INSERT INTO invoices (uuid,legal_entity_id,client_organization_id,client_tax_profile_id,document_type,series,number,issue_date,due_date,currency_code,subtotal_amount,tax_amount,total_amount,status,tax_regime,issuer_legal_name_snapshot,issuer_tax_id_snapshot,issuer_address_snapshot,receiver_legal_name_snapshot,receiver_tax_id_snapshot,receiver_address_snapshot,receiver_country_snapshot,created_at) VALUES (UUID(),$LE,$CO,$TP,'invoice','F001',21,'2026-09-30','2026-10-30','USD',1000.0000,0,1000.0000,'draft','exportacion','CTS SAC','20603203896','Lima','Cliente Bogota','900123456','Cra 7 #1','CO',NOW(3));" OK
+ "INSERT INTO invoices (uuid,legal_entity_id,client_organization_id,client_tax_profile_id,document_type,issue_date,due_date,currency_code,tax_regime,subtotal_amount,tax_amount,total_amount,status,$COLSNAP,created_at) VALUES (UUID(),$LE,$CO,$TP,'invoice','2026-09-30','2026-10-30','USD','exportacion',1000.0000,0,1000.0000,'draft','CTS SAC','20603203896','Lima','PE','Cliente Bogota','900123456','Cra 7 #1','CO',NOW(3));" OK
 probar "regimen: EXPORTACION CON IGV (o no es exportacion, o hay error)" \
- "INSERT INTO invoices (uuid,legal_entity_id,client_organization_id,client_tax_profile_id,document_type,series,number,issue_date,due_date,currency_code,subtotal_amount,tax_amount,total_amount,status,tax_regime,issuer_legal_name_snapshot,issuer_tax_id_snapshot,issuer_address_snapshot,receiver_legal_name_snapshot,receiver_tax_id_snapshot,receiver_address_snapshot,receiver_country_snapshot,created_at) VALUES (UUID(),$LE,$CO,$TP,'invoice','F001',22,'2026-09-30','2026-10-30','USD',1000.0000,180.0000,1180.0000,'draft','exportacion','CTS SAC','20603203896','Lima','Cliente Bogota','900123456','Cra 7 #1','CO',NOW(3));" RECHAZO
-probar "regimen: exportacion a un cliente domiciliado en Peru" \
- "INSERT INTO invoices (uuid,legal_entity_id,client_organization_id,client_tax_profile_id,document_type,series,number,issue_date,due_date,currency_code,subtotal_amount,tax_amount,total_amount,status,tax_regime,issuer_legal_name_snapshot,issuer_tax_id_snapshot,issuer_address_snapshot,receiver_legal_name_snapshot,receiver_tax_id_snapshot,receiver_address_snapshot,receiver_country_snapshot,created_at) VALUES (UUID(),$LE,$CO,$TP,'invoice','F001',23,'2026-09-30','2026-10-30','USD',1000.0000,0,1000.0000,'draft','exportacion',$SNAP,NOW(3));" RECHAZO
+ "INSERT INTO invoices (uuid,legal_entity_id,client_organization_id,client_tax_profile_id,document_type,issue_date,due_date,currency_code,tax_regime,subtotal_amount,tax_amount,total_amount,status,$COLSNAP,created_at) VALUES (UUID(),$LE,$CO,$TP,'invoice','2026-09-30','2026-10-30','USD','exportacion',1000.0000,180.0000,1180.0000,'draft','CTS SAC','20603203896','Lima','PE','Cliente Bogota','900123456','Cra 7 #1','CO',NOW(3));" RECHAZO
+# 9.9b: la MISMA regla, y ahora sin nombrar a Peru. Compara los dos paises
+# congelados en el documento, asi que sirve igual el dia que se emita desde
+# Bogota --y hasta 9.9b decia literalmente `<> 'PE'`--.
+probar "regimen: exportacion a un cliente domiciliado donde se emite" \
+ "INSERT INTO invoices (uuid,legal_entity_id,client_organization_id,client_tax_profile_id,document_type,issue_date,due_date,currency_code,tax_regime,subtotal_amount,tax_amount,total_amount,status,$COLSNAP,created_at) VALUES (UUID(),$LE,$CO,$TP,'invoice','2026-09-30','2026-10-30','USD','exportacion',1000.0000,0,1000.0000,'draft',$SNAP,NOW(3));" RECHAZO
 probar "regimen: exonerado con impuesto" \
- "INSERT INTO invoices (uuid,legal_entity_id,client_organization_id,client_tax_profile_id,document_type,series,number,issue_date,due_date,currency_code,subtotal_amount,tax_amount,total_amount,status,tax_regime,issuer_legal_name_snapshot,issuer_tax_id_snapshot,issuer_address_snapshot,receiver_legal_name_snapshot,receiver_tax_id_snapshot,receiver_address_snapshot,receiver_country_snapshot,created_at) VALUES (UUID(),$LE,$CO,$TP,'invoice','F001',24,'2026-09-30','2026-10-30','PEN',1000.0000,180.0000,1180.0000,'draft','exonerado',$SNAP,NOW(3));" RECHAZO
+ "INSERT INTO invoices (uuid,legal_entity_id,client_organization_id,client_tax_profile_id,document_type,issue_date,due_date,currency_code,tax_regime,subtotal_amount,tax_amount,total_amount,status,$COLSNAP,created_at) VALUES (UUID(),$LE,$CO,$TP,'invoice','2026-09-30','2026-10-30','PEN','exonerado',1000.0000,180.0000,1180.0000,'draft',$SNAP,NOW(3));" RECHAZO
 probar "regimen: inventado" \
- "INSERT INTO invoices (uuid,legal_entity_id,client_organization_id,client_tax_profile_id,document_type,series,number,issue_date,due_date,currency_code,subtotal_amount,tax_amount,total_amount,status,tax_regime,issuer_legal_name_snapshot,issuer_tax_id_snapshot,issuer_address_snapshot,receiver_legal_name_snapshot,receiver_tax_id_snapshot,receiver_address_snapshot,receiver_country_snapshot,created_at) VALUES (UUID(),$LE,$CO,$TP,'invoice','F001',25,'2026-09-30','2026-10-30','PEN',1000.0000,0,1000.0000,'draft','sin_igv',$SNAP,NOW(3));" RECHAZO
-probar "regimen: gravado sin impuesto (valido: base exonerada por linea)" \
- "INSERT INTO invoices (uuid,legal_entity_id,client_organization_id,client_tax_profile_id,document_type,series,number,issue_date,due_date,currency_code,subtotal_amount,tax_amount,total_amount,status,tax_regime,issuer_legal_name_snapshot,issuer_tax_id_snapshot,issuer_address_snapshot,receiver_legal_name_snapshot,receiver_tax_id_snapshot,receiver_address_snapshot,receiver_country_snapshot,created_at) VALUES (UUID(),$LE,$CO,$TP,'invoice','F001',26,'2026-09-30','2026-10-30','PEN',1000.0000,0,1000.0000,'draft','gravado',$SNAP,NOW(3));" OK
+ "INSERT INTO invoices (uuid,legal_entity_id,client_organization_id,client_tax_profile_id,document_type,issue_date,due_date,currency_code,tax_regime,subtotal_amount,tax_amount,total_amount,status,$COLSNAP,created_at) VALUES (UUID(),$LE,$CO,$TP,'invoice','2026-09-30','2026-10-30','PEN','sin_igv',1000.0000,0,1000.0000,'draft',$SNAP,NOW(3));" RECHAZO
+# 9.9b CAMBIA ESTA: hasta hoy se aceptaba, con el argumento de que la base podia
+# estar exonerada por linea. Es exactamente la factura que `9.9a` existe para
+# impedir --el IGV saldria en cero sin que nadie lo decidiera-- y una base
+# exonerada tiene su propio regimen: `exonerado`. Que la asercion se de la
+# vuelta es el punto: la regla se endurecio a proposito.
+probar "regimen: gravado y con impuesto CERO" \
+ "INSERT INTO invoices (uuid,legal_entity_id,client_organization_id,client_tax_profile_id,document_type,issue_date,due_date,currency_code,tax_regime,subtotal_amount,tax_amount,total_amount,status,$COLSNAP,created_at) VALUES (UUID(),$LE,$CO,$TP,'invoice','2026-09-30','2026-10-30','PEN','gravado',1000.0000,0,1000.0000,'draft',$SNAP,NOW(3));" RECHAZO
 
 echo ""
 echo "--- Lineas de factura ---"
 probar "linea: coherente" \
- "INSERT INTO invoice_lines (invoice_id,line_number,description,quantity,unit_price,line_subtotal,tax_rate,line_tax,line_total) VALUES ($INV,1,'Servicio de campana',1,10000.0000,10000.0000,0.1800,1800.0000,11800.0000);" OK
+ "INSERT INTO invoice_lines (invoice_id,line_number,description,quantity,unit_price,line_subtotal,tax_rate,line_tax,line_total) VALUES ($INV,1,'Servicio de campana',1,10000.0000,10000.0000,18.0000,1800.0000,11800.0000);" OK
 probar "linea: total distinto de subtotal + impuesto" \
- "INSERT INTO invoice_lines (invoice_id,line_number,description,quantity,unit_price,line_subtotal,tax_rate,line_tax,line_total) VALUES ($INV,2,'Otro',1,100.0000,100.0000,0.1800,18.0000,100.0000);" RECHAZO
+ "INSERT INTO invoice_lines (invoice_id,line_number,description,quantity,unit_price,line_subtotal,tax_rate,line_tax,line_total) VALUES ($INV,2,'Otro',1,100.0000,100.0000,18.0000,18.0000,100.0000);" RECHAZO
 probar "linea: cantidad cero" \
  "INSERT INTO invoice_lines (invoice_id,line_number,description,quantity,unit_price,line_subtotal,tax_rate,line_tax,line_total) VALUES ($INV,3,'Nada',0,100.0000,0,0,0,0);" RECHAZO
 probar "linea: numero de linea repetido" \
@@ -300,7 +335,8 @@ echo "--- Cobros del cliente ---"
 # Preparacion, no asercion: pero si esto falla en silencio, la prueba que viene
 # mide una factura que sigue en 'draft' y reporta lo contrario de la verdad.
 # Paso exactamente eso: el UPDATE moria con el error 1093 y nadie se enteraba.
-preparar=$($CLIENTE $DB -e "UPDATE invoices SET status='issued', issued_at=NOW(3) WHERE id=$INV;" 2>&1)
+preparar=$($CLIENTE $DB -e "UPDATE invoices SET status='issued', issued_at=NOW(3),
+  series='F001', number=906, document_number_id=$(dn 906) WHERE id=$INV;" 2>&1)
 if echo "$preparar" | grep -qi "error"; then
   printf "  \033[31m!\033[0m %-64s FALLO LA PREPARACION\n" "emitir la factura para las pruebas de borrado"
   echo "      $(echo "$preparar" | grep -i error | head -1)"
@@ -311,7 +347,7 @@ probar "linea: borrar de una factura ya emitida" \
 probar "factura emitida: borrado fisico" \
  "DELETE FROM invoices WHERE id=$INV;" RECHAZO
 probar "factura borrador: borrado fisico permitido" \
- "DELETE FROM invoices WHERE document_type='credit_note' AND number=1;" OK
+ "DELETE FROM invoices WHERE status='draft' AND tax_regime='exportacion';" OK
 probar "cobro: parcial" \
  "INSERT INTO payments (uuid,invoice_id,amount,currency_code,method,reference,received_on,created_at) VALUES (UUID(),$INV,5000.0000,'PEN','transfer','ABO-1',' 2026-10-05',NOW(3));" OK
 probar "cobro: segundo parcial" \

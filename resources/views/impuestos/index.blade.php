@@ -62,6 +62,9 @@
                   @if ($t->official_code)
                     <span class="ml-1 rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-mono">{{ $t->official_code }}</span>
                   @endif
+                  @if ($t->sales_tax_code === $t->code)
+                    <span class="ml-1 rounded bg-sky-100 px-1.5 py-0.5 text-[11px] text-sky-800">en la factura</span>
+                  @endif
                 </td>
                 <td class="px-4 py-2 text-right font-mono">{{ rtrim(rtrim($t->rate, '0'), '.') }} %</td>
                 <td class="px-4 py-2 text-xs">{{ $t->valid_from }}</td>
@@ -128,6 +131,16 @@
       <label class="block text-xs text-slate-500">Nota
         <input name="note" maxlength="255" placeholder="La norma que la cambió"
                value="{{ old('note') }}" class="mt-1 w-full rounded border-slate-300 text-sm">
+      </label>
+
+      <label class="flex items-start gap-2 text-xs text-slate-600">
+        <input type="checkbox" name="es_de_venta" value="1" class="mt-0.5 rounded border-slate-300">
+        <span>
+          Es el impuesto que va en las <strong>facturas de venta</strong> de ese país.
+          <span class="block text-[11px] text-slate-400">
+            Sin esto el sistema no sabe cuál de los impuestos del país usar al facturar, y saldría en cero.
+          </span>
+        </span>
       </label>
 
       <button class="w-full rounded bg-marca-500 px-3 py-2 text-sm text-white">Publicar</button>

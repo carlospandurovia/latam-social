@@ -2,6 +2,53 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 
+## [9.9b · La factura que sale de una campaña] — 2026-09-01
+
+`invoices` e `invoice_lines` llevaban desde la Fase 2 con la mesa puesta y **sin
+nadie que escribiera**. Al abrir la puerta salieron cinco defectos que sólo se
+ven cuando de verdad se intenta emitir.
+
+### Añadido
+- `Finance\Services\Facturas` — borrador desde una campaña, líneas, emisión con
+  el correlativo de `9.12`, anulación con motivo.
+- `countries.sales_tax_code` — **cuál** de los impuestos de un país va en una
+  factura de venta. Se marca con una casilla en `/backoffice/impuestos`.
+- `invoices.issuer_country_snapshot`, `document_number_id`, `tax_rate_id`,
+  `tax_rate_snapshot`, `issued_by_user_id`, `void_reason`.
+- `tg_invoice_emision`, `tg_iline_solo_borrador`, `tg_iline_no_update`.
+- Pantallas `/backoffice/facturas` (`finance.view`) y su detalle, con emisión y
+  anulación tras `finance.invoice.issue`. Entrada **Comprobantes** en Finanzas.
+- `Campanas::facturable()` — qué hace facturable a una campaña lo contesta el
+  módulo que las tiene.
+- `tools/pruebas/9.9b-facturas.sh` (24 aserciones) y `FacturasTest` (15).
+
+### Cambiado
+- `invoices.series` y `number` pasan a admitir `NULL`: **un borrador ya no gasta
+  correlativo**.
+- `ck_invoice_regime_country` deja de nombrar a Perú: compara los dos países
+  congelados en el documento.
+- `ck_invoice_number` admite «todavía no hay número».
+
+### Decidido
+- `DEC-248`: el número se pide al **emitir**, no al empezar a escribir.
+- `DEC-249`: el régimen y el código del impuesto, sin ningún país en el código.
+- `DEC-250`: lo emitido no se corrige, y las líneas tienen que sumar la cabecera.
+- `DEC-251`: la factura explica su propio importe sin salir de su fila; anular
+  exige motivo y el número no vuelve a la serie.
+
+### Arreglado
+- **`T-80`** — entrar con la contraseña correcta terminaba en «404 NOT FOUND».
+  `redirect()->intended()` obedecía a una dirección guardada en la sesión
+  **desde antes de la mudanza a `/backoffice`**. Ahora la dirección guardada
+  tiene que ser de esta casa y **seguir resolviendo**; si no, al panel.
+
+### Sabido y dicho
+- **`T-79`**: `ck_invoice_type` sigue con los cuatro tipos peruanos escritos en
+  el esquema. Los tipos son datos desde `9.12`; la restricción sobra.
+- **`Q-65`**: facturar una campaña **en curso** (por adelantado o por hitos) no
+  está decidido, así que hoy sólo se ofrecen las terminadas.
+- El trinquete de cobertura SQL baja de 145 a 140.
+
 ## [9.9a · El impuesto es un dato] — 2026-08-31
 
 `invoices` existe desde la Fase 2 con `tax_amount` y con la aritmética

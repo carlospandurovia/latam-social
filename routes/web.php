@@ -44,6 +44,7 @@ use App\Modules\Creator\Http\Controllers\PostulacionController;
 use App\Modules\Creator\Http\Controllers\RedesSocialesController;
 use App\Modules\Creator\Http\Controllers\SolicitudesController;
 use App\Modules\Finance\Http\Controllers\CostosController;
+use App\Modules\Finance\Http\Controllers\FacturasController;
 use App\Modules\Finance\Http\Controllers\LotesController;
 use App\Modules\Finance\Http\Controllers\MisIngresosController;
 use App\Modules\Finance\Http\Controllers\RentabilidadController;
@@ -875,6 +876,51 @@ Route::middleware('auth')->prefix('backoffice')->group(function (): void {
     Route::post('/impuestos', [ImpuestosController::class, 'publicar'])
         ->middleware('permiso:pricing.manage')
         ->name('impuestos.publicar');
+
+    // 9.9b -- Los comprobantes. DOS permisos y no uno: `finance.view` para
+    // mirar y `finance.invoice.issue` para emitir. Quien concilia cobros
+    // necesita ver que se facturo, y no por eso tiene que poder emitir a nombre
+    // de la sociedad. Los dos existen desde la Fase 3.
+    Route::get('/facturas', [FacturasController::class, 'index'])
+        ->middleware('permiso:finance.view')
+        ->name('facturas.index');
+
+    Route::get('/facturas/{uuid}', [FacturasController::class, 'ver'])
+        ->middleware('permiso:finance.view')
+        ->whereUuid('uuid')
+        ->name('facturas.ver');
+
+    Route::post('/facturas', [FacturasController::class, 'borrador'])
+        ->middleware('permiso:finance.invoice.issue')
+        ->name('facturas.borrador');
+
+    Route::post('/facturas/{uuid}/lineas', [FacturasController::class, 'guardarLinea'])
+        ->middleware('permiso:finance.invoice.issue')
+        ->whereUuid('uuid')
+        ->name('facturas.linea');
+
+    // Una linea SI se borra, y solo mientras es borrador: `tg_iline_no_delete`
+    // y `tg_iline_no_update` lo impiden en cuanto el documento se emite.
+    Route::delete('/facturas/{uuid}/lineas/{linea}', [FacturasController::class, 'borrarLinea'])
+        ->middleware('permiso:finance.invoice.issue')
+        ->whereUuid('uuid')->whereNumber('linea')
+        ->name('facturas.linea.borrar');
+
+    Route::delete('/facturas/{uuid}', [FacturasController::class, 'descartar'])
+        ->middleware('permiso:finance.invoice.issue')
+        ->whereUuid('uuid')
+        ->name('facturas.descartar');
+
+    Route::post('/facturas/{uuid}/emitir', [FacturasController::class, 'emitir'])
+        ->middleware('permiso:finance.invoice.issue')
+        ->whereUuid('uuid')
+        ->name('facturas.emitir');
+
+    // Anular exige motivo, como el numero de `9.12` y el contacto de `9.21c`.
+    Route::post('/facturas/{uuid}/anular', [FacturasController::class, 'anular'])
+        ->middleware('permiso:finance.invoice.issue')
+        ->whereUuid('uuid')
+        ->name('facturas.anular');
 
     // 9.21c -- La bandeja de contactos que llegan por la portada. Verlos es
     // `client.view`; moverlos es `client.manage`, la misma separacion que ya

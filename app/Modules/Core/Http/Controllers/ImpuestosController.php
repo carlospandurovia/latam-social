@@ -50,6 +50,10 @@ final class ImpuestosController
             'official_code' => ['nullable', 'string', 'max:10'],
             'valid_from' => ['required', 'date'],
             'note' => ['nullable', 'string', 'max:255'],
+            // 9.9b: la segunda mitad de la misma decision. Marcarla aqui
+            // evita que alguien publique la tasa y olvide decir que es la
+            // que va en la factura --con lo que se emitiria sin impuesto--.
+            'es_de_venta' => ['nullable', 'boolean'],
         ]);
 
         try {

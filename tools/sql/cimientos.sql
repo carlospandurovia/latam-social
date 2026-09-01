@@ -21,6 +21,12 @@ CREATE TABLE countries (
   tax_location_label    VARCHAR(40)  NULL,
   tax_location_pattern  VARCHAR(80)  NULL,
   requires_tax_location TINYINT(1)   NOT NULL DEFAULT 0,
+  -- 9.9b: cual de los impuestos de este pais va en una factura de VENTA. Apunta
+  -- al `code` de una fila de tax_rates, y no lleva foranea a proposito: la tasa
+  -- cambia de fila cada vez que cambia el porcentaje, y una foranea ataria el
+  -- pais a la fila de 2026 en vez de al impuesto. Sin esto el codigo tendria
+  -- «IGV» escrito dentro, que es peruano (DEC-190).
+  sales_tax_code        VARCHAR(20)  NULL,
   is_active             TINYINT(1)   NOT NULL DEFAULT 1,
   created_at            DATETIME(3)  NULL,
   updated_at            DATETIME(3)  NULL,
@@ -32,7 +38,11 @@ CREATE TABLE countries (
   CONSTRAINT ck_countries_localidad CHECK (tax_location_pattern IS NULL OR tax_location_label IS NOT NULL),
   -- Y exigirlo sin decir que forma tiene es pedir algo que no se puede
   -- comprobar: el aviso saldria en rojo para siempre.
-  CONSTRAINT ck_countries_localidad_exigida CHECK (requires_tax_location = 0 OR tax_location_pattern IS NOT NULL)
+  CONSTRAINT ck_countries_localidad_exigida CHECK (requires_tax_location = 0 OR tax_location_pattern IS NOT NULL),
+  -- La misma forma que ck_tax_code, y por lo mismo: este valor se compara
+  -- contra tax_rates.code, y dos escrituras del mismo tributo serian dos
+  -- impuestos para la consulta y uno solo para quien lo teclea.
+  CONSTRAINT ck_countries_sales_tax CHECK (sales_tax_code IS NULL OR (sales_tax_code REGEXP '^[A-Z][A-Z0-9_]{1,19}$' AND sales_tax_code COLLATE utf8mb4_bin = UPPER(sales_tax_code)))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE currencies (

@@ -134,6 +134,32 @@ final class Campanas
         ]);
 
         return $uuid;
+
+    }
+
+    /**
+     * Lo que hace falta saber de una campaña para poder facturarla (9.9b).
+     *
+     * Existe para que `Finance` no tenga que consultar `campaigns` por su
+     * cuenta. Deptrac permite que Finanzas dependa de Campañas, así que una
+     * consulta directa no la vería —es la lección de `T-74`—, pero **qué hace
+     * facturable a una campaña es una pregunta de este módulo**: la sociedad que
+     * factura, la moneda y el importe declarado salen de aquí, y el día que
+     * cambien lo hacen en un solo sitio.
+     *
+     * Devuelve `null` si no existe. No filtra por estado a propósito: quién
+     * puede facturarse y cuándo es una decisión que se dice con palabras arriba,
+     * no un `WHERE` que hace desaparecer la campaña sin explicar por qué.
+     */
+    public static function facturable(int $campanaId): ?object
+    {
+        return DB::table('campaigns as c')
+            ->leftJoin('client_brands as b', 'b.id', '=', 'c.client_brand_id')
+            ->where('c.id', $campanaId)
+            ->first(['c.id', 'c.uuid', 'c.code', 'c.name', 'c.status',
+                'c.client_organization_id', 'c.client_brand_id', 'c.billing_legal_entity_id',
+                'c.currency_code', 'c.revenue_amount', 'c.is_gratis',
+                'c.starts_on', 'c.ends_on', 'b.name as marca']);
     }
 
     /**

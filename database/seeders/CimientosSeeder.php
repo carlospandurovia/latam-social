@@ -7,6 +7,7 @@ namespace Database\Seeders;
 use App\Shared\Database\Vigencia;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 /**
@@ -759,6 +760,21 @@ final class CimientosSeeder extends Seeder
                     'updated_at' => $ahora, 'created_at' => $ahora,
                 ],
             );
+
+            // 9.9b: y CUAL de los impuestos de Peru va en una factura de venta.
+            // Es la segunda mitad de la misma decision, y sin ella el sistema
+            // tendria la tasa y no sabria que es la que hay que usar --con lo
+            // que la factura saldria en cero--.
+            //
+            // Se escribe solo si el pais no lo ha dicho todavia: es
+            // configuracion del cliente, y volver a sembrar no puede pisarla
+            // (`T-77`).
+            if (Schema::hasColumn('countries', 'sales_tax_code')
+                && DB::table('countries')->where('id', $paisPeru)
+                    ->whereNull('sales_tax_code')->exists()) {
+                DB::table('countries')->where('id', $paisPeru)
+                    ->update(['sales_tax_code' => 'IGV', 'updated_at' => $ahora]);
+            }
         }
 
         // 9.21b: las dos portadas publicas, con texto DE PARTIDA.

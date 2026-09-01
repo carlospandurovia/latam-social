@@ -68,6 +68,64 @@ final class Impuestos
     }
 
     /**
+     * El impuesto de venta de un país en una fecha, o `null`.
+     *
+     * Cuál de los impuestos de ese país va en una factura de venta lo dice
+     * `countries.sales_tax_code`, no una constante: «IGV» es peruano y esto se
+     * usa desde el código que factura para seis países (`DEC-190`, `9.9b`).
+     *
+     * Devuelve `null` en los dos casos en que no se puede responder —el país no
+     * ha declarado cuál es su impuesto de venta, o no hay tasa vigente esa
+     * fecha— y quien llama tiene que poder decirlo con palabras.
+     */
+    public static function deVenta(int $paisId, ?string $fecha = null): ?object
+    {
+        $codigo = self::codigoDeVenta($paisId);
+
+        return $codigo === null ? null : self::vigente($paisId, $codigo, $fecha);
+    }
+
+    /** Cómo se llama el impuesto de venta de ese país, si alguien lo ha dicho. */
+    public static function codigoDeVenta(int $paisId): ?string
+    {
+        if (!Schema::hasColumn('countries', 'sales_tax_code')) {
+            return null;
+        }
+
+        $codigo = DB::table('countries')->where('id', $paisId)->value('sales_tax_code');
+
+        return ($codigo === null || $codigo === '') ? null : (string) $codigo;
+    }
+
+    /**
+     * Declara cuál de los impuestos de un país va en sus facturas de venta.
+     *
+     * Se hace desde la misma pantalla que publica la tasa porque es la misma
+     * decisión dicha dos veces —«el IGV es el 18 %» y «el impuesto de una
+     * factura peruana es el IGV»— y separarlas en dos sitios es la forma más
+     * barata de que alguien haga la primera y olvide la segunda.
+     */
+    public static function marcarComoImpuestoDeVenta(int $paisId, string $codigo): void
+    {
+        $codigo = mb_strtoupper(trim($codigo));
+        $antes = self::codigoDeVenta($paisId);
+
+        if ($antes === $codigo) {
+            return;
+        }
+
+        DB::table('countries')->where('id', $paisId)
+            ->update(['sales_tax_code' => $codigo, 'updated_at' => now()]);
+
+        Bitacora::registrar(
+            accion: 'country.sales_tax_set',
+            tipoEntidad: 'country',
+            idEntidad: $paisId,
+            cambios: ['impuesto_de_venta' => ['antes' => $antes, 'despues' => $codigo]],
+        );
+    }
+
+    /**
      * Todas, con su país, para la pantalla.
      *
      * @return Collection<int, \stdClass>
@@ -78,7 +136,8 @@ final class Impuestos
             ->join('countries as c', 'c.id', '=', 't.country_id')
             ->orderBy('c.name')->orderBy('t.code')->orderByDesc('t.valid_from')
             ->get(['t.id', 't.country_id', 't.code', 't.name', 't.rate', 't.official_code',
-                't.valid_from', 't.valid_to', 't.note', 'c.name as pais', 'c.iso2']);
+                't.valid_from', 't.valid_to', 't.note', 'c.name as pais', 'c.iso2',
+                'c.sales_tax_code']);
     }
 
     /**
@@ -131,6 +190,13 @@ final class Impuestos
                 'updated_at' => now(),
             ]);
 
+            // La segunda mitad de la misma decision (`9.9b`). Va DENTRO de la
+            // transaccion: publicar la tasa y no llegar a decir que es la de
+            // venta dejaria el pais con tasa y sin saber cual usar.
+            if ((bool) ($datos['es_de_venta'] ?? false)) {
+                self::marcarComoImpuestoDeVenta($paisId, $codigo);
+            }
+
             Bitacora::registrar(
                 accion: 'tax_rate.published',
                 tipoEntidad: 'tax_rate',
@@ -175,6 +241,28 @@ final class Impuestos
                 .'emita el impuesto saldría en cero sin que nadie lo haya decidido.',
                 $sinTasa->implode(', '),
             ));
+        }
+
+        // Un pais con tasa vigente que no ha dicho CUAL de sus impuestos va en
+        // una factura de venta. Se calcularia sin impuesto, que es el mismo
+        // cero de arriba por otro camino (`9.9b`).
+        if (Schema::hasColumn('countries', 'sales_tax_code')) {
+            $sinCodigo = DB::table('legal_entities as le')
+                ->join('countries as c', 'c.id', '=', 'le.country_id')
+                ->where('le.status', 'active')
+                ->where(fn ($q) => $q->whereNull('c.sales_tax_code')->orWhere('c.sales_tax_code', ''))
+                ->whereExists(fn ($q) => $q->select(DB::raw(1))
+                    ->from('tax_rates as t')
+                    ->whereColumn('t.country_id', 'le.country_id'))
+                ->distinct()->pluck('c.name');
+
+            if ($sinCodigo->isNotEmpty()) {
+                $avisos[] = Aviso::rojo(sprintf(
+                    'Hay tasas declaradas pero nadie ha dicho cuál es el impuesto de venta de %s. '
+                    .'Marque una tasa como «la que va en la factura» o se emitirá sin impuesto.',
+                    $sinCodigo->implode(', '),
+                ));
+            }
         }
 
         // Una tasa que se cierra y no tiene sucesora deja un hueco a futuro.
