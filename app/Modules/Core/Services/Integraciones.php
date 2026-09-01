@@ -69,12 +69,20 @@ final class Integraciones
         return DB::table('integration_connections as ic')
             ->join('integration_providers as ip', 'ip.id', '=', 'ic.integration_provider_id')
             ->leftJoin('legal_entities as le', 'le.id', '=', 'ic.legal_entity_id')
+            // 9.17e: el extremo que el proveedor declara para ese entorno. La
+            // pantalla ensena cual se USA y si es propia o heredada, porque
+            // «no se ve la URL» y «la URL esta mal» se arreglan distinto.
+            ->leftJoin('integration_provider_endpoints as pe', function ($union): void {
+                $union->on('pe.integration_provider_id', '=', 'ic.integration_provider_id')
+                    ->on('pe.environment', '=', 'ic.environment');
+            })
             ->orderBy('ip.purpose')->orderBy('ip.name')->orderBy('ic.environment')
             ->get(['ic.id', 'ic.uuid', 'ic.name', 'ic.environment', 'ic.base_url',
                 'ic.username', 'ic.status', 'ic.last_verified_at', 'ic.last_success_at',
                 'ic.last_error_at', 'ic.last_error_message',
                 'ip.code as proveedor', 'ip.name as proveedor_nombre', 'ip.purpose',
-                'le.code as sociedad']);
+                'le.code as sociedad',
+                'pe.base_url as url_del_proveedor', 'pe.label as etiqueta_del_proveedor']);
     }
 
     /** @return Collection<int, \stdClass> */
@@ -82,6 +90,51 @@ final class Integraciones
     {
         return DB::table('integration_providers')->where('is_active', 1)
             ->orderBy('purpose')->orderBy('name')->get(['id', 'code', 'name', 'purpose']);
+    }
+
+    /**
+     * A dónde llama de verdad una conexión.
+     *
+     * La suya si la tiene; si no, la que el proveedor declara para ese entorno.
+     * **Es la única forma correcta de preguntarlo**: leer `base_url` a secas
+     * devuelve `null` en el caso normal —el que hereda— y quien llame se irá a
+     * ninguna parte sin saber por qué.
+     */
+    public static function urlDe(int $conexionId): ?string
+    {
+        $fila = DB::table('integration_connections as ic')
+            ->leftJoin('integration_provider_endpoints as pe', function ($union): void {
+                $union->on('pe.integration_provider_id', '=', 'ic.integration_provider_id')
+                    ->on('pe.environment', '=', 'ic.environment');
+            })
+            ->where('ic.id', $conexionId)
+            ->first(['ic.base_url', 'pe.base_url as heredada']);
+
+        if ($fila === null) {
+            return null;
+        }
+
+        $propia = (string) ($fila->base_url ?? '');
+
+        return $propia !== '' ? $propia : (($fila->heredada ?? null) === null ? null : (string) $fila->heredada);
+    }
+
+    /**
+     * Los extremos que declara cada proveedor, para enseñarlos en el formulario.
+     *
+     * @return Collection<int, \stdClass>
+     */
+    public static function extremos(): Collection
+    {
+        if (!Schema::hasTable('integration_provider_endpoints')) {
+            return collect();
+        }
+
+        return DB::table('integration_provider_endpoints as pe')
+            ->join('integration_providers as ip', 'ip.id', '=', 'pe.integration_provider_id')
+            ->orderBy('ip.name')->orderBy('pe.environment')
+            ->get(['pe.integration_provider_id', 'pe.environment', 'pe.base_url', 'pe.label',
+                'pe.notes', 'ip.name as proveedor']);
     }
 
     public static function porUuid(string $uuid): object

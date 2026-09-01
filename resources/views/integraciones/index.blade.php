@@ -51,7 +51,22 @@
           </div>
 
           <div class="px-5 py-3 space-y-1 text-xs text-slate-600 border-b border-slate-50">
-            <p><span class="text-slate-400">URL:</span> {{ $c->base_url ?: '— sin poner' }}</p>
+            {{-- 9.17e: se ensena la que se USA y de donde sale. «No se ve la URL»
+                 y «la URL esta mal» se arreglan en sitios distintos. --}}
+            <p>
+              <span class="text-slate-400">URL:</span>
+              @if ($c->base_url)
+                <span class="break-all font-mono">{{ $c->base_url }}</span>
+                <span class="rounded bg-amber-100 px-1.5 py-0.5 text-[11px] text-amber-800">propia</span>
+              @elseif ($c->url_del_proveedor)
+                <span class="break-all font-mono">{{ $c->url_del_proveedor }}</span>
+                <span class="rounded bg-slate-100 px-1.5 py-0.5 text-[11px]">
+                  {{ $c->etiqueta_del_proveedor ?: 'del proveedor' }}
+                </span>
+              @else
+                <span class="text-rose-700">— el proveedor no declara una para este entorno</span>
+              @endif
+            </p>
             @if ($c->username)
               <p><span class="text-slate-400">Usuario:</span> {{ $c->username }}</p>
             @endif
@@ -122,7 +137,8 @@
       <div class="bg-white rounded-xl border border-slate-200 p-5">
         <h2 class="text-sm font-semibold mb-1">Conexión nueva</h2>
         <p class="text-xs text-slate-400 mb-3">
-          Nace en borrador. No se usa hasta que se active, y para activarla hace falta la URL.
+          Nace en borrador. No se usa hasta que se active. Y <strong>la contraseña se guarda
+          después</strong>: aparece en la ficha de la conexión, en cuanto exista.
         </p>
         <form method="POST" action="{{ route('integraciones.store') }}" class="space-y-3">
           @csrf
@@ -178,10 +194,17 @@
             </p>
           </div>
           <div>
-            <label for="base_url" class="block text-xs text-slate-500 mb-1">URL</label>
-            <input id="base_url" name="base_url" maxlength="255" placeholder="https://…"
+            <label for="base_url" class="block text-xs text-slate-500 mb-1">
+              URL <span class="text-slate-400">— sólo si es distinta de la del proveedor</span>
+            </label>
+            <input id="base_url" name="base_url" maxlength="255" placeholder="Déjalo vacío"
                    value="{{ old('base_url') }}"
                    class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+            <p class="mt-1 text-xs text-slate-400">
+              Vacío significa <strong>la que declara el proveedor para ese entorno</strong>.
+              Los extremos de SUNAT son fijos y públicos: no hay que teclearlos, y teclearlos
+              es la forma de que un carácter de más produzca comprobantes que no llegan.
+            </p>
           </div>
           <div>
             <label for="username" class="block text-xs text-slate-500 mb-1">
@@ -198,11 +221,41 @@
       </div>
 
       <div class="bg-white rounded-xl border border-slate-200 p-5">
-        <h2 class="text-sm font-semibold mb-2">Qué NO está aquí todavía</h2>
+        <h2 class="text-sm font-semibold mb-2">A dónde llama cada entorno</h2>
+        <p class="text-xs text-slate-400 mb-3">
+          Estas direcciones vienen puestas. Se cambian aquí el día que el proveedor mueva una,
+          sin desplegar.
+        </p>
+        <ul class="space-y-2 text-xs">
+          @forelse ($extremos as $e)
+            <li>
+              <span class="text-slate-700">{{ $e->proveedor }}</span>
+              <span class="rounded bg-slate-100 px-1.5 py-0.5 text-[11px]">{{ $entornos[$e->environment] ?? $e->environment }}</span>
+              <span class="block break-all font-mono text-[11px] text-slate-500">{{ $e->base_url }}</span>
+              @if ($e->notes)
+                <span class="block text-[11px] text-slate-400">{{ $e->notes }}</span>
+              @endif
+            </li>
+          @empty
+            <li class="text-slate-500">Ningún proveedor declara direcciones todavía.</li>
+          @endforelse
+        </ul>
+      </div>
+
+      <div class="bg-white rounded-xl border border-slate-200 p-5">
+        <h2 class="text-sm font-semibold mb-2">Dónde va cada cosa</h2>
         <ul class="space-y-2 text-xs text-slate-500">
           <li>
-            <span class="text-slate-700">El certificado digital</span> de SUNAT. Es un secreto de
-            otra clase —un archivo— y va con la facturación electrónica, no con esta pantalla.
+            <span class="text-slate-700">La contraseña del usuario secundario</span> se guarda
+            <strong>en la ficha de la conexión</strong>, no en este formulario: primero se crea la
+            conexión, y entonces aparece el campo. Un secreto entra y no vuelve a salir, así que
+            no se puede pedir a la vez que lo demás.
+          </li>
+          <li>
+            <span class="text-slate-700">El certificado digital</span> ya tiene su sitio:
+            <a href="{{ route('certificados.index') }}" class="text-marca-700 hover:underline">Certificados de firma</a>.
+            Es un secreto de otra clase —un archivo con clave privada— y va con la
+            <strong>sociedad</strong>, no con la conexión: el mismo firma salga por donde salga.
           </li>
           <li>
             <span class="text-slate-700">La clave de los tipos de cambio</span> sigue en

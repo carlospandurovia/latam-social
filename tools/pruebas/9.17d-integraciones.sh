@@ -47,9 +47,15 @@ porque "un proposito inventado" \
    VALUES ('x917d','Proveedor de prueba','contabilidad',NOW(3));" \
   "ck_iprov_purpose|Proposito de integracion"
 
-probar "un proveedor de facturacion entra" \
+# 9.17e: el proveedor de esta suite pasa a ser de CORREO, y es a proposito.
+# Desde `tg_iconn_activa_*`, un proveedor de facturacion activo exige sociedad
+# --lleva su RUC-- y las aserciones de aqui abajo necesitan justamente el caso
+# contrario: una conexion de TODA LA PLATAFORMA, que es lo que prueba que
+# `uq_iconn_active` usa `COALESCE(legal_entity_id, 0)`. La regla del emisor
+# electronico tiene su propia suite en `9.17e`.
+probar "un proveedor de correo entra" \
   "INSERT INTO integration_providers (code,name,purpose,created_at)
-   VALUES ('x917d','Proveedor de prueba','invoicing',NOW(3));" OK
+   VALUES ('x917d','Proveedor de prueba','email',NOW(3));" OK
 
 PROV="(SELECT id FROM (SELECT id FROM integration_providers WHERE code='x917d') p)"
 
@@ -75,12 +81,12 @@ probar "un borrador sin URL entra: para eso es un borrador" \
 
 porque "pero activarla sin URL, no" \
   "UPDATE integration_connections SET status='active' WHERE name='X917D-A';" \
-  "ck_iconn_url|URL https"
+  "tg_iconn_activa_upd|no sabe a donde llamar"
 
 porque "ni con una URL sin cifrar" \
   "UPDATE integration_connections SET status='active', base_url='http://api.ejemplo.com'
     WHERE name='X917D-A';" \
-  "ck_iconn_url|URL https"
+  "tg_iconn_activa_upd|no sabe a donde llamar"
 
 probar "con https si" \
   "UPDATE integration_connections SET status='active', base_url='https://api.ejemplo.com'

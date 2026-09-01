@@ -36,6 +36,34 @@ CREATE TABLE integration_providers (
   CONSTRAINT ck_iprov_purpose CHECK (purpose IN ('invoicing','fx','email','payment','identity','other'))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- ==================== A donde llama cada proveedor, por entorno (9.17e)
+-- Reportado por el negocio: «.por que me pide la URL? si selecciono Pruebas debe
+-- ir al URL Beta, si selecciono PRD al de PRD». Tiene razon, y era un defecto de
+-- 9.17d: los extremos de SUNAT son FIJOS y PUBLICOS --no son un dato de esta
+-- instalacion, son la direccion del servicio-- y pedirselos a una persona es
+-- pedirle que teclee una constante. Un caracter de mas produce comprobantes que
+-- no llegan, con un error de red que no dice que paso.
+--
+-- Es DEC-190 del reves: alli el problema era quemar en el codigo lo que es de
+-- cada instalacion; aqui era pedirle a cada instalacion lo que es del proveedor.
+CREATE TABLE integration_provider_endpoints (
+  id            BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  integration_provider_id BIGINT UNSIGNED NOT NULL,
+  environment   VARCHAR(15)   NOT NULL,
+  base_url      VARCHAR(255)  NOT NULL,
+  -- Como lo llama el proveedor en su documentacion.
+  label         VARCHAR(60)   NULL,
+  notes         VARCHAR(255)  NULL,
+  created_at    DATETIME(3)   NULL,
+  updated_at    DATETIME(3)   NULL,
+  -- Una direccion por proveedor y entorno: con dos, la mitad de las llamadas
+  -- iria a una y la mitad a otra.
+  UNIQUE KEY uq_ipend_entorno (integration_provider_id, environment),
+  CONSTRAINT fk_ipend_provider FOREIGN KEY (integration_provider_id) REFERENCES integration_providers(id) ON DELETE RESTRICT,
+  CONSTRAINT ck_ipend_env CHECK (environment IN ('sandbox','production')),
+  CONSTRAINT ck_ipend_url CHECK (base_url LIKE 'https://%')
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE integration_connections (
   id            BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
   uuid          CHAR(36)      NOT NULL,
@@ -72,10 +100,12 @@ CREATE TABLE integration_connections (
   -- La barrera de DEC-029 aplicada a las conexiones: la de pruebas y la real
   -- conviven y no se pueden confundir.
   CONSTRAINT ck_iconn_env CHECK (environment IN ('sandbox','production')),
-  CONSTRAINT ck_iconn_status CHECK (status IN ('draft','active','disabled')),
-  -- Una conexion ACTIVA tiene que saber a donde llamar. En borrador no: un
-  -- borrador es justamente el sitio donde todavia faltan cosas.
-  CONSTRAINT ck_iconn_url CHECK (status <> 'active' OR (base_url IS NOT NULL AND base_url LIKE 'https://%'))
+  -- 9.17e: `ck_iconn_url` se fue de aqui. «.Sabe esta conexion a donde llamar?»
+  -- pasa a contestarse mirando OTRA tabla --el extremo que declara el proveedor
+  -- para ese entorno-- y un CHECK no puede cruzar tablas. Vive en
+  -- `tg_iconn_activa_ins` / `_upd`, que ademas exige lo que faltaba: un emisor
+  -- electronico va con una sociedad, porque lleva su RUC.
+  CONSTRAINT ck_iconn_status CHECK (status IN ('draft','active','disabled'))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- El secreto se escribe y no se vuelve a leer. Rotar CREA una version nueva y
@@ -116,6 +146,68 @@ CREATE TABLE integration_credentials (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 DELIMITER //
+
+-- 9.17e: lo que hace falta para ACTIVAR una conexion, y solo para activarla:
+-- un borrador es justamente el sitio donde todavia faltan cosas (DEC-190).
+--
+--   1. Sabe a donde llamar: la suya, o la que el proveedor declara para ese
+--      entorno. Es cruzada, asi que no cabe en un CHECK.
+--   2. Un emisor electronico va con una sociedad: lleva su RUC.
+CREATE TRIGGER tg_iconn_activa_ins BEFORE INSERT ON integration_connections
+FOR EACH ROW
+BEGIN
+  DECLARE v_proposito VARCHAR(30);
+  DECLARE v_delProveedor INT DEFAULT 0;
+
+  IF NEW.status = 'active' THEN
+    SELECT purpose INTO v_proposito
+      FROM integration_providers WHERE id = NEW.integration_provider_id;
+
+    SELECT COUNT(*) INTO v_delProveedor
+      FROM integration_provider_endpoints
+     WHERE integration_provider_id = NEW.integration_provider_id
+       AND environment = NEW.environment;
+
+    IF (NEW.base_url IS NULL OR NEW.base_url NOT LIKE 'https://%')
+       AND v_delProveedor = 0 THEN
+      SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'Esa conexion no sabe a donde llamar: el proveedor no declara direccion para ese entorno.';
+    END IF;
+
+    IF v_proposito = 'invoicing' AND NEW.legal_entity_id IS NULL THEN
+      SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'Un emisor electronico va con una sociedad: es su RUC el que firma.';
+    END IF;
+  END IF;
+END//
+
+CREATE TRIGGER tg_iconn_activa_upd BEFORE UPDATE ON integration_connections
+FOR EACH ROW
+BEGIN
+  DECLARE v_proposito VARCHAR(30);
+  DECLARE v_delProveedor INT DEFAULT 0;
+
+  IF NEW.status = 'active' THEN
+    SELECT purpose INTO v_proposito
+      FROM integration_providers WHERE id = NEW.integration_provider_id;
+
+    SELECT COUNT(*) INTO v_delProveedor
+      FROM integration_provider_endpoints
+     WHERE integration_provider_id = NEW.integration_provider_id
+       AND environment = NEW.environment;
+
+    IF (NEW.base_url IS NULL OR NEW.base_url NOT LIKE 'https://%')
+       AND v_delProveedor = 0 THEN
+      SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'Esa conexion no sabe a donde llamar: el proveedor no declara direccion para ese entorno.';
+    END IF;
+
+    IF v_proposito = 'invoicing' AND NEW.legal_entity_id IS NULL THEN
+      SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'Un emisor electronico va con una sociedad: es su RUC el que firma.';
+    END IF;
+  END IF;
+END//
 
 -- 9.17d: una credencial no se reescribe: se revoca y se crea la siguiente. Sin
 -- esto, «rotar» podria ser un UPDATE sobre el cifrado, y entonces la pregunta

@@ -33,6 +33,7 @@ final class IntegracionesController
     public function index(): View
     {
         return view('integraciones.index', [
+            'extremos' => Integraciones::extremos(),
             'conexiones' => Integraciones::conexiones(),
             'proveedores' => Integraciones::proveedores(),
             'sociedades' => DB::table('legal_entities')->where('status', 'active')

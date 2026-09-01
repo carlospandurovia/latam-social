@@ -593,6 +593,50 @@ final class CimientosSeeder extends Seeder
                 $p + ['is_active' => true, 'updated_at' => $ahora, 'created_at' => $ahora]);
         }
 
+        // 9.17e: y DONDE vive cada proveedor, por entorno.
+        //
+        // Los extremos de SUNAT son fijos y publicos: no son un dato de esta
+        // instalacion, son la direccion del servicio, la misma para todo el
+        // mundo. Pedirselos a una persona --como hacia `9.17d`-- es pedirle que
+        // teclee una constante, y un caracter de mas produce comprobantes que
+        // no llegan con un error de red que no dice que paso.
+        //
+        // Se siembran solo los de SUNAT porque son los unicos que se conocen
+        // sin contratar nada. El de Decolecta y el SMTP dependen de la cuenta,
+        // asi que siguen escribiendose en la conexion.
+        //
+        // Verificados contra `thegreenter/ws` (`SunatEndpoints.php`), que es la
+        // libreria con la que se va a emitir (`DEC-252`).
+        $extremos = [
+            ['proveedor' => 'sunat', 'environment' => 'sandbox',
+                'base_url' => 'https://e-beta.sunat.gob.pe/ol-ti-itcpfegem-beta/billService',
+                'label' => 'Beta de SUNAT',
+                'notes' => 'Servicio exclusivo para pruebas. El usuario secundario es MODDATOS.'],
+            ['proveedor' => 'sunat', 'environment' => 'production',
+                'base_url' => 'https://e-factura.sunat.gob.pe/ol-ti-itcpfegem/billService',
+                'label' => 'Produccion de SUNAT',
+                'notes' => 'Emision real de facturas y boletas.'],
+        ];
+
+        foreach ($extremos as $e) {
+            $proveedorId = DB::table('integration_providers')
+                ->where('code', $e['proveedor'])->value('id');
+
+            if ($proveedorId === null) {
+                continue;
+            }
+
+            // Si falta, no si cambia (`T-77`): si SUNAT mueve una direccion,
+            // quien administra la corrige aqui y volver a sembrar no puede
+            // devolverla a la de fabrica.
+            self::sembrarSiFalta(
+                'integration_provider_endpoints',
+                ['integration_provider_id' => $proveedorId, 'environment' => $e['environment']],
+                ['base_url' => $e['base_url'], 'label' => $e['label'], 'notes' => $e['notes'],
+                    'updated_at' => $ahora, 'created_at' => $ahora],
+            );
+        }
+
         // 9.12: los tipos de comprobante de Peru. Son DATOS, no un enum: hasta
         // hoy `ck_ds_type` los tenia escritos en el codigo, y la boleta es
         // peruana --el CFDI mexicano no estaba y anadirlo exigia desplegar--.

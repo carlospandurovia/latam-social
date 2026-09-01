@@ -7,6 +7,7 @@ namespace Tests\Feature;
 use App\Modules\Core\Services\Integraciones;
 use App\Shared\Auth\Permisos;
 use Database\Seeders\CimientosSeeder;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;
@@ -36,6 +37,8 @@ final class IntegracionesTest extends TestCase
 
     private string $uuid;
 
+    private int $sociedadId;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -44,13 +47,17 @@ final class IntegracionesTest extends TestCase
         Permisos::olvidar();
         Queue::fake();
 
+        // 9.17e: CON sociedad --un emisor electronico lleva su RUC, y desde
+        // esta iteracion la base lo exige para activar-- y SIN `base_url`: la
+        // direccion de SUNAT viene sembrada por entorno y no se teclea.
+        $this->sociedadId = $this->entidadLegal();
+
         $this->uuid = Integraciones::guardarConexion(null, [
             'integration_provider_id' => (int) DB::table('integration_providers')
                 ->where('code', 'sunat')->value('id'),
-            'legal_entity_id' => null,
+            'legal_entity_id' => $this->sociedadId,
             'name' => 'SUNAT de prueba',
             'environment' => 'sandbox',
-            'base_url' => 'https://e-beta.sunat.gob.pe',
             'username' => 'MODDATOS',
             'status' => 'active',
         ], 1);
@@ -154,7 +161,7 @@ final class IntegracionesTest extends TestCase
 
     // ----------------------------------------------------------- la conexion
 
-    /** Una activa sin URL no entra: la base lo impide y la pantalla lo dice antes. */
+    /** Una URL por http no entra: la pantalla lo dice antes que la base. */
     public function test_una_conexion_activa_necesita_url_https(): void
     {
         $this->actingAs($this->usuarioCon('admin'))->post(route('integraciones.store'), [
@@ -165,6 +172,119 @@ final class IntegracionesTest extends TestCase
             'base_url' => 'http://smtp.ejemplo.com',
             'status' => 'active',
         ])->assertSessionHasErrors('base_url');
+    }
+
+    // --------------------------------------------- 9.17e: la URL no se teclea
+
+    /**
+     * **La del defecto reportado.** La dirección se hereda del proveedor.
+     *
+     * > «¿por qué me pide la URL? si selecciono Pruebas debe ir al URL Beta»
+     *
+     * Los extremos de SUNAT son fijos y públicos: no son un dato de esta
+     * instalación. La conexión del `setUp` se creó **sin escribir ninguna** y
+     * tiene que saber a dónde llama.
+     */
+    public function test_la_direccion_se_hereda_del_proveedor(): void
+    {
+        $this->assertNull(Integraciones::porUuid($this->uuid)->base_url);
+        $this->assertSame(
+            'https://e-beta.sunat.gob.pe/ol-ti-itcpfegem-beta/billService',
+            Integraciones::urlDe($this->conexionId),
+        );
+    }
+
+    /** Y cada entorno hereda la suya, que es la mitad que faltaba. */
+    public function test_cada_entorno_hereda_la_suya(): void
+    {
+        $uuid = Integraciones::guardarConexion(null, [
+            'integration_provider_id' => (int) DB::table('integration_providers')
+                ->where('code', 'sunat')->value('id'),
+            'legal_entity_id' => $this->sociedadId,
+            'name' => 'SUNAT producción',
+            'environment' => 'production',
+            'status' => 'draft',
+        ], 1);
+
+        $this->assertSame(
+            'https://e-factura.sunat.gob.pe/ol-ti-itcpfegem/billService',
+            Integraciones::urlDe((int) Integraciones::porUuid($uuid)->id),
+        );
+    }
+
+    /** La propia gana: es la excepción para un OSE o una homologación. */
+    public function test_la_direccion_propia_gana_sobre_la_del_proveedor(): void
+    {
+        Integraciones::guardarConexion($this->uuid, [
+            'integration_provider_id' => (int) DB::table('integration_providers')
+                ->where('code', 'sunat')->value('id'),
+            'legal_entity_id' => $this->sociedadId,
+            'name' => 'SUNAT de prueba',
+            'environment' => 'sandbox',
+            'base_url' => 'https://ose.example.test/billService',
+            'status' => 'active',
+        ], 1);
+
+        $this->assertSame(
+            'https://ose.example.test/billService',
+            Integraciones::urlDe($this->conexionId),
+        );
+    }
+
+    /**
+     * Un emisor electrónico va con una sociedad, y lo impone el motor.
+     *
+     * Es lo que faltaba: el formulario ofrecía «Toda la plataforma» para SUNAT,
+     * que no puede ser — un comprobante sale con **un** RUC.
+     */
+    public function test_un_emisor_electronico_activo_exige_sociedad(): void
+    {
+        $this->expectException(QueryException::class);
+        $this->expectExceptionMessageMatches('/va con una sociedad/');
+
+        Integraciones::guardarConexion(null, [
+            'integration_provider_id' => (int) DB::table('integration_providers')
+                ->where('code', 'sunat')->value('id'),
+            'legal_entity_id' => null,
+            'name' => 'SUNAT sin sociedad',
+            'environment' => 'production',
+            'status' => 'active',
+        ], 1);
+    }
+
+    /** Y el correo sí puede ser de toda la plataforma: la regla es del propósito. */
+    public function test_el_correo_si_puede_ser_de_toda_la_plataforma(): void
+    {
+        $uuid = Integraciones::guardarConexion(null, [
+            'integration_provider_id' => (int) DB::table('integration_providers')
+                ->where('code', 'smtp')->value('id'),
+            'legal_entity_id' => null,
+            'name' => 'Correo de la plataforma',
+            'environment' => 'production',
+            'base_url' => 'https://smtp.example.test',
+            'status' => 'active',
+        ], 1);
+
+        $this->assertNull(Integraciones::porUuid($uuid)->legal_entity_id);
+    }
+
+    /** Los extremos sembrados salen en la pantalla, para no tener que buscarlos. */
+    public function test_la_pantalla_ensena_las_direcciones_sembradas(): void
+    {
+        $this->actingAs($this->usuarioCon('admin'))
+            ->get(route('integraciones.index'))
+            ->assertOk()
+            ->assertSee('e-beta.sunat.gob.pe')
+            ->assertSee('e-factura.sunat.gob.pe');
+    }
+
+    /** Y dice dónde va el certificado, que no va aquí. */
+    public function test_la_pantalla_dice_donde_va_el_certificado(): void
+    {
+        $this->actingAs($this->usuarioCon('admin'))
+            ->get(route('integraciones.index'))
+            ->assertOk()
+            ->assertSee('Certificados de firma');
     }
 
     // ------------------------------------------------------------- el permiso

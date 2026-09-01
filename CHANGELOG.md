@@ -2,6 +2,34 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 
+## [9.17e · La dirección de un proveedor no se teclea] — 2026-09-01
+
+Tres preguntas desde la instalación sobre la misma pantalla, y las tres eran
+defectos.
+
+### Añadido
+- **`integration_provider_endpoints`** — a dónde llama cada proveedor, por
+  entorno. Sembrados los dos de SUNAT, verificados contra `thegreenter/ws`.
+- `Integraciones::urlDe()` — la propia si la tiene, la del proveedor si no.
+- `tg_iconn_activa_ins` / `_upd` — activar exige saber a dónde llamar y, si es
+  un emisor electrónico, una sociedad.
+- `tools/pruebas/9.17e-extremos.sh` (11 aserciones).
+
+### Cambiado
+- El campo URL del formulario pasa a ser **opcional**: vacío significa «la del
+  proveedor para ese entorno».
+- La ficha de la conexión enseña **cuál se usa y de dónde sale** — *propia* o
+  *del proveedor*.
+- La caja de ayuda decía que el certificado no estaba aquí «todavía». Está
+  desde `9.9c`: ahora enlaza a **Certificados de firma** y explica que la
+  contraseña se guarda en la ficha de la conexión, no en el alta.
+
+### Decidido
+- `DEC-255`: la dirección la declara el catálogo, no la teclea una persona.
+  `DEC-190` del revés.
+- `DEC-256`: `ck_iconn_url` pasa a disparador, y un emisor electrónico va con
+  una sociedad.
+
 ## [9.9c · El certificado con el que firma cada sociedad] — 2026-09-01
 
 La decisión que había detrás se puso sobre la mesa antes de escribir una línea:
