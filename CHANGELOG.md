@@ -2,6 +2,37 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 
+## [9.9a · El impuesto es un dato] — 2026-08-31
+
+`invoices` existe desde la Fase 2 con `tax_amount` y con la aritmética
+comprobada por la base. **La tasa no existía en ninguna parte**: nadie sabía que
+el IGV es 18 %, así que nadie podía calcular ese importe.
+
+### Añadido
+- **`tax_rates`**, un **periodo** con no solape por (país, código): para una
+  fecha dada hay una sola respuesta a «¿cuánto era el IGV?».
+- `Impuestos::vigente($pais, $codigo, $fecha)` — la fecha es un parámetro, no
+  `now()`.
+- `Impuestos::publicar()` — cierra la que rige **el día antes** y abre la nueva.
+  Publicar hacia atrás se rechaza con palabras.
+- Pantalla `/backoffice/impuestos` con `pricing.manage`, y área **Impuestos** en
+  el grupo fiscal del panel de configuración.
+- Semilla: el **IGV de Perú al 18 %** con su código de catálogo SUNAT (`1000`).
+- `tools/pruebas/9.9a-impuestos.sh` (12 aserciones) y `ImpuestosTest` (12).
+
+### Decidido
+- `DEC-245`: periodo y no constante — **las tasas cambian y las facturas de antes
+  no**.
+- `DEC-246`: se pregunta por una fecha; una tasa no se corrige, se publica la
+  siguiente. Y no se borra: explica el importe de lo ya emitido.
+- `DEC-247`: sólo se siembra el IGV peruano, y desde el arranque de la
+  instalación — fechar una vigencia hacia atrás es inventarse una historia.
+
+### Sabido y dicho
+- Novena vez que se usa `Periodo` y **la primera en la que no hizo falta
+  descubrir el defecto para ponerla**.
+- Falta `9.9b` (emitir la factura con esta tasa) y `9.9c` (el envío a SUNAT).
+
 ## [9.21c · El contacto que no se pierde] — 2026-08-31
 
 El formulario de la portada de marcas ya no termina en un `mailto:`.

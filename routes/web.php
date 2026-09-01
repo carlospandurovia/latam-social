@@ -24,6 +24,7 @@ use App\Modules\Core\Http\Controllers\BitacoraController;
 use App\Modules\Core\Http\Controllers\CatalogosController;
 use App\Modules\Core\Http\Controllers\ConfiguracionController;
 use App\Modules\Core\Http\Controllers\EntidadesLegalesController;
+use App\Modules\Core\Http\Controllers\ImpuestosController;
 use App\Modules\Core\Http\Controllers\IntegracionesController;
 use App\Modules\Core\Http\Controllers\LandingController;
 use App\Modules\Core\Http\Controllers\MarcaController;
@@ -864,6 +865,17 @@ Route::middleware('auth')->prefix('backoffice')->group(function (): void {
     // nuevo: una serie pertenece a la sociedad que emite (`BR-LE-008`), asi que
     // quien administra sociedades administra sus series. Un permiso mas para lo
     // mismo solo anade un sitio donde olvidarse de darlo.
+    // 9.9a -- Las tasas de impuesto. `pricing.manage` y no `legal_entity.manage`:
+    // quien pone una tasa es quien lleva finanzas, la misma persona que fija la
+    // politica de precios de 9.18.
+    Route::get('/impuestos', [ImpuestosController::class, 'index'])
+        ->middleware('permiso:pricing.manage')
+        ->name('impuestos.index');
+
+    Route::post('/impuestos', [ImpuestosController::class, 'publicar'])
+        ->middleware('permiso:pricing.manage')
+        ->name('impuestos.publicar');
+
     // 9.21c -- La bandeja de contactos que llegan por la portada. Verlos es
     // `client.view`; moverlos es `client.manage`, la misma separacion que ya
     // tienen los clientes.

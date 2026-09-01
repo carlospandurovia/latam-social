@@ -54,7 +54,7 @@ final class ConfiguracionTest extends TestCase
      *
      * Las pruebas que registran áreas de mentira las dejarían puestas para la
      * siguiente, que volvería a registrar las de verdad **encima** de ellas y
-     * contaría cinco áreas donde hay once. Se limpia al salir: en la prueba
+     * contaría cinco áreas donde hay doce. Se limpia al salir: en la prueba
      * siguiente el arranque de la aplicación vuelve a poner las reales.
      */
     protected function tearDown(): void
@@ -218,8 +218,8 @@ final class ConfiguracionTest extends TestCase
             // 9.21b «Portada publica»; las seis veces esta prueba se puso roja: es exactamente para lo
             // que esta. La lista se actualiza a mano y a proposito, para que
             // anadir un area sea una decision y no un descuido.
-            ['Catálogos', 'Correo', 'Creadores', 'Entidades legales', 'Integraciones', 'Marca',
-                'Política de precios', 'Portada pública', 'Series y correlativos',
+            ['Catálogos', 'Correo', 'Creadores', 'Entidades legales', 'Impuestos', 'Integraciones',
+                'Marca', 'Política de precios', 'Portada pública', 'Series y correlativos',
                 'Tipos de cambio', 'Términos'],
             Preparacion::areasRegistradas(),
         );

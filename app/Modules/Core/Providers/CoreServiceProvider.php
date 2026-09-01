@@ -10,6 +10,7 @@ use App\Modules\Core\Services\Cobertura;
 use App\Modules\Core\Services\Correlativos;
 use App\Modules\Core\Services\CredencialFuente;
 use App\Modules\Core\Services\Decolecta;
+use App\Modules\Core\Services\Impuestos;
 use App\Modules\Core\Services\Integraciones;
 use App\Modules\Core\Services\Landing;
 use App\Modules\Core\Services\Marca;
@@ -240,6 +241,13 @@ final class CoreServiceProvider extends ServiceProvider
         // que NO trae valor de partida: una serie se registra ante la
         // administracion tributaria y una inventada produce comprobantes
         // invalidos. Por eso avisa en rojo en vez de sembrarse (`DEC-190`).
+        // 9.9a: con las otras fiscales y delante de las series, porque sin
+        // tasa el impuesto de una factura saldria en cero sin que nadie lo
+        // hubiera decidido.
+        Preparacion::area('Impuestos', 'pricing.manage', 'impuestos.index',
+            static fn (): array => Impuestos::avisos(), orden: 34,
+            grupo: Preparacion::FISCAL);
+
         Preparacion::area('Series y correlativos', 'legal_entity.manage', 'series.index',
             static fn (): array => Correlativos::avisos(), orden: 36,
             grupo: Preparacion::FISCAL);

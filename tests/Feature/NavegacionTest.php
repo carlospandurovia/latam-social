@@ -39,7 +39,7 @@ final class NavegacionTest extends TestCase
     private const CONFIGURACION = [
         'marca.index', 'terminos.index', 'politica.index', 'integraciones.index',
         'entidades.index', 'series.index', 'cambio.index', 'catalogos.index',
-        'landing.index',
+        'landing.index', 'impuestos.index',
     ];
 
     protected function setUp(): void

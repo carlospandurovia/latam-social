@@ -733,6 +733,34 @@ final class CimientosSeeder extends Seeder
             }
         }
 
+        // 9.9a: el IGV de Peru. Solo el de Peru, que es donde se factura:
+        // sembrar el IVA colombiano o el mexicano seria inventar el dato de un
+        // pais donde todavia no se emite nada --el mismo criterio que `Q-64` con
+        // los tipos de cambio--. Una tasa que nadie ha confirmado es peor que
+        // ninguna, porque se usa sin mirarla.
+        //
+        // Rige desde el arranque de la instalacion y no desde 2011: esta base no
+        // tiene facturas anteriores, y fechar una vigencia hacia atras es
+        // inventarse una historia que nadie puede comprobar.
+        if ($paisPeru !== null) {
+            self::sembrarSiFalta(
+                'tax_rates',
+                ['country_id' => $paisPeru, 'code' => 'IGV', 'valid_to' => null],
+                [
+                    'name' => 'Impuesto General a las Ventas',
+                    'rate' => '18.0000',
+                    // Catalogo 05 de SUNAT: es lo que viaja en el XML.
+                    'official_code' => '1000',
+                    'valid_from' => self::desdeCuandoSePuede('tax_rates', [
+                        'country_id' => $paisPeru, 'code' => 'IGV',
+                    ]),
+                    'note' => 'Valor de partida de la instalacion. Se cambia publicando la '
+                        .'siguiente desde /backoffice/impuestos, sin desplegar.',
+                    'updated_at' => $ahora, 'created_at' => $ahora,
+                ],
+            );
+        }
+
         // 9.21b: las dos portadas publicas, con texto DE PARTIDA.
         //
         // Se siembran porque una instalacion recien montada tiene que poder

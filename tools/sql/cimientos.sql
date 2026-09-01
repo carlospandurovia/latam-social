@@ -384,6 +384,33 @@ ALTER TABLE exchange_rates
 -- motores.
 -- ===========================================================================
 
+
+-- ============================ D2 Core: las tasas de impuesto (9.9a)
+-- `invoices` existe desde la Fase 2 con `tax_amount` y hasta con la aritmetica
+-- comprobada, pero la TASA no estaba en ninguna parte: nadie sabia que el IGV
+-- es 18 %, asi que nadie podia calcular ese importe. Y es un PERIODO porque las
+-- tasas cambian y las facturas de antes no: para una fecha dada hay una sola
+-- respuesta a «.cuanto era el IGV?».
+CREATE TABLE tax_rates (
+  id            BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  country_id    BIGINT UNSIGNED NOT NULL,
+  code          VARCHAR(20)   NOT NULL,
+  name          VARCHAR(80)   NOT NULL,
+  rate          DECIMAL(7,4)  NOT NULL,
+  official_code VARCHAR(10)   NULL,
+  valid_from    DATE          NOT NULL,
+  valid_to      DATE          NULL,
+  note          VARCHAR(255)  NULL,
+  created_at    DATETIME(3)   NULL,
+  updated_at    DATETIME(3)   NULL,
+  KEY ix_tax_pais (country_id, code, valid_from),
+  CONSTRAINT fk_tax_country FOREIGN KEY (country_id) REFERENCES countries(id) ON DELETE RESTRICT,
+  CONSTRAINT ck_tax_rate CHECK (rate >= 0 AND rate < 100),
+  CONSTRAINT ck_tax_code CHECK (code REGEXP '^[A-Z][A-Z0-9_]{1,19}$' AND code COLLATE utf8mb4_bin = UPPER(code)),
+  CONSTRAINT ck_tax_dates CHECK (valid_to IS NULL OR valid_to >= valid_from),
+  CONSTRAINT ck_tax_nombre CHECK (CHAR_LENGTH(TRIM(name)) >= 3)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- ============================ D2 Core: la politica de precios (9.18)
 -- La retencion que se le aplica al creador que no emite comprobante (Q-13) y el
 -- umbral de rentabilidad aceptable (Q-40). Ninguno de los dos puede estar en el
@@ -427,6 +454,7 @@ CREATE TABLE pricing_policies (
   CONSTRAINT ck_pp_base CHECK (margin_basis IN ('cost','revenue')),
   CONSTRAINT ck_pp_fechas CHECK (valid_to IS NULL OR valid_to >= valid_from)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 
 DELIMITER //
 
@@ -514,6 +542,52 @@ END//
 -- resuelve por par y por fecha, asi que dos periodos cerrados que se pisen son
 -- el mismo empate para una fecha pasada. Generados por
 -- App\Shared\Database\Periodo, no escritos a mano.
+-- 9.9a -- Una sola tasa por impuesto y fecha. Las tasas cambian y las facturas
+-- de antes no: sin esto, subir el IGV hoy reescribiria el impuesto de una
+-- factura de hace dos anos la proxima vez que alguien la recalculara.
+-- Generados por App\Shared\Database\Periodo, no escritos a mano.
+
+CREATE TRIGGER `tg_tax_sin_solape_ins`
+BEFORE INSERT ON `tax_rates`
+FOR EACH ROW
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM `tax_rates`
+         WHERE `country_id` <=> NEW.`country_id`
+           AND `code` <=> NEW.`code`
+           AND NEW.`valid_from` <= IFNULL(`valid_to`, '9999-12-31')
+           AND `valid_from` <= IFNULL(NEW.`valid_to`, '9999-12-31')
+    ) THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Ya hay una tasa de ese impuesto en esas fechas: cierre la anterior el dia antes.';
+    END IF;
+END//
+
+CREATE TRIGGER `tg_tax_sin_solape_upd`
+BEFORE UPDATE ON `tax_rates`
+FOR EACH ROW
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM `tax_rates`
+         WHERE `id` <> NEW.`id`
+           AND `country_id` <=> NEW.`country_id`
+           AND `code` <=> NEW.`code`
+           AND NEW.`valid_from` <= IFNULL(`valid_to`, '9999-12-31')
+           AND `valid_from` <= IFNULL(NEW.`valid_to`, '9999-12-31')
+    ) THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Ya hay una tasa de ese impuesto en esas fechas: cierre la anterior el dia antes.';
+    END IF;
+END//
+
+-- 9.9a -- Una tasa cerrada explica el impuesto de lo ya emitido.
+
+CREATE TRIGGER `tg_tax_no_delete`
+BEFORE DELETE ON `tax_rates`
+FOR EACH ROW
+BEGIN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'Una tasa no se borra: cierrela, que explica el impuesto de lo ya emitido.';
+END//
+
 CREATE TRIGGER `tg_fos_sin_solape_ins`
 BEFORE INSERT ON `fx_official_sources`
 FOR EACH ROW
