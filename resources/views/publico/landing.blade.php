@@ -154,19 +154,91 @@
     </section>
   @endif
 
-  {{-- Para marcas todavía no hay formulario: la conversación empieza por correo
-       hasta que 9.21c construya el prospecto con su bandeja. Decirlo así es más
-       honesto que un botón que no lleva a ninguna parte. --}}
+  {{-- ---------------------------------------------------- contacto (marcas) --}}
   @unless ($esDeCreadores)
-    <section id="empezar" class="mx-auto max-w-2xl px-6 py-16 text-center border-t border-slate-100">
+    <section id="empezar" class="mx-auto max-w-2xl px-6 py-16 border-t border-slate-100">
       <h2 class="text-xl font-semibold text-slate-900">{{ $pagina->cta_label }}</h2>
-      <p class="mt-2 text-sm text-slate-600">Escríbenos y te contamos cómo sería tu campaña.</p>
-      @if ($marca['correoSoporte'])
-        <a href="mailto:{{ $marca['correoSoporte'] }}"
-           class="mt-5 inline-block rounded-lg bg-marca-500 px-5 py-3 text-sm font-semibold text-white">
-          {{ $marca['correoSoporte'] }}
-        </a>
+      <p class="mt-2 text-sm text-slate-600">
+        Cuéntanos qué tienes en mente y te escribimos con cómo sería tu campaña.
+      </p>
+
+      @if (session('aviso'))
+        <div class="mt-4 rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
+          {{ session('aviso') }}
+        </div>
       @endif
+      @if ($errors->any())
+        <div class="mt-4 rounded-lg bg-rose-50 border border-rose-200 px-4 py-3 text-sm text-rose-800">
+          <ul class="list-disc pl-5">@foreach ($errors->all() as $e)<li>{{ $e }}</li>@endforeach</ul>
+        </div>
+      @endif
+
+      <form method="POST" action="{{ route('contacto') }}" class="mt-6 space-y-4">
+        @csrf
+
+        <div class="grid gap-4 sm:grid-cols-2">
+          <label class="block text-sm text-slate-600">Empresa o marca
+            <input name="company_name" required maxlength="160" value="{{ old('company_name') }}"
+                   class="mt-1 w-full rounded-lg border-slate-300">
+          </label>
+
+          <label class="block text-sm text-slate-600">Tu nombre
+            <input name="contact_name" required maxlength="160" value="{{ old('contact_name') }}"
+                   class="mt-1 w-full rounded-lg border-slate-300">
+          </label>
+        </div>
+
+        <div class="grid gap-4 sm:grid-cols-2">
+          <label class="block text-sm text-slate-600">Correo
+            <input type="email" name="email" required maxlength="255" value="{{ old('email') }}"
+                   class="mt-1 w-full rounded-lg border-slate-300">
+          </label>
+
+          <label class="block text-sm text-slate-600">Teléfono <span class="text-slate-400">(opcional)</span>
+            <input name="phone" maxlength="30" value="{{ old('phone') }}"
+                   class="mt-1 w-full rounded-lg border-slate-300">
+          </label>
+        </div>
+
+        <div class="grid gap-4 sm:grid-cols-2">
+          <label class="block text-sm text-slate-600">País
+            <select name="country_id" required class="mt-1 w-full rounded-lg border-slate-300">
+              @foreach ($paises as $p)
+                <option value="{{ $p->id }}" @selected((string) old('country_id') === (string) $p->id)>{{ $p->name }}</option>
+              @endforeach
+            </select>
+          </label>
+
+          <label class="block text-sm text-slate-600">Web <span class="text-slate-400">(opcional)</span>
+            <input name="website" maxlength="255" placeholder="https://…" value="{{ old('website') }}"
+                   class="mt-1 w-full rounded-lg border-slate-300">
+          </label>
+        </div>
+
+        <label class="block text-sm text-slate-600">Qué tienes en mente
+          <textarea name="message" rows="4" maxlength="1000"
+                    class="mt-1 w-full rounded-lg border-slate-300">{{ old('message') }}</textarea>
+        </label>
+
+        {{-- El campo trampa, con otro nombre que el de la postulación: dos
+             formularios públicos con la misma trampa se saltan de una vez. --}}
+        <div class="hidden" aria-hidden="true">
+          <label>Empresa
+            <input name="empresa_2" tabindex="-1" autocomplete="off" value="">
+          </label>
+        </div>
+
+        <button class="w-full rounded-lg bg-marca-500 px-5 py-3 text-sm font-semibold text-white">
+          {{ $pagina->cta_label }}
+        </button>
+
+        <p class="text-xs text-slate-500">
+          Sólo lo usamos para responderte.
+          @if ($marca['correoSoporte'])
+            Si prefieres escribir tú: {{ $marca['correoSoporte'] }}
+          @endif
+        </p>
+      </form>
     </section>
   @endunless
 @endsection

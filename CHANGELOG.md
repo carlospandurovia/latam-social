@@ -2,6 +2,38 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 
+## [9.21c · El contacto que no se pierde] — 2026-08-31
+
+El formulario de la portada de marcas ya no termina en un `mailto:`.
+
+### Añadido
+- **`client_leads`**: el contacto de una marca es una **fila**, no un correo. Hoy
+  el correo está en «log» y una instalación con el SMTP a medio configurar
+  perdería cada contacto sin que nadie se entere.
+- **Formulario de contacto** en `/`, con las mismas tres defensas que la
+  postulación: `throttle:5,1`, campo trampa y ningún CAPTCHA.
+- **Bandeja de Prospectos** (`/backoffice/prospectos`), detrás de Clientes en el
+  menú — que es de donde salen. Ver con `client.view`, mover con `client.manage`.
+- `uq_clead_abierto`, columna puerta **33**: un solo contacto abierto por correo.
+  Lo cerrado deja el hueco libre, así que quien vuelve el año que viene es un
+  contacto nuevo y no un duplicado.
+- `tools/pruebas/9.21c-prospectos.sh` (13 aserciones) y `ProspectosTest` (12).
+
+### Decidido
+- `DEC-242`: una fila, no un correo. El aviso por correo va **encima**.
+- `DEC-243`: misma forma que `creator_applications`, y sólo lo abierto ocupa la
+  puerta.
+- `DEC-244`: descartar exige motivo y **no borra**; convertir exige decir en qué
+  cliente, porque duplicar el alta sería tener dos sitios donde se crea uno.
+
+### Sabido y dicho
+- **Una aserción pasaba por casualidad y los dos motores la delataron**: la fila
+  de prueba rompía dos reglas a la vez y cada motor nombra la que evalúa primero.
+  Verde en MariaDB, roja en MySQL 8, con el mismo dato. Tercera iteración seguida
+  en que hacen falta los dos.
+- `ck_clead_descartado` lleva `note IS NOT NULL` **antes** del largo, por la
+  lección de `9.12`: un `CHECK` que da `NULL` no rechaza.
+
 ## [9.21b · La puerta de la calle] — 2026-08-31
 
 Hasta hoy la única puerta era el acceso al back-office: no había forma de

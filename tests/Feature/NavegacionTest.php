@@ -225,6 +225,7 @@ final class NavegacionTest extends TestCase
             // 9.21b: las dos portadas y la postulación. Son la calle: si
             // pidieran sesión no servirían para nada.
             'portada.marcas', 'portada.creadores', 'portada.gracias', 'postular',
+            'contacto', 'contacto.gracias',
         ];
 
         $fuera = [];

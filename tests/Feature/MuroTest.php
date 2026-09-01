@@ -94,6 +94,7 @@ final class MuroTest extends TestCase
         // `throttle:5,1` y el campo trampa; y lo que escribe queda en
         // `creator_applications`, en estado `submitted`, sin tocar nada mas.
         'portada.marcas', 'portada.creadores', 'portada.gracias', 'postular',
+        'contacto', 'contacto.gracias',
     ];
 
     protected function setUp(): void

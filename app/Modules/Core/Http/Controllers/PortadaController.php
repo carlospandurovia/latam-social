@@ -66,11 +66,10 @@ final class PortadaController
             // que la vista necesita este dato.
             'marca' => Marca::datos(),
             'esDeCreadores' => $code === Landing::CREADORES,
-            // Solo hace falta para el formulario de postulacion. Se pasa siempre
-            // para que la plantilla no tenga que preguntar de dos maneras.
-            'paises' => $code === Landing::CREADORES
-                ? DB::table('countries')->where('is_active', 1)->orderBy('name')->get(['id', 'name'])
-                : collect(),
+            // 9.21c: las DOS portadas tienen formulario --postular y contactar--
+            // asi que los paises hacen falta siempre.
+            'paises' => DB::table('countries')->where('is_active', 1)
+                ->orderBy('name')->get(['id', 'name']),
         ]);
     }
 }

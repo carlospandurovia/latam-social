@@ -45,6 +45,9 @@
             ['Solicitudes', 'solicitudes.index', 'solicitudes', 'creator.approve'],
             ['Creadores', 'creadores.index', 'creadores', 'creator.view'],
             ['Clientes', 'clientes.index', 'clientes', 'client.view'],
+            // 9.21c: detras de Clientes porque es de donde salen: la bandeja de
+            // los que escribieron por la portada y todavia no son cliente.
+            ['Prospectos', 'prospectos.index', 'prospectos', 'client.view'],
             // 7.1: detras de Clientes porque una campana se hace PARA un cliente
             // y su marca; sin cliente dado de alta no hay nada que ver aqui.
             ['Campañas', 'campanas.index', 'campanas', 'campaign.view'],

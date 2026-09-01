@@ -122,3 +122,7 @@
 # 9.21b crea sus portadas (`X921B...`) y las borra: un texto de marketing SI se
 # borra --no sostiene ninguna cifra-- y eso es justo lo que afirma la ultima.
 9.21b-landing
+
+# 9.21c NO se puede limpiar: `tg_clead_no_delete` impide borrar un contacto, que
+# es justo lo que afirma su ultima asercion. Necesita base recien rehecha.
+9.21c-prospectos

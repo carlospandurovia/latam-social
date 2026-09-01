@@ -67,3 +67,5 @@ portada.marcas          # la portada, para marcas
 portada.creadores       # la portada, para creadores
 portada.gracias         # el «gracias» de la postulacion
 postular                # 9.21b, throttle:5,1 + campo trampa; escribe en creator_applications
+contacto                # 9.21c, throttle:5,1 + campo trampa; escribe en client_leads
+contacto.gracias        # pantalla final

@@ -7,9 +7,11 @@ use App\Modules\Campaign\Http\Controllers\CandidatosController;
 use App\Modules\Campaign\Http\Controllers\InvitacionController;
 use App\Modules\Campaign\Http\Controllers\SeguimientoController;
 use App\Modules\Client\Http\Controllers\ClientesController;
+use App\Modules\Client\Http\Controllers\ContactoController;
 use App\Modules\Client\Http\Controllers\ContactosController;
 use App\Modules\Client\Http\Controllers\MarcasController;
 use App\Modules\Client\Http\Controllers\PerfilesFiscalesController;
+use App\Modules\Client\Http\Controllers\ProspectosController;
 use App\Modules\Communication\Http\Controllers\CorreosController;
 use App\Modules\Content\Http\Controllers\AprobacionController;
 use App\Modules\Content\Http\Controllers\EntregablesController;
@@ -77,6 +79,16 @@ Route::get('/creadores/gracias', [PortadaController::class, 'gracias'])->name('p
 Route::post('/creadores/postular', [PostulacionController::class, 'postular'])
     ->middleware('throttle:5,1')
     ->name('postular');
+
+// 9.21c -- El contacto de las marcas. Mismas tres defensas que la postulacion
+// --throttle, campo trampa y ningun CAPTCHA-- y por el mismo motivo: es un
+// formulario publico que ESCRIBE. Vive en Client porque escribe en
+// `client_leads`; Core pinta la portada y Client recibe el contacto.
+Route::post('/contacto', [ContactoController::class, 'enviar'])
+    ->middleware('throttle:5,1')
+    ->name('contacto');
+
+Route::get('/contacto/gracias', [ContactoController::class, 'gracias'])->name('contacto.gracias');
 
 Route::middleware('guest')->group(function (): void {
     Route::get('/entrar', [AccesoController::class, 'formulario'])->name('acceso');
@@ -852,6 +864,23 @@ Route::middleware('auth')->prefix('backoffice')->group(function (): void {
     // nuevo: una serie pertenece a la sociedad que emite (`BR-LE-008`), asi que
     // quien administra sociedades administra sus series. Un permiso mas para lo
     // mismo solo anade un sitio donde olvidarse de darlo.
+    // 9.21c -- La bandeja de contactos que llegan por la portada. Verlos es
+    // `client.view`; moverlos es `client.manage`, la misma separacion que ya
+    // tienen los clientes.
+    Route::get('/prospectos', [ProspectosController::class, 'index'])
+        ->middleware('permiso:client.view')
+        ->name('prospectos.index');
+
+    Route::post('/prospectos/{uuid}/mover', [ProspectosController::class, 'mover'])
+        ->middleware('permiso:client.manage')
+        ->whereUuid('uuid')
+        ->name('prospectos.mover');
+
+    Route::post('/prospectos/{uuid}/convertir', [ProspectosController::class, 'convertir'])
+        ->middleware('permiso:client.manage')
+        ->whereUuid('uuid')
+        ->name('prospectos.convertir');
+
     // 9.21b -- El texto de la portada publica. `brand.manage` y no un permiso
     // nuevo: quien decide como nos llamamos decide que dice la portada.
     Route::get('/landing', [LandingController::class, 'index'])

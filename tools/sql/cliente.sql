@@ -138,6 +138,53 @@ CREATE TABLE contacts (
   CONSTRAINT ck_contacts_status CHECK (status IN ('active','inactive'))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+
+-- ============================ D2 Cliente: el prospecto de la portada (9.21c)
+-- Una tabla y no un correo: hoy el correo esta en «log» --no sale del servidor--
+-- y una instalacion con el SMTP mal configurado perderia cada contacto SIN QUE
+-- NADIE SE ENTERE. Mismo diseno que `creator_applications` a proposito: son el
+-- mismo problema --alguien de fuera deja sus datos y alguien de dentro los
+-- atiende-- y quien conozca una bandeja conoce las dos.
+CREATE TABLE client_leads (
+  id                  BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  uuid                CHAR(36)      NOT NULL,
+  company_name        VARCHAR(160)  NOT NULL,
+  contact_name        VARCHAR(160)  NOT NULL,
+  email               VARCHAR(255)  NOT NULL,
+  phone               VARCHAR(30)   NULL,
+  country_id          BIGINT UNSIGNED NOT NULL,
+  website             VARCHAR(255)  NULL,
+  message             VARCHAR(1000) NULL,
+  source              VARCHAR(20)   NOT NULL DEFAULT 'landing',
+  status              VARCHAR(20)   NOT NULL DEFAULT 'new',
+  reviewed_by_user_id BIGINT UNSIGNED NULL,
+  reviewed_at         DATETIME(3)   NULL,
+  note                VARCHAR(500)  NULL,
+  client_organization_id BIGINT UNSIGNED NULL,
+  submitted_at        DATETIME(3)   NOT NULL,
+  created_at          DATETIME(3)   NULL,
+  updated_at          DATETIME(3)   NULL,
+  -- Un solo contacto ABIERTO por correo: quien rellena el formulario tres veces
+  -- porque nadie le contesta no puede aparecer como tres marcas distintas.
+  lead_open_key VARCHAR(255)
+    GENERATED ALWAYS AS (
+      CASE WHEN status IN ('new','contacted') THEN LOWER(email) ELSE NULL END
+    ) STORED,
+  UNIQUE KEY uq_clead_uuid (uuid),
+  UNIQUE KEY uq_clead_abierto (lead_open_key),
+  KEY ix_clead_estado (status, submitted_at),
+  KEY ix_clead_pais (country_id),
+  CONSTRAINT fk_clead_country FOREIGN KEY (country_id) REFERENCES countries(id) ON DELETE RESTRICT,
+  CONSTRAINT fk_clead_revisor FOREIGN KEY (reviewed_by_user_id) REFERENCES users(id) ON DELETE RESTRICT,
+  CONSTRAINT fk_clead_cliente FOREIGN KEY (client_organization_id) REFERENCES client_organizations(id) ON DELETE RESTRICT,
+  CONSTRAINT ck_clead_status CHECK (status IN ('new','contacted','qualified','discarded','converted')),
+  CONSTRAINT ck_clead_descartado CHECK (status <> 'discarded' OR (note IS NOT NULL AND CHAR_LENGTH(TRIM(note)) >= 10)),
+  CONSTRAINT ck_clead_convertido CHECK (status <> 'converted' OR client_organization_id IS NOT NULL),
+  CONSTRAINT ck_clead_revisado CHECK (status = 'new' OR (reviewed_at IS NOT NULL AND reviewed_by_user_id IS NOT NULL)),
+  CONSTRAINT ck_clead_correo CHECK (email LIKE '%_@_%'),
+  CONSTRAINT ck_clead_web CHECK (website IS NULL OR website LIKE 'http://%' OR website LIKE 'https://%')
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- ===========================================================================
 -- 3.10 -- El historico no se solapa
 --
@@ -217,6 +264,18 @@ FOR EACH ROW
 BEGIN
   SIGNAL SQLSTATE '45000'
     SET MESSAGE_TEXT = 'client_tax_profiles no admite borrado: de aqui salen el RUC y la razon social de la factura.';
+END//
+
+-- 9.21c -- De aqui sale «.de donde salio este cliente?» y «.cuantos descartamos
+-- y por que?». Descartar es la forma de decir que no; borrar se lleva por
+-- delante las dos preguntas.
+
+CREATE TRIGGER `tg_clead_no_delete`
+BEFORE DELETE ON `client_leads`
+FOR EACH ROW
+BEGIN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'Un contacto no se borra: descartelo con su motivo.';
 END//
 
 DELIMITER ;
