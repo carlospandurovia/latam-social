@@ -178,6 +178,30 @@ final class Integraciones
      * conexión recién creada está así— y quien llama tiene que poder decirlo con
      * palabras en vez de estrellarse.
      */
+    /**
+     * Revoca la credencial viva de una conexión. **No la borra: la marca.**
+     *
+     * Borrarla se lleva por delante quién la puso y hasta cuándo estuvo en uso,
+     * y ésa es la primera pregunta el día que aparezca un consumo raro contra
+     * el servicio. La fila se queda con su motivo y libera `uq_icred_vigente`,
+     * así que se puede poner otra.
+     */
+    public static function revocarSecreto(
+        int $conexionId,
+        string $clase,
+        string $motivo = 'Retirada desde el admin.',
+    ): void {
+        DB::table('integration_credentials')
+            ->where('integration_connection_id', $conexionId)
+            ->where('kind', $clase)
+            ->whereNull('revoked_at')
+            ->update([
+                'revoked_at' => now(),
+                'revoked_reason' => mb_substr($motivo, 0, 255),
+                'updated_at' => now(),
+            ]);
+    }
+
     public static function secreto(int $conexionId, string $clase): ?string
     {
         $cifrado = DB::table('integration_credentials')

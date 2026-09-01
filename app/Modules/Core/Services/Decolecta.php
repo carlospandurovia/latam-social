@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Modules\Core\Services;
 
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Throwable;
 
@@ -77,8 +76,13 @@ final class Decolecta
                 'No hay credencial de Decolecta: ni en el entorno ni guardada en la pantalla.');
         }
 
-        $base = (string) (DB::table('fx_sources')->where('code', self::FUENTE)->value('api_base_url')
-            ?: config('latam.cambio.decolecta.url', self::URL));
+        // 9.17h: la direccion sale de la conexion o del catalogo del
+        // proveedor, no de una columna que alguien teclea. `self::URL` se queda
+        // como ultimo recurso para una base sin sembrar todavia.
+        $base = CredencialFuente::url(
+            self::FUENTE,
+            (string) config('latam.cambio.decolecta.url', self::URL),
+        );
 
         try {
             $respuesta = Http::withToken($clave)

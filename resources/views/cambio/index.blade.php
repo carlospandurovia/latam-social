@@ -204,66 +204,38 @@
       </div>
     </div>
 
-    {{-- 4. La credencial. --}}
-    <div class="space-y-5">
-      <div class="bg-white rounded-xl border border-slate-200 p-5">
-        <h2 class="text-sm font-medium text-slate-700">Credencial de Decolecta</h2>
+    {{-- 4. La credencial, que desde 9.17h vive en Integraciones.
 
-        @if ($credencial['origen'] === 'entorno')
-          <p class="mt-2 rounded-lg bg-emerald-50 p-3 text-xs text-emerald-800">
-            La clave viene del <strong>entorno</strong> (<code>DECOLECTA_API_KEY</code>), que es el
-            sitio bueno: no pasa por el navegador ni queda en ninguna tabla.
-            Mientras esté ahí, manda esa.
-          </p>
-        @elseif ($credencial['origen'] === 'base')
-          <p class="mt-2 text-sm">Guardada y cifrada, termina en
-            <code>{{ $credencial['ultimos'] }}</code>.</p>
-          <p class="mt-1 text-xs text-slate-500">
-            La puso {{ $credencial['puesta_por'] ?? 'alguien que ya no está' }}
-            el {{ substr((string) $credencial['puesta_el'], 0, 16) }}.
-          </p>
-        @else
+         Se mudó porque es la configuración de una INTEGRACIÓN --con quién se
+         habla y con qué clave-- y no trabajo con tipos de cambio. Lo que se
+         queda aquí es lo de todos los días: las tasas, quién publica cada par,
+         el registro de las traídas y la carga a mano.
+
+         Se deja un enlace y no un formulario repetido: dos puertas a lo mismo
+         es lo que `9.20` vino a quitar. --}}
+    <div class="space-y-5">
+      <div class="rounded-xl border border-slate-200 bg-white p-5">
+        <h2 class="text-sm font-medium text-slate-700">Credencial de Decolecta</h2>
+        @if ($credencial['origen'] === 'ninguna')
           <p class="mt-2 rounded-lg bg-amber-50 p-3 text-xs text-amber-900">
             <strong>No hay ninguna configurada.</strong> Hasta que la haya, el cron corre y
             no trae nada — y lo dirá aquí arriba cada día.
           </p>
+        @elseif ($credencial['origen'] === 'entorno')
+          <p class="mt-2 text-sm text-slate-600">
+            Sale del <strong>entorno</strong> (<code>DECOLECTA_API_KEY</code>), porque no hay
+            ninguna guardada.
+          </p>
+        @else
+          <p class="mt-2 text-sm text-slate-600">
+            Guardada y cifrada, termina en <code>{{ $credencial['ultimos'] }}</code>.
+          </p>
         @endif
-
         @can('integration.manage')
-          <form method="POST" action="{{ route('cambio.credencial') }}" class="mt-4 space-y-2">
-            @csrf
-            <label for="api_key" class="block text-xs text-slate-500">
-              {{ $credencial['origen'] === 'base' ? 'Reemplazar la clave' : 'Clave de la API' }}
-            </label>
-            {{-- `type=password` y `autocomplete=off`: no se reenseña ni se
-                 guarda en el gestor del navegador. Y la clave que YA está no se
-                 precarga aquí nunca —una pantalla que la reenseña es una
-                 pantalla que la filtra por encima del hombro—. --}}
-            <input id="api_key" name="api_key" type="password" autocomplete="off"
-                   class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-            @error('api_key') <p class="text-xs text-rose-600">{{ $message }}</p> @enderror
-
-            <label for="api_base_url" class="block text-xs text-slate-500 pt-1">
-              URL base <span class="text-slate-400">(opcional)</span>
-            </label>
-            <input id="api_base_url" name="api_base_url" type="url"
-                   placeholder="{{ $credencial['url'] ?? 'https://api.decolecta.com' }}"
-                   class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
-            @error('api_base_url') <p class="text-xs text-rose-600">{{ $message }}</p> @enderror
-
-            <button class="w-full rounded-lg bg-marca-500 px-3 py-2 text-sm font-medium text-white hover:bg-marca-600 transition">
-              Guardar credencial
-            </button>
-          </form>
-
-          @if ($credencial['origen'] === 'base')
-            <form method="POST" action="{{ route('cambio.credencial.olvidar') }}" class="mt-2">
-              @csrf @method('DELETE')
-              <button class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 transition">
-                Borrar la guardada
-              </button>
-            </form>
-          @endif
+          <a href="{{ route('integraciones.index', ['p' => 'fx']) }}"
+             class="mt-3 inline-block rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50">
+            Configurarla en Integraciones
+          </a>
         @else
           <p class="mt-3 text-xs text-slate-500">
             Configurar credenciales exige el permiso <code>integration.manage</code>.

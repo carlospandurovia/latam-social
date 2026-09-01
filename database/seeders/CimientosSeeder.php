@@ -601,9 +601,10 @@ final class CimientosSeeder extends Seeder
         // teclee una constante, y un caracter de mas produce comprobantes que
         // no llegan con un error de red que no dice que paso.
         //
-        // Se siembran solo los de SUNAT porque son los unicos que se conocen
-        // sin contratar nada. El de Decolecta y el SMTP dependen de la cuenta,
-        // asi que siguen escribiendose en la conexion.
+        // Se siembran los que son FIJOS y PUBLICOS: los dos de SUNAT y el de
+        // Decolecta (9.17h). El del correo no cabe aqui --el servidor SMTP
+        // depende de la cuenta de cada instalacion-- y se escribe en la
+        // conexion, que es donde vive lo que es de cada sitio.
         //
         // Verificados contra `thegreenter/ws` (`SunatEndpoints.php`), que es la
         // libreria con la que se va a emitir (`DEC-252`).
@@ -616,6 +617,13 @@ final class CimientosSeeder extends Seeder
                 'base_url' => 'https://e-factura.sunat.gob.pe/ol-ti-itcpfegem/billService',
                 'label' => 'Produccion de SUNAT',
                 'notes' => 'Emision real de facturas y boletas.'],
+            // 9.17h: y la de Decolecta, que estaba en una CONSTANTE de PHP y
+            // ademas en una columna que se podia teclear. Es la direccion fija
+            // y publica del proveedor: ni una cosa ni la otra (`DEC-255`).
+            ['proveedor' => 'decolecta', 'environment' => 'production',
+                'base_url' => 'https://api.decolecta.com',
+                'label' => 'API de Decolecta',
+                'notes' => 'Publica el tipo de cambio de SUNAT. Solo USD-PEN, compra y venta.'],
         ];
 
         foreach ($extremos as $e) {

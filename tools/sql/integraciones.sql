@@ -263,3 +263,13 @@ BEGIN
 END//
 
 DELIMITER ;
+
+-- 9.17h -- La fuente de tipos de cambio cuelga de una conexion.
+--
+-- Diferida hasta aqui, y no dentro de `fx_sources`: esa tabla vive en
+-- `cimientos.sql`, que se carga ANTES que este esquema porque
+-- `integration_connections` referencia a `users` y a `legal_entities`. Ponerla
+-- en linea invertiria el orden y crearia un ciclo.
+ALTER TABLE fx_sources
+  ADD CONSTRAINT fk_fxs_conn FOREIGN KEY (integration_connection_id)
+  REFERENCES integration_connections(id) ON DELETE RESTRICT;

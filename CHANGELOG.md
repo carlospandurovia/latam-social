@@ -2,6 +2,38 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 
+## [9.17h · La fuente de tipos de cambio deja de tener caja fuerte propia] — 2026-09-01
+
+La última de las tres que el negocio pidió mover a la base. Con ella, **ningún
+ajuste del sistema exige ya entrar a la máquina.**
+
+### Cambiado
+
+- La clave de la fuente de tipos de cambio pasa de cuatro columnas de
+  `fx_sources` a `integration_credentials`, que **versiona y revoca**. Guardar
+  una clave nueva ya no borra quién puso la anterior (`DEC-266`).
+- La migración **no descifra nada**: las dos cajas cifran con `Crypt`, así que el
+  criptograma se copia tal cual y la clave no existe en claro en ningún momento.
+- La precedencia se unifica con la del correo: **manda la guardada; si no hay, el
+  `.env`**. Era la contraria, en la misma pantalla que la del correo (`DEC-267`).
+- `https://api.decolecta.com` sale de una constante de PHP y de una columna
+  tecleable, y pasa a `integration_provider_endpoints` como las de SUNAT
+  (`DEC-255`, segunda vez en tres iteraciones).
+- La pestaña «Tipos de cambio» de Integraciones deja de decir dónde vive la
+  configuración y **es** la configuración. Las tasas, las fuentes oficiales por
+  par, el registro de traídas y la carga a mano se quedan en su pantalla, con un
+  enlace en cada dirección (`DEC-265`).
+- Retirar una clave la **revoca con su motivo**; ya no la pone a `NULL`.
+
+### Quitado
+
+- `fx_sources.api_key_cipher`, `.api_key_last4`, `.credential_set_at`,
+  `.credential_set_by_user_id` y `.api_base_url`.
+- El disparador `tg_fxs_credencial_firmada` y la regla `ck_fxs_last4`. **La regla
+  no se pierde:** en la tabla nueva `set_by_user_id` y `set_at` son `NOT NULL`,
+  y una regla que se convierte en columna obligatoria ya no se puede olvidar de
+  comprobar.
+
 ## [9.17i · La cara de las integraciones] — 2026-09-01
 
 Crítica del negocio, con la pantalla de otro producto suyo delante: *«esta

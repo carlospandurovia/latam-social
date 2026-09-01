@@ -14,6 +14,7 @@ use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Str;
 use Tests\Apoyo\ConFixturas;
 use Tests\TestCase;
 
@@ -50,16 +51,95 @@ final class TiposDeCambioTest extends TestCase
 
     // ------------------------------------------------------------ credencial
 
-    /** La clave se guarda cifrada: en la columna no está el valor. */
+    /**
+     * La clave se guarda cifrada: en la columna no está el valor.
+     *
+     * 9.17h: la columna es otra. La clave dejó de vivir en `fx_sources` —que
+     * tenía su propia caja fuerte, sin versión y sin revocación— y vive en
+     * `integration_credentials`, por la misma puerta que la de SUNAT y la del
+     * correo. Lo que la prueba defiende no ha cambiado: **en la tabla no está
+     * el valor**.
+     */
     public function test_la_credencial_no_queda_en_claro_en_la_base(): void
     {
         CredencialFuente::guardar('sunat', 'clave-secreta-8f2a', $this->usuarioCon('admin')->id);
 
-        $guardada = (string) DB::table('fx_sources')->where('code', 'sunat')->value('api_key_cipher');
+        $guardada = (string) DB::table('fx_sources as s')
+            ->join('integration_credentials as c', 'c.integration_connection_id', '=', 's.integration_connection_id')
+            ->where('s.code', 'sunat')->whereNull('c.revoked_at')
+            ->value('c.secret_cipher');
 
         $this->assertNotSame('clave-secreta-8f2a', $guardada);
         $this->assertStringNotContainsString('clave-secreta', $guardada);
         $this->assertSame('clave-secreta-8f2a', CredencialFuente::clave('sunat'));
+    }
+
+    /**
+     * 9.17h: guardar una clave nueva **revoca la anterior**, no la pisa.
+     *
+     * Es lo que la caja fuerte vieja de `fx_sources` no sabía hacer: un
+     * `UPDATE` sobre `api_key_cipher` se llevaba por delante quién había puesto
+     * la anterior y hasta cuándo estuvo en uso. Esa es la primera pregunta el
+     * día que aparezca un consumo raro contra el servicio.
+     */
+    public function test_una_clave_nueva_revoca_la_anterior_y_la_deja_en_el_historico(): void
+    {
+        $autor = (int) $this->usuarioCon('admin')->id;
+
+        CredencialFuente::guardar('sunat', 'la-primera-1111', $autor);
+        CredencialFuente::guardar('sunat', 'la-segunda-2222', $autor);
+
+        $conexionId = (int) DB::table('fx_sources')->where('code', 'sunat')
+            ->value('integration_connection_id');
+
+        $filas = DB::table('integration_credentials')
+            ->where('integration_connection_id', $conexionId)
+            ->orderBy('version')->get(['version', 'last4', 'revoked_at', 'revoked_reason']);
+
+        $this->assertCount(2, $filas, 'las dos siguen ahi');
+        $this->assertNotNull($filas[0]->revoked_at, 'la primera queda revocada');
+        $this->assertNotNull($filas[0]->revoked_reason, 'y con su motivo');
+        $this->assertNull($filas[1]->revoked_at, 'la segunda es la viva');
+        $this->assertSame('la-segunda-2222', CredencialFuente::clave('sunat'));
+    }
+
+    /**
+     * 9.17h: retirar la clave **no la borra**, la revoca.
+     *
+     * `9.2` la ponía a NULL y con ella se iba quién la había puesto.
+     */
+    public function test_retirar_la_clave_la_deja_revocada_y_no_borrada(): void
+    {
+        $autor = (int) $this->usuarioCon('admin')->id;
+        CredencialFuente::guardar('sunat', 'la-que-se-retira', $autor);
+
+        CredencialFuente::olvidar('sunat');
+
+        $conexionId = (int) DB::table('fx_sources')->where('code', 'sunat')
+            ->value('integration_connection_id');
+
+        $this->assertSame(1, DB::table('integration_credentials')
+            ->where('integration_connection_id', $conexionId)->count(), 'la fila sigue');
+        $this->assertSame(0, DB::table('integration_credentials')
+            ->where('integration_connection_id', $conexionId)->whereNull('revoked_at')->count());
+        $this->assertNull(CredencialFuente::clave('sunat'));
+    }
+
+    /**
+     * 9.17h: la dirección sale del catálogo del proveedor, no de una columna.
+     *
+     * Estaba en una constante de PHP **y además** en una columna que se podía
+     * teclear. Es la dirección fija y pública de Decolecta: ni una cosa ni la
+     * otra (`DEC-255`).
+     */
+    public function test_la_direccion_de_decolecta_la_declara_el_catalogo(): void
+    {
+        CredencialFuente::guardar('sunat', 'una-clave-cualquiera', (int) $this->usuarioCon('admin')->id);
+
+        $this->assertSame(
+            'https://api.decolecta.com',
+            CredencialFuente::url('sunat', 'https://no-deberia-usarse.test'),
+        );
     }
 
     /** Y lo que se le enseña a una persona son cuatro caracteres, no la clave. */
@@ -74,8 +154,17 @@ final class TiposDeCambioTest extends TestCase
         $this->assertNotContains('clave-secreta-8f2a', $estado);
     }
 
-    /** El entorno manda sobre la base. */
-    public function test_la_clave_del_entorno_gana_a_la_guardada(): void
+    /**
+     * 9.17h: **la afirmación se invierte, y con motivo.**
+     *
+     * Hasta hoy el entorno ganaba siempre. Esa regla convivía en la MISMA
+     * pantalla con la contraria de `DEC-260` —la cuenta de correo guardada
+     * manda sobre el `.env`—, y dos integraciones vecinas con precedencias
+     * opuestas es peor que cualquiera de las dos reglas por separado: se teclea
+     * una clave en el panel, se guarda, y sigue llamando con la de antes sin
+     * que nada lo diga. Ahora manda la guardada, y el `.env` es el respaldo.
+     */
+    public function test_la_clave_guardada_gana_a_la_del_entorno(): void
     {
         CredencialFuente::guardar('sunat', 'la-de-la-base', $this->usuarioCon('admin')->id);
 
@@ -83,18 +172,56 @@ final class TiposDeCambioTest extends TestCase
         // lo unico que sigue funcionando con `config:cache` en produccion.
         config(['latam.cambio.decolecta.clave' => 'la-del-entorno']);
 
+        $this->assertSame('la-de-la-base', CredencialFuente::clave('sunat'));
+        $this->assertSame(CredencialFuente::BASE, CredencialFuente::estado('sunat')['origen']);
+    }
+
+    /** Y sin ninguna guardada, el `.env` sigue sirviendo. */
+    public function test_sin_clave_guardada_manda_la_del_entorno(): void
+    {
+        config(['latam.cambio.decolecta.clave' => 'la-del-entorno']);
+
         $this->assertSame('la-del-entorno', CredencialFuente::clave('sunat'));
         $this->assertSame(CredencialFuente::ENTORNO, CredencialFuente::estado('sunat')['origen']);
     }
 
-    /** `tg_fxs_credencial_firmada`: media firma no vale. */
+    /**
+     * Media firma sigue sin valer — y ahora lo impone la COLUMNA.
+     *
+     * `9.2` lo defendía con `tg_fxs_credencial_firmada`, un disparador que
+     * comprobaba que las cuatro columnas de la firma fueran juntas. Con la
+     * clave en `integration_credentials` no hace falta ningún disparador:
+     * `set_by_user_id` y `set_at` son `NOT NULL`, así que una credencial sin
+     * autor **no cabe en la tabla**. Una regla que se convierte en una columna
+     * obligatoria es una regla que ya no se puede olvidar de comprobar.
+     */
     public function test_una_credencial_sin_autor_no_entra_ni_por_sql(): void
     {
+        $conexionId = (int) DB::table('integration_connections')->insertGetId([
+            'uuid' => (string) Str::uuid(),
+            'integration_provider_id' => (int) DB::table('integration_providers')
+                ->where('purpose', 'fx')->value('id'),
+            'legal_entity_id' => null,
+            'name' => 'Fuente sin firma',
+            'environment' => 'production',
+            'base_url' => null,
+            'status' => 'draft',
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+
         $this->expectException(QueryException::class);
 
-        DB::table('fx_sources')->where('code', 'sunat')->update([
-            'api_key_cipher' => 'loquesea', 'api_key_last4' => 'abcd',
-            'credential_set_at' => now(), 'credential_set_by_user_id' => null,
+        // fixture-invalido-a-proposito: `set_by_user_id` y `set_at` son NOT NULL,
+        // y eso es justo lo que esta prueba afirma.
+        DB::table('integration_credentials')->insert([
+            'integration_connection_id' => $conexionId,
+            'kind' => 'api_key',
+            'secret_cipher' => 'loquesea',
+            'last4' => 'abcd',
+            'version' => 1,
+            'set_by_user_id' => null,
+            'set_at' => null,
+            'created_at' => now(), 'updated_at' => now(),
         ]);
     }
 
@@ -103,6 +230,8 @@ final class TiposDeCambioTest extends TestCase
     {
         $this->actingAs($this->usuarioCon('admin'))
             ->post('/backoffice/tipos-de-cambio/credencial', ['api_key' => 'clave-secreta-8f2a'])
+            // 9.17h: vuelve a la PESTANA, que es donde esta el formulario ahora.
+            ->assertRedirect(route('integraciones.index', ['p' => 'fx']))
             ->assertSessionHas('exito');
 
         $fila = DB::table('audit_logs')->where('action', 'fx.credential.set')->first();

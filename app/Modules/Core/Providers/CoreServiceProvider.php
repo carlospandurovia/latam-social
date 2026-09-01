@@ -7,10 +7,10 @@ namespace App\Modules\Core\Providers;
 use App\Modules\Core\Console\PublicarTerminosCommand;
 use App\Modules\Core\Console\TraerTiposDeCambioCommand;
 use App\Modules\Core\Http\Controllers\IntegracionesController;
+use App\Modules\Core\Http\Controllers\TiposDeCambioController;
 use App\Modules\Core\Services\Certificados;
 use App\Modules\Core\Services\Cobertura;
 use App\Modules\Core\Services\Correlativos;
-use App\Modules\Core\Services\CredencialFuente;
 use App\Modules\Core\Services\Decolecta;
 use App\Modules\Core\Services\Impuestos;
 use App\Modules\Core\Services\Integraciones;
@@ -155,12 +155,14 @@ final class CoreServiceProvider extends ServiceProvider
             orden: 10,
         );
 
-        // 9.17h se la lleva a esta pestaña de verdad. Hoy dice dónde vive.
+        // 9.17h: ya se la lleva de verdad. La clave y la direccion viven
+        // aqui; las tasas, las fuentes oficiales por par y el registro de
+        // traidas se quedan en su pantalla, que es trabajo y no configuracion.
         Pestanas::registrar(
             'fx',
             'Tipos de cambio',
-            datos: static fn (): array => [],
-            avisos: static fn (): array => [],
+            datos: static fn (): array => TiposDeCambioController::datosDeIntegracion(),
+            avisos: static fn (): array => TiposDeCambioController::avisosDeLaFuente(),
             orden: 20,
         );
     }
@@ -325,23 +327,20 @@ final class CoreServiceProvider extends ServiceProvider
                 ))];
             }, orden: 60, grupo: Preparacion::CATALOGOS);
 
+        // 9.17h -- ESTA AREA YA NO AVISA DE LA CREDENCIAL.
+        //
+        // No es que el aviso sobre: es que se arregla en otro sitio. La clave
+        // vive desde hoy en la pestana de Integraciones y alli avisa, con su
+        // formulario debajo. Repetirlo aqui llevaria a una pantalla donde no
+        // hay nada que tocar, que es justo lo que `9.17i` vino a quitar.
+        //
+        // Lo que SI se queda es «la ultima traida fue mal»: eso se mira en el
+        // registro de traidas y se reintenta aqui.
         Preparacion::area('Tipos de cambio', 'fx.manage', 'cambio.index',
             static function (): array {
-                $avisos = [];
-                $fuente = Decolecta::FUENTE;
+                $mirar = TraidaDeCambio::loQueHayQueMirar(Decolecta::FUENTE);
 
-                if (CredencialFuente::estado($fuente)['origen'] === CredencialFuente::NINGUNA) {
-                    $avisos[] = Aviso::rojo(
-                        'No hay credencial para la fuente oficial de tipos de cambio. Sin ella no '
-                        .'entra ninguna tasa nueva, y convertir con una tasa vieja es convertir mal.',
-                    );
-                }
-
-                if (($mirar = TraidaDeCambio::loQueHayQueMirar($fuente)) !== null) {
-                    $avisos[] = Aviso::ambar($mirar);
-                }
-
-                return $avisos;
+                return $mirar === null ? [] : [Aviso::ambar($mirar)];
             }, orden: 40, grupo: Preparacion::FISCAL);
     }
 }

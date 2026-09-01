@@ -9,11 +9,13 @@ use App\Modules\Core\Services\CredencialFuente;
 use App\Modules\Core\Services\Decolecta;
 use App\Modules\Core\Services\TraidaDeCambio;
 use App\Shared\Audit\Bitacora;
+use App\Shared\Config\Aviso;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
+use RuntimeException;
 
 /**
  * La pantalla de tipos de cambio (9.2).
@@ -67,30 +69,35 @@ final class TiposDeCambioController
     public function guardarCredencial(Request $peticion): RedirectResponse
     {
         $datos = $peticion->validate([
-            'api_key' => ['required', 'string', 'min:8', 'max:255'],
+            'api_key' => ['nullable', 'string', 'min:8', 'max:255'],
             'api_base_url' => ['nullable', 'url', 'max:255'],
         ]);
 
-        $clave = trim((string) $datos['api_key']);
+        $clave = trim((string) ($datos['api_key'] ?? ''));
 
-        DB::transaction(function () use ($datos, $clave): void {
-            if (($datos['api_base_url'] ?? null) !== null) {
-                DB::table('fx_sources')->where('code', Decolecta::FUENTE)
-                    ->update(['api_base_url' => $datos['api_base_url'], 'updated_at' => now()]);
-            }
+        try {
+            CredencialFuente::guardar(
+                Decolecta::FUENTE, $clave, (int) Auth::id(), $datos['api_base_url'] ?? null,
+            );
+        } catch (RuntimeException $e) {
+            return back()->withInput()->with('aviso', $e->getMessage());
+        }
 
-            CredencialFuente::guardar(Decolecta::FUENTE, $clave, (int) Auth::id());
-        });
+        if ($clave !== '') {
+            Bitacora::registrar(
+                accion: 'fx.credential.set',
+                tipoEntidad: 'fx_source',
+                idEntidad: (int) DB::table('fx_sources')->where('code', Decolecta::FUENTE)->value('id'),
+                cambios: ['credencial' => ['antes' => null, 'despues' => 'termina en '.mb_substr($clave, -4)]],
+            );
+        }
 
-        Bitacora::registrar(
-            accion: 'fx.credential.set',
-            tipoEntidad: 'fx_source',
-            idEntidad: (int) DB::table('fx_sources')->where('code', Decolecta::FUENTE)->value('id'),
-            cambios: ['credencial' => ['antes' => null, 'despues' => 'termina en '.mb_substr($clave, -4)]],
+        return redirect()->route('integraciones.index', ['p' => 'fx'])->with(
+            'exito',
+            $clave === ''
+                ? 'Guardado. La clave anterior sigue en uso: sólo cambia lo demás.'
+                : 'Clave guardada, cifrada. Pruebe a traer el tipo de cambio de hoy.',
         );
-
-        return redirect()->route('cambio.index')
-            ->with('exito', 'Credencial guardada, cifrada. Pruebe a traer el tipo de cambio de hoy.');
     }
 
     public function olvidarCredencial(): RedirectResponse
@@ -101,11 +108,63 @@ final class TiposDeCambioController
             accion: 'fx.credential.cleared',
             tipoEntidad: 'fx_source',
             idEntidad: (int) DB::table('fx_sources')->where('code', Decolecta::FUENTE)->value('id'),
-            cambios: ['credencial' => ['antes' => 'guardada', 'despues' => null]],
+            cambios: ['credencial' => ['antes' => 'guardada', 'despues' => 'revocada']],
         );
 
-        return redirect()->route('cambio.index')
-            ->with('aviso', 'Credencial borrada de la base. Si hay una en el entorno, sigue mandando esa.');
+        return redirect()->route('integraciones.index', ['p' => 'fx'])
+            ->with('aviso', 'Clave revocada. Queda en el histórico con quién la puso. '
+                .'Si hay una en el entorno, a partir de ahora manda ésa.');
+    }
+
+    /**
+     * Los datos de la pestaña de tipos de cambio de Integraciones (9.17h).
+     *
+     * @return array<string, mixed>
+     */
+    public static function datosDeIntegracion(): array
+    {
+        $credencial = CredencialFuente::estado(Decolecta::FUENTE);
+
+        return [
+            'credencial' => $credencial,
+            'urlPorDefecto' => (string) config('latam.cambio.decolecta.url', Decolecta::URL),
+            'hoy' => now()->toDateString(),
+            'avisosCambio' => self::avisosDeLaFuente(),
+            // Dos estados y no cuatro: o entra una tasa nueva cada dia o no
+            // entra. «A medias» no existe aqui.
+            'estadoCambio' => $credencial['origen'] === CredencialFuente::NINGUNA
+                ? ['nivel' => 'falta', 'texto' => 'Falta la clave']
+                : ['nivel' => 'activo', 'texto' => 'Activo'],
+        ];
+    }
+
+    /**
+     * Lo que falta para que entren tasas. **Sólo lo que se arregla aquí.**
+     *
+     * `loQueHayQueMirar()` --que la última traída fue mal-- se queda en el área
+     * de Tipos de cambio: eso se mira en el registro de traídas y se reintenta
+     * allí, no se arregla tecleando una clave.
+     *
+     * @return list<Aviso>
+     */
+    public static function avisosDeLaFuente(): array
+    {
+        if (CredencialFuente::estado(Decolecta::FUENTE)['origen'] !== CredencialFuente::NINGUNA) {
+            return [];
+        }
+
+        return [Aviso::rojo(
+            'No hay credencial para la fuente oficial de tipos de cambio. Sin ella no entra '
+            .'ninguna tasa nueva, y convertir con una tasa vieja es convertir mal.',
+        )];
+    }
+
+    /** A la pantalla desde la que se pulsó, no siempre a la misma. */
+    private static function volver(Request $peticion): RedirectResponse
+    {
+        return $peticion->input('volver') === 'fx'
+            ? redirect()->route('integraciones.index', ['p' => 'fx'])
+            : redirect()->route('cambio.index');
     }
 
     /**
@@ -124,7 +183,10 @@ final class TiposDeCambioController
         $resultado = Decolecta::traer((string) $fecha);
         TraidaDeCambio::anotar(Decolecta::FUENTE, (string) $fecha, $resultado);
 
-        return redirect()->route('cambio.index')->with(
+        // 9.17h: el mismo boton se pulsa desde dos sitios --la pestana de
+        // integraciones y la pantalla de tasas-- y devolver siempre a la
+        // segunda echaba de la pantalla a quien estaba configurando.
+        return self::volver($peticion)->with(
             $resultado['outcome'] === Decolecta::OK ? 'exito' : 'aviso',
             $resultado['detalle'],
         );

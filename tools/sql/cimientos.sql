@@ -68,27 +68,32 @@ CREATE TABLE currencies (
 -- La clave ajena NO distingue mayusculas: el cotejamiento es
 -- `utf8mb4_unicode_ci` y 'SUNAT' entra igual que 'sunat'. Comprobado contra el
 -- motor, y afirmado en la suite para que no se suponga lo contrario.
--- 9.2 -- Las columnas de credencial. `api_key_cipher` va CIFRADA con `Crypt`,
--- la misma maquina que guarda las cuentas bancarias desde 3.8, y el entorno
--- (`DECOLECTA_API_KEY`) manda sobre ella cuando existe. `api_key_last4` esta
--- para que la pantalla pueda decir «termina en 8f2a» sin descifrar nada: la
--- clave entera no se ensena nunca, ni al que la escribio un minuto antes.
+-- 9.17h -- LA FUENTE YA NO TIENE CAJA FUERTE PROPIA.
+--
+-- Hasta 9.17h esta tabla llevaba `api_key_cipher`, `api_key_last4`,
+-- `credential_set_at` y `credential_set_by_user_id`: un SEGUNDO almacen de
+-- secretos, mas pobre que el que ya existia --no versionaba, no revocaba y no
+-- dejaba rastro de la anterior--. La clave vive ahora en
+-- `integration_credentials` (9.17d), que hace las tres cosas, y la fuente
+-- cuelga de una conexion. `DEC-257`: el esqueleto se comparte, lo propio del
+-- proposito se queda. Lo propio de una fuente es su codigo, su nombre y si esta
+-- en uso; la clave nunca lo fue.
+--
+-- `api_base_url` se va por el mismo motivo que se fue la de SUNAT en 9.17e: la
+-- direccion publica de un proveedor no se teclea, la declara el catalogo.
 CREATE TABLE fx_sources (
   id           BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
   code         VARCHAR(40)  NOT NULL,
   name         VARCHAR(80)  NOT NULL,
   description  VARCHAR(255) NULL,
-  api_base_url VARCHAR(255) NULL,
-  api_key_cipher TEXT       NULL,
-  api_key_last4  VARCHAR(4) NULL,
-  credential_set_at DATETIME(3) NULL,
-  credential_set_by_user_id BIGINT UNSIGNED NULL,
+  integration_connection_id BIGINT UNSIGNED NULL,
   is_active    TINYINT(1)   NOT NULL DEFAULT 1,
   created_at   DATETIME(3)  NULL,
   updated_at   DATETIME(3)  NULL,
   UNIQUE KEY uq_fxs_code (code),
-  KEY ix_fxs_credencial (credential_set_by_user_id),
-  CONSTRAINT ck_fxs_last4 CHECK (api_key_last4 IS NULL OR CHAR_LENGTH(api_key_last4) = 4)
+  -- UNICA: dos fuentes no pueden compartir conexion, o «de quien es esta
+  -- clave» dejaria de tener una respuesta.
+  UNIQUE KEY uq_fxs_conexion (integration_connection_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- `side` (9.1): SUNAT publica compra y venta el MISMO dia y no son
@@ -369,10 +374,6 @@ CREATE TABLE fx_fetch_runs (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- FKs de catalogo diferidas hasta aqui para no depender del orden de creacion.
-ALTER TABLE fx_sources
-  ADD CONSTRAINT fk_fxs_credencial FOREIGN KEY (credential_set_by_user_id)
-  REFERENCES users(id) ON DELETE RESTRICT;
-
 ALTER TABLE countries
   ADD CONSTRAINT fk_countries_currency FOREIGN KEY (default_currency_code)
     REFERENCES currencies(code) ON DELETE RESTRICT;
@@ -520,24 +521,6 @@ END//
 -- 3,742 y su fuente diria 3,751--. Se bloquea el UPDATE ENTERO, como
 -- `tg_cvw_inmutable`, porque no hay ninguna columna de esta tabla que tenga
 -- sentido cambiar despues de publicada.
--- 9.2 -- Poner una credencial deja rastro completo o no lo deja.
---
--- Media firma --cifrado sin autor, o autor sin fecha-- es peor que ninguna,
--- porque parece que la pregunta «quien la puso» tiene respuesta. Y esa pregunta
--- es la primera el dia que aparezca un consumo raro contra el servicio.
-CREATE TRIGGER `tg_fxs_credencial_firmada`
-BEFORE UPDATE ON `fx_sources`
-FOR EACH ROW
-BEGIN
-    IF NEW.`api_key_cipher` IS NOT NULL
-       AND (NEW.`credential_set_at` IS NULL
-            OR NEW.`credential_set_by_user_id` IS NULL
-            OR NEW.`api_key_last4` IS NULL) THEN
-        SIGNAL SQLSTATE '45000'
-          SET MESSAGE_TEXT = 'Una credencial guardada exige quien la puso, cuando, y sus cuatro ultimos.';
-    END IF;
-END//
-
 CREATE TRIGGER `tg_fx_inmutable`
 BEFORE UPDATE ON `exchange_rates`
 FOR EACH ROW
