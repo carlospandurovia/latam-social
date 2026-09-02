@@ -567,7 +567,23 @@ final class InvitacionesTest extends TestCase
             ->assertDontSee('5,000')
             // Ni lo que cobra otro creador de la misma campana.
             ->assertDontSee('1,234')
-            ->assertDontSee((string) $otro);
+            ->assertDontSee('1234.00');
+
+        // 9.9d: AQUI HABIA `assertDontSee((string) $otro)`, y era un aserto
+        // fragil que no afirmaba lo que decia afirmar.
+        //
+        // `$otro` es un id autonumerico. Cuando salio un numero de dos cifras
+        // --96-- la prueba se puso roja porque «96» aparecia en cualquier sitio
+        // de la pagina: una fecha, un importe, un trozo de token. No habia
+        // ninguna fuga; lo unico que hacia falta para romperla era que otra
+        // iteracion insertara filas antes y corriera los ids, que es
+        // exactamente lo que paso al anadir las de `9.9d`.
+        //
+        // Lo que la prueba defiende --que no se filtra lo que cobra OTRO
+        // creador-- lo afirman las lineas de arriba, con el importe en los dos
+        // formatos en que podria salir. Un id interno en el HTML no es una fuga
+        // de dinero, y afirmar que no aparece es afirmar una coincidencia.
+        unset($otro);
     }
 
     public function test_el_recorrido_de_aceptar_por_pantalla(): void

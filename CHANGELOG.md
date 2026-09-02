@@ -46,6 +46,34 @@ ajuste del sistema exige ya entrar a la máquina.**
   y una regla que se convierte en columna obligatoria ya no se puede olvidar de
   comprobar.
 
+## [9.9d · El XML firmado, detrás de una frontera] — 2026-09-02
+
+### Añadido
+
+- `App\Modules\Finance\Emision` — la frontera de `DEC-252`: una interfaz por
+  país, un registro, y el adaptador peruano con Greenter dentro. Deptrac declara
+  una capa `Greenter` que **sólo** esa carpeta puede nombrar (`DEC-269`).
+- `electronic_documents` — el XML firmado, en la base y no en `files`
+  (`DEC-270`). Columna puerta 35: uno vigente por factura y clase.
+- `App\Shared\Texto\Letras` — el importe en palabras, que el comprobante exige.
+  En `Shared` porque no es peruano.
+- En la ficha de la factura: armar y firmar el XML, descargarlo, y ver las
+  versiones anteriores.
+- `greenter/lite` v5.3.0 como dependencia.
+
+### Arreglado
+
+- 🔴 **La fecha del comprobante se iba un día atrás.** `issue_date` es «el día en
+  la zona de la sociedad»; construirla en UTC hacía que Greenter la escribiera
+  como el día anterior en hora de Lima. La zona del emisor viaja ahora en la
+  estructura. **Salió de generar el primer XML de verdad**, no de una prueba.
+
+### Nota para el despliegue
+
+`Greenter\See` crea un `SoapClient` en su constructor, así que no se usa: armar
+un XML no debe exigir `ext-soap`. Pero **`9.9e` sí lo va a exigir** — conviene
+confirmar que el hosting tiene `php-soap` habilitado antes de llegar ahí.
+
 ## [9.17j · El sistema se entera de que le falta migrar] — 2026-09-01
 
 ### Añadido

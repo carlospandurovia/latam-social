@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Modules\Finance\Providers;
 
 use App\Modules\Finance\Console\RevisarDevengosCommand;
+use App\Modules\Finance\Emision\Armadores;
+use App\Modules\Finance\Emision\Peru\ArmadorGreenter;
 use App\Modules\Finance\Listeners\DevengarParticipacion;
 use App\Shared\Auth\Permisos;
 use App\Shared\Eventos\EventoOcurrido;
@@ -31,6 +33,17 @@ final class FinanceServiceProvider extends ServiceProvider
         // proposito --la aceptacion ocurre por HTTP, no por comando--, que es
         // donde `ContentServiceProvider` registra el suyo desde `8.1`.
         Event::listen(EventoOcurrido::class, DevengarParticipacion::class);
+
+        // 9.9d: quien sabe armar un comprobante electronico en cada pais.
+        //
+        // Este es el UNICO sitio de Finance que nombra al adaptador peruano, y
+        // por eso `deptrac` deja pasar esa arista. Lo que NO deja pasar es que
+        // alguien nombre a Greenter fuera de `Emision/Peru/`: esa es la
+        // frontera de `DEC-252`, y es una puerta, no un acuerdo.
+        //
+        // Se registra una FABRICA: armar el adaptador monta Twig y un firmador,
+        // y la inmensa mayoria de las peticiones no emiten nada.
+        Armadores::registrar('PE', static fn (): ArmadorGreenter => new ArmadorGreenter);
 
         // 9.15: quien puede mirar los archivos de finanzas. La regla vive AQUI
         // y no en un `switch` central porque necesita saber de `payouts` y de

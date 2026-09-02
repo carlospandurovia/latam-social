@@ -924,6 +924,24 @@ Route::middleware('auth')->prefix('backoffice')->group(function (): void {
         ->whereUuid('uuid')
         ->name('facturas.anular');
 
+    // 9.9d -- El comprobante electronico: armarlo y firmarlo.
+    //
+    // `finance.invoice.issue` y no un permiso nuevo: quien puede emitir una
+    // factura es quien puede armar su comprobante. Inventar un segundo permiso
+    // para el segundo paso del mismo acto es partir en dos una decision que
+    // nadie toma por separado.
+    Route::post('/facturas/{uuid}/comprobante', [FacturasController::class, 'generarXml'])
+        ->middleware('permiso:finance.invoice.issue')
+        ->whereUuid('uuid')
+        ->name('facturas.comprobante');
+
+    // Descargarlo es LEER una factura: lo puede hacer quien ve finanzas, sin
+    // poder emitir. Es el documento que se le manda al cliente y al contador.
+    Route::get('/facturas/{uuid}/comprobante/{documento}', [FacturasController::class, 'descargarXml'])
+        ->middleware('permiso:finance.view')
+        ->whereUuid('uuid')->whereUuid('documento')
+        ->name('facturas.comprobante.descargar');
+
     // 9.21c -- La bandeja de contactos que llegan por la portada. Verlos es
     // `client.view`; moverlos es `client.manage`, la misma separacion que ya
     // tienen los clientes.

@@ -39,8 +39,25 @@ deptrac:
       collectors: [{ type: directory, value: app/Modules/Content/.* }]
     - name: Measurement
       collectors: [{ type: directory, value: app/Modules/Measurement/.* }]
+    # 9.9d -- Finance SIN el adaptador peruano.
+    #
+    # `must_not` lo saca de esta capa para poder darle a esa carpeta --y solo a
+    # ella-- permiso para nombrar a Greenter. Sin el `must_not`, el adaptador
+    # seria «Finance» y el permiso valdria para todo el modulo, que es
+    # exactamente lo que `DEC-252` vino a impedir.
     - name: Finance
-      collectors: [{ type: directory, value: app/Modules/Finance/.* }]
+      collectors:
+        - type: bool
+          must:
+            - type: directory
+              value: app/Modules/Finance/.*
+          must_not:
+            - type: directory
+              value: app/Modules/Finance/Emision/Peru/.*
+
+    # El adaptador peruano. Es el unico que puede ver Greenter.
+    - name: EmisionPeru
+      collectors: [{ type: directory, value: app/Modules/Finance/Emision/Peru/.* }]
     - name: Communication
       collectors: [{ type: directory, value: app/Modules/Communication/.* }]
     - name: Intelligence
@@ -64,6 +81,21 @@ deptrac:
         - type: classLike
           value: '^(Illuminate|Symfony|Carbon|Psr|Ramsey|Doctrine|Laravel|Monolog)\\.*'
 
+    # ------------------------------------------------------------------------
+    # Greenter, en su propia capa (9.9d).
+    #
+    # NO entra en `Framework` a proposito. Framework aparece en todas las capas
+    # --cualquiera puede usar Laravel--, y meter a Greenter ahi lo abriria a
+    # todo el proyecto. En su propia capa, aparece en el `ruleset` de una sola:
+    # `EmisionPeru`. Nombrarlo desde cualquier otro sitio pone Deptrac en rojo.
+    #
+    # Esto es `DEC-252` --«Greenter ira detras de una frontera, porque es
+    # peruano y esto es para seis paises»-- convertido en una comprobacion.
+    - name: Greenter
+      collectors:
+        - type: classLike
+          value: '^Greenter\\.*'
+
   ruleset:
     # Framework aparece en TODAS: cualquier capa puede usar Laravel. Lo que la
     # regla sigue impidiendo es que un módulo importe a otro que no le toca.
@@ -78,7 +110,15 @@ deptrac:
     Matching:      [Framework, Shared, Core, Creator, Campaign]
     Content:       [Framework, Shared, Core, Identity, Creator, Campaign]
     Measurement:   [Framework, Shared, Core, Campaign, Content]
-    Finance:       [Framework, Shared, Core, Identity, Creator, Client, Campaign, Content]
+    # 9.9d: `EmisionPeru` entra aqui SOLO para que el proveedor pueda registrar
+    # el adaptador. Es una arista y esta escrita; lo que la frontera protege no
+    # es que Finance ignore que existe Peru --lo tiene que saber para elegirlo--
+    # sino que NADIE fuera de esa carpeta nombre a Greenter.
+    Finance:       [Framework, Shared, Core, Identity, Creator, Client, Campaign, Content, EmisionPeru]
+
+    # El adaptador peruano ve Greenter, y Finance para los datos que recibe. No
+    # ve ningun otro modulo: armar un XML no necesita saber de campanas.
+    EmisionPeru:   [Framework, Shared, Finance, Greenter]
     # Communication NO conoce el negocio: los datos llegan en el payload del evento.
     Communication: [Framework, Shared, Core, Identity]
     # Consumidores puros. Nadie los lista como dependencia permitida.

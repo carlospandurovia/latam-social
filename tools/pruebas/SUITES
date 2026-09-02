@@ -134,3 +134,8 @@
 9.9a-impuestos
 9.9b-facturas
 9.9c-certificados
+
+# 9.9d va DESPUES de 9.9b: necesita una factura sobre la que colgar el
+# documento, y quien la deja ahi es la suite de facturas. Y va despues de 9.9c
+# porque la clave ajena del certificado exige que esa tabla exista.
+9.9d-comprobante

@@ -390,6 +390,66 @@ CREATE TABLE invoice_lines (
   CONSTRAINT ck_iline_math CHECK (line_total = line_subtotal + line_tax)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+
+-- ============================ El comprobante electronico (9.9d)
+--
+-- POR QUE EL XML VA EN LA BASE Y NO EN `files`
+--
+-- No es un archivo cualquiera: es LA PRUEBA FIRMADA de una operacion, y tres
+-- cosas la separan del resto.
+--   1. Tiene que sobrevivir EXACTAMENTE como se firmo. Un byte distinto y la
+--      firma deja de validar. En la base entra en la copia de seguridad de la
+--      base, junto a la factura; en disco vive con otra politica de copia y se
+--      pierde por separado.
+--   2. Es pequeno: 6 KB. La razon de sacar archivos de la base --que ocupan--
+--      aqui no aplica.
+--   3. Una instalacion sin disco configurado tiene que poder emitir bien. Si la
+--      validez fiscal dependiera de que alguien configuro S3, habria
+--      instalaciones emitiendo y perdiendo la prueba sin enterarse.
+--
+-- El PDF, cuando llegue, si ira a `files`: se puede volver a generar.
+CREATE TABLE electronic_documents (
+  id            BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  uuid          CHAR(36)      NOT NULL,
+  invoice_id    BIGINT UNSIGNED NOT NULL,
+  -- `xml_signed` hoy; `cdr` en 9.9e, cuando SUNAT conteste.
+  kind          VARCHAR(20)   NOT NULL,
+  -- El nombre que exige la administracion. Se guarda porque es parte de la
+  -- IDENTIDAD del documento: SUNAT lo usa para reconocerlo dentro del ZIP y
+  -- rechaza sin decir que el problema es el nombre.
+  name          VARCHAR(120)  NOT NULL,
+  xml_content   MEDIUMTEXT    NOT NULL,
+  sha256        CHAR(64)      NOT NULL,
+  size_bytes    INT UNSIGNED  NOT NULL,
+  -- Con QUE certificado se firmo. La pregunta que hay que poder contestar el
+  -- dia que haya dos y uno este revocado.
+  signing_certificate_id BIGINT UNSIGNED NULL,
+  generated_at  DATETIME(3)   NOT NULL,
+  generated_by_user_id BIGINT UNSIGNED NOT NULL,
+  superseded_at DATETIME(3)   NULL,
+  created_at    DATETIME(3)   NULL,
+  updated_at    DATETIME(3)   NULL,
+  -- Columna puerta 35: UNO vigente por factura y clase. Regenerar es legitimo
+  -- --se corrigio el ubigeo, se cambio el certificado-- pero el anterior no
+  -- desaparece: si ya se mando, lo que SUNAT tiene es ese.
+  vigente_gate  VARCHAR(45) GENERATED ALWAYS AS (CASE WHEN superseded_at IS NULL THEN CONCAT(invoice_id, ':', kind) ELSE NULL END) STORED,
+  UNIQUE KEY uq_edoc_uuid (uuid),
+  UNIQUE KEY uq_edoc_vigente (vigente_gate),
+  KEY ix_edoc_factura (invoice_id, kind),
+  KEY ix_edoc_huella (sha256),
+  KEY ix_edoc_autor (generated_by_user_id),
+  KEY ix_edoc_cert (signing_certificate_id),
+  CONSTRAINT fk_edoc_invoice FOREIGN KEY (invoice_id) REFERENCES invoices(id) ON DELETE RESTRICT,
+  CONSTRAINT fk_edoc_autor FOREIGN KEY (generated_by_user_id) REFERENCES users(id) ON DELETE RESTRICT,
+  CONSTRAINT fk_edoc_cert FOREIGN KEY (signing_certificate_id) REFERENCES signing_certificates(id) ON DELETE RESTRICT,
+  CONSTRAINT ck_edoc_kind CHECK (kind IN ('xml_signed','cdr')),
+  -- 64 caracteres exactos: un sha256 en hexadecimal. Una huella truncada no
+  -- sirve para comprobar nada y parece que si.
+  CONSTRAINT ck_edoc_huella CHECK (CHAR_LENGTH(sha256) = 64 AND sha256 REGEXP '^[0-9a-f]{64}$'),
+  CONSTRAINT ck_edoc_vacio CHECK (size_bytes > 0),
+  CONSTRAINT ck_edoc_nombre CHECK (CHAR_LENGTH(TRIM(name)) >= 5)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- ============================ Cobros del cliente
 CREATE TABLE payments (
   id            BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
@@ -838,6 +898,39 @@ BEGIN
   IF NEW.payment_method_id <> OLD.payment_method_id OR NEW.creator_id <> OLD.creator_id THEN
     SIGNAL SQLSTATE '45000'
       SET MESSAGE_TEXT = 'El destino de un pago no se cambia: anule el pago y cree otro.';
+  END IF;
+END//
+
+-- 9.9d -- Lo que se firmo no se toca.
+--
+-- Misma regla que `ledger_entries` y que `invoices` desde 9.9b, y aqui pesa
+-- mas: el XML ES la prueba. Si se pudiera editar, la firma que lleva dentro
+-- dejaria de significar nada, que es justo lo contrario de para lo que se firma.
+CREATE TRIGGER tg_edoc_no_delete BEFORE DELETE ON electronic_documents
+FOR EACH ROW
+BEGIN
+  SIGNAL SQLSTATE '45000'
+    SET MESSAGE_TEXT = 'Un comprobante firmado no se borra: es la prueba de lo que se declaro.';
+END//
+
+-- Lo unico que puede cambiar es `superseded_at`, y solo de vacio a puesto: es
+-- como se dice «este ya no es el vigente» sin borrar el que se mando.
+CREATE TRIGGER tg_edoc_inmutable BEFORE UPDATE ON electronic_documents
+FOR EACH ROW
+BEGIN
+  IF NEW.xml_content <> OLD.xml_content
+     OR NEW.sha256 <> OLD.sha256
+     OR NEW.name <> OLD.name
+     OR NEW.invoice_id <> OLD.invoice_id
+     OR NEW.kind <> OLD.kind
+     OR NEW.generated_at <> OLD.generated_at THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'Lo que se firmo no se cambia: se genera otro y este queda reemplazado.';
+  END IF;
+
+  IF OLD.superseded_at IS NOT NULL AND NEW.superseded_at IS NULL THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'Un documento reemplazado no vuelve a ser el vigente.';
   END IF;
 END//
 

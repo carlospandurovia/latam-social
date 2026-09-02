@@ -188,6 +188,73 @@
         </form>
       @endif
 
+      {{-- 9.9d: el comprobante electronico. Solo tiene sentido con la factura
+           ya emitida: un borrador no tiene numero, y sin numero no hay
+           comprobante que armar. --}}
+      @if (!in_array($factura->status, ['draft'], true))
+        <div class="rounded-xl border border-slate-200 bg-white p-5 space-y-3">
+          <h2 class="text-sm font-semibold">Comprobante electrónico</h2>
+
+          @if ($documento)
+            <div class="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900">
+              <p class="font-mono">{{ $documento->name }}</p>
+              <p class="mt-1">
+                {{ number_format($documento->size_bytes / 1024, 1) }} KB ·
+                {{ substr((string) $documento->generated_at, 0, 16) }}
+                @if ($documento->autor) · lo armó {{ $documento->autor }} @endif
+              </p>
+              {{-- La huella completa, no cortada: es con lo que se comprueba que
+                   el archivo descargado es el que se firmo. --}}
+              <p class="mt-1 break-all font-mono text-[10px] text-emerald-700">
+                sha256 {{ $documento->sha256 }}
+              </p>
+            </div>
+
+            @can('finance.view')
+              <a href="{{ route('facturas.comprobante.descargar', ['uuid' => $factura->uuid, 'documento' => $documento->uuid]) }}"
+                 class="block rounded-lg border border-slate-300 px-3 py-2 text-center text-sm text-slate-700 hover:bg-slate-50">
+                Descargar el XML firmado
+              </a>
+            @endcan
+          @else
+            <p class="text-xs text-slate-500">
+              Todavía no se ha armado. Hace falta que la sociedad tenga
+              <strong>certificado de firma vigente</strong> y ubigeo.
+            </p>
+          @endif
+
+          @if ($puedeEmitir && $factura->status !== 'voided')
+            <form method="POST" action="{{ route('facturas.comprobante', ['uuid' => $factura->uuid]) }}">
+              @csrf
+              <button class="w-full rounded-lg bg-marca-500 px-3 py-2 text-sm font-medium text-white hover:opacity-90">
+                {{ $documento ? 'Volver a armarlo' : 'Armar y firmar el XML' }}
+              </button>
+              @if ($documento)
+                <p class="mt-1 text-[11px] text-slate-400">
+                  El anterior no se borra: queda marcado como reemplazado.
+                </p>
+              @endif
+            </form>
+          @endif
+
+          @if ($documentos->count() > 1)
+            <details class="text-xs text-slate-500">
+              <summary class="cursor-pointer">Versiones anteriores ({{ $documentos->count() - 1 }})</summary>
+              <ul class="mt-2 space-y-1">
+                @foreach ($documentos as $d)
+                  @if ($d->superseded_at)
+                    <li class="font-mono text-[11px]">
+                      {{ $d->name }} · {{ substr((string) $d->generated_at, 0, 16) }}
+                      <span class="text-slate-400">reemplazado el {{ substr((string) $d->superseded_at, 0, 16) }}</span>
+                    </li>
+                  @endif
+                @endforeach
+              </ul>
+            </details>
+          @endif
+        </div>
+      @endif
+
       @if ($puedeEmitir && !in_array($factura->status, ['draft', 'voided'], true))
         <form method="POST" action="{{ route('facturas.anular', ['uuid' => $factura->uuid]) }}"
               class="rounded-xl border border-rose-200 bg-white p-5 space-y-3">

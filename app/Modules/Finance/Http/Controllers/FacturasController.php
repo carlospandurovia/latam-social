@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace App\Modules\Finance\Http\Controllers;
 
+use App\Modules\Finance\Services\Comprobantes;
 use App\Modules\Finance\Services\Facturas;
 use App\Shared\Auth\Permisos;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -63,6 +65,50 @@ final class FacturasController
             'estados' => Facturas::ESTADOS,
             'regimenes' => Facturas::REGIMENES,
             'puedeEmitir' => Permisos::tiene((int) Auth::id(), 'finance.invoice.issue'),
+            // 9.9d: el comprobante electronico. `historial` y no solo el
+            // vigente: regenerar es legitimo, y ver que se regenero --y cuando,
+            // y quien-- es parte de poder defender lo que se declaro.
+            'documento' => Comprobantes::vigente((int) $factura->id),
+            'documentos' => Comprobantes::historial((int) $factura->id),
+        ]);
+    }
+
+    /**
+     * Arma y firma el XML del comprobante (9.9d).
+     *
+     * No lo manda: eso es `9.9e`. Separarlo hace que «no se pudo armar» y «no
+     * se pudo entregar» no se confundan, que son dos arreglos distintos.
+     */
+    public function generarXml(string $uuid): RedirectResponse
+    {
+        try {
+            Comprobantes::generar($uuid, (int) Auth::id());
+        } catch (Throwable $e) {
+            return back()->with('aviso', $e->getMessage());
+        }
+
+        return back()->with('exito', 'Comprobante armado y firmado. Ya se puede descargar.');
+    }
+
+    /**
+     * Descarga el XML firmado.
+     *
+     * `Content-Type: application/xml` y descarga forzada: es un documento que
+     * se guarda y se presenta, no algo que se lee en el navegador.
+     */
+    public function descargarXml(string $uuid, string $documento): Response
+    {
+        unset($uuid);
+
+        try {
+            $fila = Comprobantes::xml($documento);
+        } catch (Throwable $e) {
+            abort(404, $e->getMessage());
+        }
+
+        return response((string) $fila->xml_content, 200, [
+            'Content-Type' => 'application/xml; charset=UTF-8',
+            'Content-Disposition' => 'attachment; filename="'.$fila->name.'"',
         ]);
     }
 
