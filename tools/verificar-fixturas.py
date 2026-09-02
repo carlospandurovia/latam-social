@@ -209,6 +209,19 @@ contador = [0]
 cols_global = [None]
 
 
+# 9.17j -- Las tablas que son de Laravel y no de este proyecto.
+#
+# `migrations` no esta en `tools/sql/` y no debe estarlo: es la contabilidad del
+# framework, no parte del modelo. Pero `EsquemaTest` escribe en ella a proposito
+# --quita una fila para comprobar que el sistema se entera de que le falta
+# migrar-- y sin esta lista el verificador la denuncia por no existir.
+#
+# Se nombran una por una y no se acepta cualquier tabla desconocida: «no esta en
+# el esquema» es exactamente el hallazgo que este verificador existe para dar.
+DEL_FRAMEWORK = {'migrations', 'sessions', 'cache', 'cache_locks',
+                 'jobs', 'job_batches', 'failed_jobs', 'password_reset_tokens'}
+
+
 def fabricar_fila(tabla, columna, cols, fks, cache, enumerados, visitadas):
     """Inserta una fila minima en `tabla` y devuelve su clave.
 
@@ -515,6 +528,7 @@ def main():
         print('  No se dejan vaciar (disparador `no_delete`): ' + ', '.join(tozudas))
 
     a_proposito = []
+    del_framework = []
 
     for archivo in archivos:
         texto = archivo.read_text(encoding='utf-8')
@@ -542,6 +556,10 @@ def main():
 
             if 'fixture-invalido-a-proposito' in previas:
                 a_proposito.append(donde)
+                continue
+
+            if tabla in DEL_FRAMEWORK:
+                del_framework.append(donde)
                 continue
 
             if tabla not in cols:
@@ -637,6 +655,10 @@ def main():
                 problemas.append((donde, detalle))
 
     print(f'  Base: {BASE}    inserts revisados: {revisados}')
+    if del_framework:
+        print()
+        print(f'  De tablas del framework, no del modelo: {len(del_framework)}')
+
     if a_proposito:
         # Se imprimen SIEMPRE, no solo con -v: una lista de excepciones que
         # nadie mira crece sola. Es la misma politica que `SIN_PERMISO` en

@@ -20,6 +20,7 @@ use App\Modules\Core\Services\Politica;
 use App\Modules\Core\Services\Terminos;
 use App\Modules\Core\Services\TraidaDeCambio;
 use App\Shared\Config\Aviso;
+use App\Shared\Config\Esquema;
 use App\Shared\Config\Pestanas;
 use App\Shared\Config\Preparacion;
 use App\Shared\Files\Vigilante;
@@ -82,6 +83,21 @@ final class CoreServiceProvider extends ServiceProvider
             static function (\Illuminate\View\View $vista): void {
                 $vista->with('marca', Marca::datos());
             });
+
+        // 9.17j (`T-84`): el aviso de que la base va por detras del codigo.
+        //
+        // Solo en `layouts.panel`, y a proposito: es un aviso para quien
+        // administra, no para la pantalla de acceso ni para la calle. Va en la
+        // PLANTILLA y no en un area de configuracion porque con el esquema
+        // atrasado puede reventar CUALQUIER pantalla, no una en particular, y
+        // porque no se arregla desde ninguna pantalla --se arregla con una orden
+        // en el servidor--.
+        //
+        // Un compositor y no una variable de cada controlador: son 199 rutas, y
+        // la que se olvidara seria justo la que reventara.
+        View::composer('layouts.panel', static function (\Illuminate\View\View $vista): void {
+            $vista->with('avisoEsquema', Esquema::aviso());
+        });
 
         // 9.17: el logotipo y el favicon de la plataforma.
         //

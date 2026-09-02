@@ -46,6 +46,27 @@ ajuste del sistema exige ya entrar a la máquina.**
   y una regla que se convierte en columna obligatoria ya no se puede olvidar de
   comprobar.
 
+## [9.17j · El sistema se entera de que le falta migrar] — 2026-09-01
+
+### Añadido
+
+- `App\Shared\Config\Esquema` — compara los archivos de migración con la tabla
+  `migrations` y avisa **en todas las pantallas del panel**, arriba del todo, con
+  la primera migración que falta y la orden exacta para aplicarla (`DEC-268`).
+  Avisa también en la dirección contraria: migraciones aplicadas que este código
+  ya no conoce.
+- `tools/verificar-mensajes.py` gana un segundo control: **el mismo texto de
+  rechazo en dos tablas distintas**, que manda a buscar el problema donde no
+  está. Hoy da cero — es un trinquete, no un hallazgo.
+
+### Nota
+
+`T-83` estaba **mal apuntado por mí**, y medirlo antes de construir nada lo
+demostró: de 430 mensajes distintos sólo uno se repite, y ese uno es la misma
+regla con dos puertas. Lo que costó la mañana fueron dos **versiones** de una
+regla —una en la base, otra en el código—, indistinguibles sobre un solo
+esquema. Se cierra con `T-84`, no con un verificador de mensajes.
+
 ## [9.17i · La cara de las integraciones] — 2026-09-01
 
 Crítica del negocio, con la pantalla de otro producto suyo delante: *«esta

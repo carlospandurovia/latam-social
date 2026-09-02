@@ -170,6 +170,33 @@
     @endif
 
     <main class="flex-1 p-8 overflow-x-auto">
+      {{-- 9.17j (`T-84`): la base por detras del codigo.
+
+           Va ARRIBA DEL TODO y en todas las pantallas del panel porque con el
+           esquema atrasado puede fallar cualquiera, no una en particular. Lo
+           pone un compositor, no cada controlador: son 199 rutas, y la que se
+           olvidara seria justo la que reventara.
+
+           Nace de una manana entera perdida: se desplego el codigo de `9.17g`
+           sin correr `migrate`, y guardar una cuenta de correo devolvia un
+           `SQLSTATE` en crudo con el mensaje de la regla ANTERIOR --que se llama
+           igual y dice lo mismo que la nueva--. Saber cual estaba instalada
+           exigia comparar las condiciones de las dos versiones del disparador.
+           Nadie que use el sistema puede hacer eso. --}}
+      @if (! empty($avisoEsquema))
+        <div class="mb-6 rounded-lg border px-4 py-3 text-sm
+          {{ $avisoEsquema->nivel === 'rojo'
+             ? 'border-rose-300 bg-rose-50 text-rose-900'
+             : 'border-amber-300 bg-amber-50 text-amber-900' }}">
+          <p class="font-semibold">
+            {{ $avisoEsquema->nivel === 'rojo'
+               ? 'El sistema está a medio desplegar'
+               : 'Lo desplegado no es lo que hay en la base' }}
+          </p>
+          <p class="mt-1">{{ $avisoEsquema->texto }}</p>
+        </div>
+      @endif
+
       @if (session('mensaje'))
         <div class="mb-6 rounded-lg border border-marca-200 bg-marca-50 px-4 py-3 text-sm text-marca-800">
           {{ session('mensaje') }}

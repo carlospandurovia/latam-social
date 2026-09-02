@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
-Que ningun SIGNAL pase de 128 caracteres.
+Que ningun SIGNAL pase de 128 caracteres, y que dos tablas distintas no digan
+lo mismo.
 
 POR QUE
 -------
@@ -33,9 +34,32 @@ PHP en las migraciones y con heredocs en el esquema de referencia, y una regex
 sobre el fuente se deja la mitad. `information_schema.TRIGGERS` los tiene ya
 montados, vengan de donde vengan.
 
+El segundo control (9.17j)
+--------------------------
+Un mensaje repetido en DOS TABLAS distintas casi siempre es un copiar y pegar
+que no se termino de adaptar: el rechazo habla de la tabla de al lado y quien lo
+lee busca el problema donde no esta.
+
+Se mira por TABLA y no por regla a proposito. Dos disparadores de la MISMA tabla
+diciendo lo mismo es normal y correcto --`_ins` y `_upd` son dos puertas de una
+sola regla, y «no se borra» y «no se altera» son la misma frase para el que la
+lee--. Entre tablas distintas no hay ninguna razon legitima, asi que este
+control no necesita lista de excepciones: la lista de excepciones que nadie mira
+es como un verificador deja de servir.
+
+Lo que NO puede ver, y hay que decirlo
+--------------------------------------
+El caso que costo una manana entera en 9.17h no lo habria cazado esto: eran dos
+VERSIONES de la misma regla --la de `9.17e` en la base y la de `9.17g` en el
+codigo-- con el mismo nombre y el mismo texto. Sobre un solo esquema son
+indistinguibles, porque solo hay una instalada. Eso lo contesta
+`App\Shared\Config\Esquema` avisando de que falta migrar, no un verificador de
+mensajes.
+
 Uso:  python3 tools/verificar-mensajes.py [base] [--cliente mysql8]
 """
 
+import collections
 import os
 import re
 import shlex
@@ -82,6 +106,7 @@ def main():
 
     total = 0
     largos = []
+    porMensaje = collections.defaultdict(set)
     for fila in filas:
         partes = fila.split('\t', 2)
         if len(partes) < 3:
@@ -93,21 +118,42 @@ def main():
             total += 1
             if len(texto) > LIMITE:
                 largos.append((len(texto), nombre, tabla, texto))
+            porMensaje[texto].add((tabla, nombre))
+
+    cruzados = {texto: donde for texto, donde in porMensaje.items()
+                if len({tabla for tabla, _ in donde}) > 1}
 
     print(f'  Base: {BASE}    disparadores: {len(filas)}    mensajes SIGNAL: {total}')
-    print(f'  Limite de MESSAGE_TEXT: {LIMITE} caracteres (VARCHAR(128) en MySQL/Percona)')
+    print(f'  Distintos: {len(porMensaje)}    '
+          f'Limite de MESSAGE_TEXT: {LIMITE} caracteres (VARCHAR(128) en MySQL/Percona)')
     print()
 
-    if not largos:
-        print('  Todos los mensajes caben: en produccion diran lo que dicen aqui.')
-        return 0
+    fallos = 0
 
-    for n, nombre, tabla, texto in sorted(largos, reverse=True):
-        print(f'  x {nombre} sobre `{tabla}`: {n} caracteres, {n - LIMITE} de mas')
-        print(f'      {texto}')
+    if largos:
+        for n, nombre, tabla, texto in sorted(largos, reverse=True):
+            print(f'  x {nombre} sobre `{tabla}`: {n} caracteres, {n - LIMITE} de mas')
+            print(f'      {texto}')
+            print()
+        print(f'  {len(largos)} mensaje(s) que en MySQL/Percona dan 1648 en vez de 45000.')
+        fallos += len(largos)
+    else:
+        print('  Todos los mensajes caben: en produccion diran lo que dicen aqui.')
+
+    if cruzados:
         print()
-    print(f'  {len(largos)} mensaje(s) que en MySQL/Percona dan 1648 en vez de 45000.')
-    return 1
+        for texto, donde in sorted(cruzados.items()):
+            print(f'  x el mismo texto en {len({t for t, _ in donde})} tablas distintas:')
+            print(f'      {texto}')
+            for tabla, nombre in sorted(donde):
+                print(f'        {tabla}.{nombre}')
+            print()
+        print(f'  {len(cruzados)} mensaje(s) que mandan a buscar el problema a otra tabla.')
+        fallos += len(cruzados)
+    else:
+        print('  Ningun mensaje se repite entre tablas distintas.')
+
+    return 1 if fallos else 0
 
 
 if __name__ == '__main__':
