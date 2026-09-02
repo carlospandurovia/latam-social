@@ -237,6 +237,86 @@
             </form>
           @endif
 
+          {{-- 9.9e: la entrega a la administracion. Solo tiene sentido con el
+               XML ya armado: no hay nada que mandar antes. --}}
+          @if ($documento)
+            <div class="rounded-lg border px-3 py-2 text-xs
+              @switch($factura->external_status)
+                @case('aceptado') border-emerald-200 bg-emerald-50 text-emerald-900 @break
+                @case('observado') border-amber-200 bg-amber-50 text-amber-900 @break
+                @case('rechazado') border-rose-200 bg-rose-50 text-rose-900 @break
+                @case('error_red') border-amber-200 bg-amber-50 text-amber-900 @break
+                @default border-slate-200 bg-slate-50 text-slate-600
+              @endswitch">
+              <p class="font-semibold">
+                @switch($factura->external_status)
+                  @case('aceptado') Aceptado por la administración @break
+                  @case('observado') Aceptado, con observaciones @break
+                  @case('rechazado') Rechazado: no existe para la administración @break
+                  @case('error_red') No se llegó a saber @break
+                  @case('no_configurado') Falta algo para poder mandarlo @break
+                  @default Todavía no se ha mandado
+                @endswitch
+              </p>
+              @if ($intentos->isNotEmpty())
+                @php($ultimo = $intentos->first())
+                <p class="mt-1">
+                  {{ $ultimo->response_code ? $ultimo->response_code.' — ' : '' }}{{ $ultimo->response_message }}
+                </p>
+                <p class="mt-1 text-[11px] opacity-70">
+                  Intento {{ $ultimo->attempt_number }} ·
+                  {{ substr((string) $ultimo->sent_at, 0, 16) }} ·
+                  {{ $ultimo->environment }}
+                  @if ($ultimo->autor) · {{ $ultimo->autor }} @endif
+                </p>
+              @endif
+            </div>
+
+            @if ($cdr)
+              @can('finance.view')
+                <a href="{{ route('facturas.comprobante.descargar', ['uuid' => $factura->uuid, 'documento' => $cdr->uuid]) }}"
+                   class="block rounded-lg border border-slate-300 px-3 py-2 text-center text-sm text-slate-700 hover:bg-slate-50">
+                  Descargar la respuesta de la administración (CDR)
+                </a>
+              @endcan
+            @endif
+
+            {{-- Un RECHAZO no se reintenta: reenviarlo da el mismo rechazo. El
+                 boton no se pinta, y se dice por que --si estuviera, alguien lo
+                 pulsaria diez veces antes de leer el motivo--. --}}
+            @if ($puedeEmitir && $factura->status !== 'voided')
+              @if ($factura->external_status === 'rechazado')
+                <p class="text-xs text-rose-700">
+                  Un rechazo no se reintenta: el documento no es válido y reenviarlo dará lo mismo.
+                  Anule esta factura, corrija y emita otra.
+                </p>
+              @else
+                <form method="POST" action="{{ route('facturas.enviar', ['uuid' => $factura->uuid]) }}">
+                  @csrf
+                  <button class="w-full rounded-lg bg-navy px-3 py-2 text-sm font-medium text-white hover:opacity-90">
+                    {{ $intentos->isEmpty() ? 'Mandar a la administración' : 'Reintentar el envío' }}
+                  </button>
+                </form>
+              @endif
+            @endif
+
+            @if ($intentos->count() > 1)
+              <details class="text-xs text-slate-500">
+                <summary class="cursor-pointer">Intentos anteriores ({{ $intentos->count() - 1 }})</summary>
+                <ul class="mt-2 space-y-1">
+                  @foreach ($intentos->skip(1) as $i)
+                    <li>
+                      <span class="font-mono">#{{ $i->attempt_number }}</span>
+                      {{ $i->outcome }} · {{ substr((string) $i->sent_at, 0, 16) }}
+                      @if ($i->response_code) · {{ $i->response_code }} @endif
+                      @if ($i->duration_ms) · {{ $i->duration_ms }} ms @endif
+                    </li>
+                  @endforeach
+                </ul>
+              </details>
+            @endif
+          @endif
+
           @if ($documentos->count() > 1)
             <details class="text-xs text-slate-500">
               <summary class="cursor-pointer">Versiones anteriores ({{ $documentos->count() - 1 }})</summary>

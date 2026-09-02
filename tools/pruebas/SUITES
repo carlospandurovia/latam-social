@@ -139,3 +139,8 @@
 # documento, y quien la deja ahi es la suite de facturas. Y va despues de 9.9c
 # porque la clave ajena del certificado exige que esa tabla exista.
 9.9d-comprobante
+
+# 9.9e va despues de 9.9d: un intento apunta a un documento electronico, y
+# quien deja uno es aquella. Y como 9.9d, tiene que quitar sus propios
+# disparadores para poder limpiar.
+9.9e-envio

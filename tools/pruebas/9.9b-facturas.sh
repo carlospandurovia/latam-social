@@ -216,8 +216,13 @@ porque "cambiarle el domicilio del receptor a una factura emitida" \
 # Lo que SI puede seguir moviendose: el estado y el sello de la administracion.
 # Sin esta asercion, un disparador que congelara la fila entera tambien pasaria
 # las tres de arriba --y dejaria el sistema sin poder registrar un cobro--.
+# 9.9e: el valor cambia de «aceptada» a «aceptado», y no es un capricho de
+# genero. Hasta 9.9e `external_status` no tenia vocabulario --VARCHAR(30) NULL y
+# a escribir lo que fuera-- asi que esta asercion habia inventado uno. Ahora hay
+# cinco finales con significado y `ck_invoice_external` los cierra: un estado
+# que nadie sabe leer no dice nada.
 probar "marcarla como enviada si se puede" \
-  "UPDATE invoices SET status='sent', external_status='aceptada' WHERE id=$BORRADOR;" "OK"
+  "UPDATE invoices SET status='sent', external_status='aceptado' WHERE id=$BORRADOR;" "OK"
 
 porque "anadir una linea a una factura ya emitida" \
   "INSERT INTO invoice_lines (invoice_id,line_number,description,quantity,unit_price,

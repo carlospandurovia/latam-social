@@ -5,10 +5,14 @@ declare(strict_types=1);
 namespace App\Modules\Finance\Services;
 
 use App\Modules\Core\Services\Certificados;
+use App\Modules\Core\Services\Integraciones;
 use App\Modules\Finance\Emision\Armadores;
 use App\Modules\Finance\Emision\Comprobante;
+use App\Modules\Finance\Emision\CredencialesDeEnvio;
+use App\Modules\Finance\Emision\Enviadores;
 use App\Modules\Finance\Emision\LineaDeComprobante;
 use App\Modules\Finance\Emision\Parte;
+use App\Modules\Finance\Emision\RespuestaDeEnvio;
 use App\Shared\Audit\Bitacora;
 use App\Shared\Config\Aviso;
 use App\Shared\Texto\Letras;
@@ -42,6 +46,9 @@ use RuntimeException;
 final class Comprobantes
 {
     public const XML_FIRMADO = 'xml_signed';
+
+    /** La respuesta firmada de la administracion (9.9e). */
+    public const CDR = 'cdr';
 
     /**
      * Genera el XML firmado de una factura y lo deja guardado.
@@ -109,6 +116,218 @@ final class Comprobantes
         );
 
         return $uuid;
+    }
+
+    /**
+     * Entrega el comprobante a la administración y guarda lo que conteste (9.9e).
+     *
+     * ### Qué se guarda, y por qué tres sitios
+     *
+     * - **`document_submissions`** — el intento: qué se mandó, cuándo, quién,
+     *   contra qué conexión, cuánto tardó y qué contestaron. Es lo que explica
+     *   qué pasó, y no se pisa: reintentar añade una fila.
+     * - **`electronic_documents kind='cdr'`** — la respuesta firmada de la
+     *   administración, que es la prueba de que el comprobante existe para
+     *   ellos. Va donde va el XML y por los mismos motivos (`DEC-270`).
+     * - **`invoices.external_status`** — cómo está AHORA, que es lo que la
+     *   pantalla enseña sin abrir nada.
+     *
+     * ### No lanza por un rechazo
+     *
+     * Un rechazo es una respuesta y hay que guardarla. Lo que sí lanza es lo que
+     * impide siquiera intentarlo: sin XML armado, sin conexión activa o sin
+     * clave, no hay nada que mandar y decirlo es más útil que un intento
+     * fallido más en el registro.
+     */
+    public static function enviar(string $facturaUuid, int $usuarioId): RespuestaDeEnvio
+    {
+        $factura = self::facturaEmitida($facturaUuid);
+        $documento = self::vigente((int) $factura->id);
+
+        if ($documento === null) {
+            throw new RuntimeException(
+                'Esa factura todavia no tiene comprobante armado: armelo antes de mandarlo.',
+            );
+        }
+
+        $entorno = self::entornoDe($factura);
+        $credenciales = self::credenciales($factura, $entorno);
+        $enviador = Enviadores::para((string) $factura->issuer_country_snapshot);
+
+        $arranque = microtime(true);
+        $respuesta = $enviador->envia(
+            (string) $documento->name,
+            (string) self::xml((string) $documento->uuid)->xml_content,
+            $credenciales,
+        );
+        $tardo = (int) round((microtime(true) - $arranque) * 1000);
+
+        self::anotarEnvio($factura, $documento, $credenciales, $respuesta, $tardo, $usuarioId);
+
+        return $respuesta;
+    }
+
+    /**
+     * Con qué conexión se habla. **Aquí es donde se descubre lo que falta.**
+     *
+     * Cada `throw` de este método es un ajuste concreto que alguien tiene que
+     * ir a hacer, y por eso lo dice con esas palabras en vez de dejar que la
+     * llamada falle luego con un error del otro lado.
+     */
+    private static function credenciales(object $factura, string $entorno): CredencialesDeEnvio
+    {
+        $conexion = DB::table('integration_connections as ic')
+            ->join('integration_providers as ip', 'ip.id', '=', 'ic.integration_provider_id')
+            ->where('ip.purpose', 'invoicing')
+            ->where('ic.status', 'active')
+            ->where('ic.environment', $entorno)
+            ->where('ic.legal_entity_id', $factura->legal_entity_id)
+            ->first(['ic.id', 'ic.name', 'ic.username']);
+
+        if ($conexion === null) {
+            throw new RuntimeException(sprintf(
+                'No hay ninguna conexion de facturacion activa para esa sociedad en el entorno «%s». '
+                .'Se configura en Integraciones.',
+                $entorno,
+            ));
+        }
+
+        if (trim((string) $conexion->username) === '') {
+            throw new RuntimeException(
+                'Esa conexion no tiene usuario secundario. Sin el, la administracion no sabe quien llama.',
+            );
+        }
+
+        $clave = Integraciones::secreto((int) $conexion->id, 'password');
+
+        if ($clave === null || trim($clave) === '') {
+            throw new RuntimeException(
+                'Esa conexion no tiene contrasena guardada: cargue la del usuario secundario en Integraciones.',
+            );
+        }
+
+        $url = Integraciones::urlDe((int) $conexion->id);
+
+        if ($url === null || trim($url) === '') {
+            throw new RuntimeException(
+                'Esa conexion no sabe a donde llamar: ni ella ni el catalogo del proveedor declaran direccion.',
+            );
+        }
+
+        return new CredencialesDeEnvio(
+            url: $url,
+            identificadorEmisor: (string) $factura->issuer_tax_id_snapshot,
+            usuario: (string) $conexion->username,
+            clave: $clave,
+            entorno: $entorno,
+            conexion: (string) $conexion->name,
+        );
+    }
+
+    /**
+     * Anota el intento, guarda el CDR y actualiza el estado. **En una sola
+     * transacción**: un intento anotado sin su CDR, o un estado que dice
+     * «aceptada» sin la prueba, son peores que no haberlo guardado.
+     */
+    private static function anotarEnvio(
+        object $factura,
+        object $documento,
+        CredencialesDeEnvio $credenciales,
+        RespuestaDeEnvio $respuesta,
+        int $tardo,
+        int $usuarioId,
+    ): void {
+        DB::transaction(function () use (
+            $factura, $documento, $credenciales, $respuesta, $tardo, $usuarioId
+        ): void {
+            $intento = 1 + (int) DB::table('document_submissions')
+                ->where('invoice_id', $factura->id)->max('attempt_number');
+
+            DB::table('document_submissions')->insert([
+                'uuid' => (string) Str::uuid(),
+                'invoice_id' => (int) $factura->id,
+                'electronic_document_id' => (int) $documento->id,
+                'attempt_number' => $intento,
+                'outcome' => $respuesta->estado,
+                'response_code' => $respuesta->codigo,
+                'response_message' => $respuesta->descripcion === '' ? null : $respuesta->descripcion,
+                'notes_count' => count($respuesta->notas),
+                'connection_snapshot' => mb_substr($credenciales->conexion, 0, 60),
+                'environment' => $credenciales->entorno,
+                'duration_ms' => $tardo,
+                'sent_at' => now(),
+                'sent_by_user_id' => $usuarioId,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            if ($respuesta->cdr !== null) {
+                self::guardarCdr($factura, $respuesta, $usuarioId);
+            }
+
+            DB::table('invoices')->where('id', $factura->id)->update([
+                'external_status' => $respuesta->estado,
+                'integration_connection_snapshot' => mb_substr($credenciales->conexion, 0, 60),
+                'updated_at' => now(),
+            ]);
+        });
+
+        // El codigo y la descripcion SI entran en la bitacora --son lo que hay
+        // que poder citar-- y las credenciales NO (`BR-SEC-001`).
+        Bitacora::registrar(
+            accion: 'invoice.submitted',
+            tipoEntidad: 'invoice',
+            idEntidad: (int) $factura->id,
+            cambios: [
+                'resultado' => ['antes' => null, 'despues' => $respuesta->estado],
+                'respuesta' => ['antes' => null,
+                    'despues' => trim(($respuesta->codigo ?? '-').' '.$respuesta->descripcion)],
+            ],
+        );
+    }
+
+    /**
+     * El CDR, guardado como un documento electrónico más.
+     *
+     * Va **comprimido tal cual llegó**: es lo que la administración firmó, y
+     * descomprimirlo para guardarlo bonito sería guardar otra cosa.
+     */
+    private static function guardarCdr(object $factura, RespuestaDeEnvio $respuesta, int $usuarioId): void
+    {
+        DB::table('electronic_documents')
+            ->where('invoice_id', $factura->id)->where('kind', self::CDR)
+            ->whereNull('superseded_at')
+            ->update(['superseded_at' => now(), 'updated_at' => now()]);
+
+        DB::table('electronic_documents')->insert([
+            'uuid' => (string) Str::uuid(),
+            'invoice_id' => (int) $factura->id,
+            'kind' => self::CDR,
+            'name' => (string) ($respuesta->nombreCdr ?? 'cdr.zip'),
+            'xml_content' => (string) $respuesta->cdr,
+            'sha256' => hash('sha256', (string) $respuesta->cdr),
+            'size_bytes' => strlen((string) $respuesta->cdr),
+            'generated_at' => now(),
+            'generated_by_user_id' => $usuarioId,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+    }
+
+    /**
+     * Los intentos de una factura, el último primero.
+     *
+     * @return Collection<int, \stdClass>
+     */
+    public static function intentos(int $facturaId): Collection
+    {
+        return DB::table('document_submissions as ds')
+            ->leftJoin('users as u', 'u.id', '=', 'ds.sent_by_user_id')
+            ->where('ds.invoice_id', $facturaId)
+            ->orderByDesc('ds.attempt_number')
+            ->get(['ds.uuid', 'ds.attempt_number', 'ds.outcome', 'ds.response_code',
+                'ds.response_message', 'ds.notes_count', 'ds.connection_snapshot',
+                'ds.environment', 'ds.duration_ms', 'ds.sent_at', 'u.name as autor']);
     }
 
     /** El documento vigente de una factura, sin su XML. */

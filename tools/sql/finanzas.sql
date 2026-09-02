@@ -357,6 +357,11 @@ CREATE TABLE invoices (
   CONSTRAINT fk_invoice_tax_rate FOREIGN KEY (tax_rate_id) REFERENCES tax_rates(id) ON DELETE RESTRICT,
   CONSTRAINT fk_invoice_issuer_user FOREIGN KEY (issued_by_user_id) REFERENCES users(id) ON DELETE RESTRICT,
   CONSTRAINT ck_invoice_status CHECK (status IN ('draft','issued','sent','paid','partially_paid','voided','rejected')),
+  -- 9.9e: `external_status` existia desde la Fase 2 SIN vocabulario --a
+  -- escribir lo que fuera--. Ahora que hay cinco finales con significado, se
+  -- cierra: un estado que nadie sabe leer no dice nada, y el sitio donde se
+  -- descubre eso es una pantalla que no sabe que pintar.
+  CONSTRAINT ck_invoice_external CHECK (external_status IS NULL OR external_status IN ('aceptado','observado','rechazado','error_red','no_configurado')),
   CONSTRAINT ck_invoice_amounts CHECK (subtotal_amount >= 0 AND tax_amount >= 0 AND total_amount >= 0),
   -- La aritmetica la comprueba la base, no quien teclea.
   CONSTRAINT ck_invoice_math CHECK (total_amount = subtotal_amount + tax_amount),
@@ -460,6 +465,62 @@ CREATE TABLE electronic_documents (
   CONSTRAINT ck_edoc_huella CHECK (CHAR_LENGTH(sha256) = 64 AND sha256 REGEXP '^[0-9a-f]{64}$'),
   CONSTRAINT ck_edoc_vacio CHECK (size_bytes > 0),
   CONSTRAINT ck_edoc_nombre CHECK (CHAR_LENGTH(TRIM(name)) >= 5)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+-- ============================ El envio a la administracion (9.9e)
+--
+-- POR QUE UNA TABLA DE INTENTOS Y NO UN ESTADO EN LA FACTURA
+--
+-- `invoices.external_status` dice COMO ESTA AHORA. Esta tabla dice QUE HA
+-- PASADO, y son dos preguntas distintas que se hacen en momentos distintos:
+--   - «.esta aceptada?»                                   -> la factura.
+--   - «.por que tardo tres dias?», «.cuantas veces se     -> esto.
+--      reintento?», «.que contesto SUNAT la primera vez?»
+--
+-- La segunda es la que se hace cuando algo va mal, que es cuando hace falta.
+-- Con solo el estado, cada reintento BORRA la respuesta anterior, y la unica
+-- copia de «SUNAT dijo que el RUC del cliente no existe» desaparece en cuanto
+-- alguien vuelve a darle al boton.
+CREATE TABLE document_submissions (
+  id            BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  uuid          CHAR(36)      NOT NULL,
+  invoice_id    BIGINT UNSIGNED NOT NULL,
+  -- QUE documento se mando. Si se regenero el XML entre dos intentos, esto
+  -- dice cual de los dos vio la administracion.
+  electronic_document_id BIGINT UNSIGNED NOT NULL,
+  attempt_number SMALLINT UNSIGNED NOT NULL,
+  outcome       VARCHAR(20)   NOT NULL,
+  response_code VARCHAR(10)   NULL,
+  response_message VARCHAR(255) NULL,
+  notes_count   SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+  -- CON QUE conexion se hablo, por su NOMBRE. No la clave.
+  connection_snapshot VARCHAR(60) NULL,
+  environment   VARCHAR(20)   NOT NULL,
+  duration_ms   INT UNSIGNED  NULL,
+  sent_at       DATETIME(3)   NOT NULL,
+  sent_by_user_id BIGINT UNSIGNED NOT NULL,
+  created_at    DATETIME(3)   NULL,
+  updated_at    DATETIME(3)   NULL,
+  UNIQUE KEY uq_dsub_uuid (uuid),
+  -- Dos filas con el mismo numero significarian que dos envios simultaneos se
+  -- pisaron, y entonces «cuantas veces se intento» dejaria de tener respuesta.
+  UNIQUE KEY uq_dsub_intento (invoice_id, attempt_number),
+  KEY ix_dsub_factura (invoice_id, sent_at),
+  KEY ix_dsub_documento (electronic_document_id),
+  KEY ix_dsub_autor (sent_by_user_id),
+  KEY ix_dsub_resultado (outcome, sent_at),
+  CONSTRAINT fk_dsub_invoice FOREIGN KEY (invoice_id) REFERENCES invoices(id) ON DELETE RESTRICT,
+  CONSTRAINT fk_dsub_edoc FOREIGN KEY (electronic_document_id) REFERENCES electronic_documents(id) ON DELETE RESTRICT,
+  CONSTRAINT fk_dsub_autor FOREIGN KEY (sent_by_user_id) REFERENCES users(id) ON DELETE RESTRICT,
+  -- Los cinco finales exigen cinco arreglos distintos. Uno que no esta en la
+  -- lista es un final que nadie sabe como arreglar.
+  CONSTRAINT ck_dsub_outcome CHECK (outcome IN ('aceptado','observado','rechazado','error_red','no_configurado')),
+  CONSTRAINT ck_dsub_intento CHECK (attempt_number >= 1),
+  -- Si la administracion contesto, se guarda lo que dijo. Sin esto,
+  -- «aceptado» sin codigo pasaria y «.donde esta el CDR?» no tendria respuesta.
+  CONSTRAINT ck_dsub_contesto CHECK (outcome IN ('error_red','no_configurado') OR response_code IS NOT NULL),
+  CONSTRAINT ck_dsub_notas CHECK (notes_count = 0 OR outcome IN ('observado','aceptado'))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ============================ Cobros del cliente
@@ -1000,6 +1061,24 @@ BEGIN
         SET MESSAGE_TEXT = 'Ese tipo de comprobante no existe en el catalogo del pais del emisor.';
     END IF;
   END IF;
+END//
+
+-- 9.9e -- Un intento de envio es un HECHO: ni se borra ni se cambia.
+--
+-- Misma regla que `ledger_entries` y `electronic_documents`. Reintentar anade
+-- una fila; corregir la anterior seria reescribir lo que paso.
+CREATE TRIGGER tg_dsub_no_delete BEFORE DELETE ON document_submissions
+FOR EACH ROW
+BEGIN
+  SIGNAL SQLSTATE '45000'
+    SET MESSAGE_TEXT = 'Un envio a la administracion no se borra: es lo que explica que paso.';
+END//
+
+CREATE TRIGGER tg_dsub_no_update BEFORE UPDATE ON document_submissions
+FOR EACH ROW
+BEGIN
+  SIGNAL SQLSTATE '45000'
+    SET MESSAGE_TEXT = 'Un envio no se corrige: se reintenta, y eso anade una fila.';
 END//
 
 DELIMITER ;

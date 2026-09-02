@@ -942,6 +942,14 @@ Route::middleware('auth')->prefix('backoffice')->group(function (): void {
         ->whereUuid('uuid')->whereUuid('documento')
         ->name('facturas.comprobante.descargar');
 
+    // 9.9e -- Entregarlo a la administracion. `finance.invoice.issue` por lo
+    // mismo que armarlo: es el segundo paso del mismo acto, y partirlo en dos
+    // permisos partiria una decision que nadie toma por separado.
+    Route::post('/facturas/{uuid}/enviar', [FacturasController::class, 'enviar'])
+        ->middleware('permiso:finance.invoice.issue')
+        ->whereUuid('uuid')
+        ->name('facturas.enviar');
+
     // 9.21c -- La bandeja de contactos que llegan por la portada. Verlos es
     // `client.view`; moverlos es `client.manage`, la misma separacion que ya
     // tienen los clientes.

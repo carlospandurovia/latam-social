@@ -6,7 +6,9 @@ namespace App\Modules\Finance\Providers;
 
 use App\Modules\Finance\Console\RevisarDevengosCommand;
 use App\Modules\Finance\Emision\Armadores;
+use App\Modules\Finance\Emision\Enviadores;
 use App\Modules\Finance\Emision\Peru\ArmadorGreenter;
+use App\Modules\Finance\Emision\Peru\EnviadorGreenter;
 use App\Modules\Finance\Listeners\DevengarParticipacion;
 use App\Shared\Auth\Permisos;
 use App\Shared\Eventos\EventoOcurrido;
@@ -44,6 +46,13 @@ final class FinanceServiceProvider extends ServiceProvider
         // Se registra una FABRICA: armar el adaptador monta Twig y un firmador,
         // y la inmensa mayoria de las peticiones no emiten nada.
         Armadores::registrar('PE', static fn (): ArmadorGreenter => new ArmadorGreenter);
+
+        // 9.9e: y quien sabe ENTREGARLO. Se registra aparte del armador
+        // porque fallan por motivos distintos --no poder armar un XML es un
+        // dato que falta; no poder entregarlo es la red, el servicio del otro
+        // lado o una credencial-- y el dia que un pais se emita con una
+        // libreria y se entregue con otra, esto ya esta partido.
+        Enviadores::registrar('PE', static fn (): EnviadorGreenter => new EnviadorGreenter);
 
         // 9.15: quien puede mirar los archivos de finanzas. La regla vive AQUI
         // y no en un `switch` central porque necesita saber de `payouts` y de

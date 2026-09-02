@@ -70,6 +70,12 @@ final class FacturasController
             // y quien-- es parte de poder defender lo que se declaro.
             'documento' => Comprobantes::vigente((int) $factura->id),
             'documentos' => Comprobantes::historial((int) $factura->id),
+            // 9.9e: el CDR y el registro de intentos. `intentos` y no solo el
+            // ultimo estado: «.esta aceptada?» y «.por que tardo tres dias?»
+            // son dos preguntas, y la segunda es la que se hace cuando algo va
+            // mal --que es cuando hace falta--.
+            'cdr' => Comprobantes::vigente((int) $factura->id, Comprobantes::CDR),
+            'intentos' => Comprobantes::intentos((int) $factura->id),
         ]);
     }
 
@@ -88,6 +94,36 @@ final class FacturasController
         }
 
         return back()->with('exito', 'Comprobante armado y firmado. Ya se puede descargar.');
+    }
+
+    /**
+     * Entrega el comprobante a la administración (9.9e).
+     *
+     * **Un rechazo no es un error del programa**: se guarda, se enseña y no se
+     * reintenta. Por eso vuelve con un aviso y no con una excepción. Lo que sí
+     * se trata como error es lo que impide siquiera intentarlo.
+     */
+    public function enviar(string $uuid): RedirectResponse
+    {
+        try {
+            $respuesta = Comprobantes::enviar($uuid, (int) Auth::id());
+        } catch (Throwable $e) {
+            return back()->with('aviso', $e->getMessage());
+        }
+
+        $texto = trim(($respuesta->codigo === null ? '' : $respuesta->codigo.' — ').$respuesta->descripcion);
+
+        return back()->with(
+            $respuesta->entro() ? 'exito' : 'aviso',
+            match ($respuesta->estado) {
+                'aceptado' => 'Aceptado por la administración. '.$texto,
+                'observado' => 'Aceptado CON OBSERVACIONES: mírelas, el siguiente puede no entrar. '.$texto,
+                'rechazado' => 'RECHAZADO: el comprobante no existe para la administración. '
+                    .'Corrija y emita otro; reenviarlo dará el mismo rechazo. '.$texto,
+                'error_red' => 'No se llegó a saber: '.$texto.' Se puede reintentar.',
+                default => $texto,
+            },
+        );
     }
 
     /**

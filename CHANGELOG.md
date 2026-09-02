@@ -46,6 +46,41 @@ ajuste del sistema exige ya entrar a la máquina.**
   y una regla que se convierte en columna obligatoria ya no se puede olvidar de
   comprobar.
 
+## [9.9e · El comprobante llega a la administración] — 2026-09-02
+
+### Añadido
+
+- `EnviadorDeComprobante` — la otra mitad de la frontera de `DEC-252`, con su
+  registro por país y el adaptador peruano sobre Greenter.
+- `document_submissions` — cada envío deja rastro: qué se mandó, cuándo, quién,
+  contra qué conexión, cuánto tardó y qué contestaron (`DEC-276`). No se borra
+  ni se corrige.
+- El CDR se guarda como `electronic_documents kind='cdr'`: es la prueba de que
+  el comprobante existe para la administración.
+- `porQueNoPuede()` — el sistema nota que le falta `ext-soap` **antes** de
+  fallar, en vez de dar un error que habla de una clase que no existe.
+- En la ficha de la factura: mandar, ver el resultado, descargar el CDR y el
+  historial de intentos.
+
+### Cambiado
+
+- Ante un **rechazo**, la pantalla no ofrece reintentar y dice por qué: reenviar
+  un documento inválido da el mismo rechazo (`DEC-275`).
+
+### Arreglado
+
+- `invoices.external_status` llevaba desde la Fase 2 **sin vocabulario**. Se
+  notó al encontrar una aserción de `9.9b` que guardaba `'aceptada'`, inventado
+  sobre la marcha porque nada lo impedía. Ahora `ck_invoice_external` lo cierra.
+
+### Nota honesta
+
+La llamada por el cable **no se pudo ejercitar en el entorno de desarrollo**:
+no tiene `ext-soap` y SUNAT no es alcanzable desde ahí. Todo lo demás sí —los
+cinco finales, el rastro, el CDR, la inmutabilidad— porque la costura está en
+`WsClientInterface` (`DEC-277`). El estreno va paso a paso en el documento de la
+iteración.
+
 ## [9.9f · La factura congela su localidad y deja de suponer Perú] — 2026-09-02
 
 Cierra `T-87` y `T-79`, las dos deudas que `9.9d` dejó a la vista.
