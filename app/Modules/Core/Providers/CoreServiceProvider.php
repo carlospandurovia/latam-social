@@ -21,6 +21,7 @@ use App\Modules\Core\Services\Terminos;
 use App\Modules\Core\Services\TraidaDeCambio;
 use App\Shared\Config\Aviso;
 use App\Shared\Config\Esquema;
+use App\Shared\Config\Instalacion;
 use App\Shared\Config\Pestanas;
 use App\Shared\Config\Preparacion;
 use App\Shared\Files\Vigilante;
@@ -97,6 +98,11 @@ final class CoreServiceProvider extends ServiceProvider
         // la que se olvidara seria justo la que reventara.
         View::composer('layouts.panel', static function (\Illuminate\View\View $vista): void {
             $vista->with('avisoEsquema', Esquema::aviso());
+            // 9.22a: y en que MAQUINA se esta. Va con el anterior y no en un
+            // compositor propio porque contestan a la misma pregunta --«.es
+            // esto lo que creo que es?»-- y separarlos solo garantizaria que
+            // uno de los dos se olvide en la siguiente plantilla.
+            $vista->with('avisoInstalacion', Instalacion::aviso());
         });
 
         // 9.17: el logotipo y el favicon de la plataforma.

@@ -46,6 +46,36 @@ ajuste del sistema exige ya entrar a la máquina.**
   y una regla que se convierte en columna obligatoria ya no se puede olvidar de
   comprobar.
 
+## [9.22a · Desde aquí no se manda de verdad] — 2026-09-02
+
+Cierra `DEC-029`, que llevaba desde el addendum como *«la protección más
+importante»* y en estado PROPUESTA. **Hasta `9.9e` no hacía falta:** el sistema
+no sabía mandar. Desde ayer, sí.
+
+### Añadido
+
+- `App\Shared\Config\Instalacion` — qué instalación es ésta. Sale de `APP_ENV`
+  porque es lo único que **no viaja dentro de un volcado de la base** (`DEC-278`).
+- `Integraciones::conexionParaUsar()` — **la puerta**. Una sola comprobación en
+  vez de una por consumidor (`DEC-279`).
+- `App\Shared\Integracion\EntornoAjeno` — «no puedes desde aquí» tiene tipo
+  propio: no se arregla en el panel, se arregla en otra máquina.
+- Franja permanente en el panel cuando la instalación no es producción. En
+  producción no sale: un aviso que se ve siempre deja de leerse.
+- `PERMITIR_CONEXIONES_DE_PRODUCCION` — la anulación, en rojo y auditada
+  (`DEC-280`).
+
+### Cambiado
+
+- En la ficha de la factura, el motivo **sustituye** al botón de mandar. Va antes
+  del clic y no después.
+
+### Nota honesta
+
+Esto protege de **copiar la base**. No protege de clonar el servidor entero, que
+se lleva también el archivo de entorno. Y de las tres cosas que `DEC-029` pedía
+para la anulación —temporal, permisionada, auditada— hoy sólo está la tercera.
+
 ## [9.9e · El comprobante llega a la administración] — 2026-09-02
 
 ### Añadido

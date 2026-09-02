@@ -76,6 +76,11 @@ final class FacturasController
             // mal --que es cuando hace falta--.
             'cdr' => Comprobantes::vigente((int) $factura->id, Comprobantes::CDR),
             'intentos' => Comprobantes::intentos((int) $factura->id),
+            // 9.22a: por que NO se puede mandar desde esta maquina, si es que
+            // no se puede. Se decide en el controlador y no en la plantilla:
+            // afirmar «desde aqui esto sale de verdad» no es maquetacion
+            // (`DEC-262`).
+            'noSePuedeMandar' => Comprobantes::porQueNoSePuedeMandar($factura),
         ]);
     }
 

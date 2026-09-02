@@ -197,6 +197,23 @@
         </div>
       @endif
 
+      {{-- 9.22a: en que maquina se esta. Va DESPUES del aviso de esquema
+           porque «falta migrar» rompe pantallas y esto no, y antes de todo lo
+           demas porque cambia el significado de cualquier boton de la pagina. --}}
+      @if (! empty($avisoInstalacion))
+        <div class="mb-6 rounded-lg border px-4 py-3 text-sm
+          {{ $avisoInstalacion->nivel === 'rojo'
+             ? 'border-rose-300 bg-rose-50 text-rose-900'
+             : 'border-amber-300 bg-amber-50 text-amber-900' }}">
+          <p class="font-semibold">
+            {{ $avisoInstalacion->nivel === 'rojo'
+               ? 'La barrera de entorno está abierta'
+               : 'Ésta no es la instalación de producción' }}
+          </p>
+          <p class="mt-1">{{ $avisoInstalacion->texto }}</p>
+        </div>
+      @endif
+
       @if (session('mensaje'))
         <div class="mb-6 rounded-lg border border-marca-200 bg-marca-50 px-4 py-3 text-sm text-marca-800">
           {{ session('mensaje') }}

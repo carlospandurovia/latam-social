@@ -85,6 +85,13 @@ final class EnvioAlaAdministracionTest extends TestCase
 
         $this->cargarCertificado();
         $this->conexionDeSunat();
+
+        // 9.22a: estas pruebas emiten con serie de PRODUCCION y mandan contra
+        // una conexion de produccion, asi que declaran que simulan la maquina
+        // de verdad. Se dice aqui en vez de apagar la barrera: una prueba que
+        // necesita bajar una barrera y no lo dice es una prueba que tapa el
+        // defecto que la barrera existe para evitar (`DEC-029`).
+        config(['instalacion.entorno' => 'production']);
     }
 
     protected function tearDown(): void

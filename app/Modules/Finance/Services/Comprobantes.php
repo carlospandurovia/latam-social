@@ -15,6 +15,7 @@ use App\Modules\Finance\Emision\Parte;
 use App\Modules\Finance\Emision\RespuestaDeEnvio;
 use App\Shared\Audit\Bitacora;
 use App\Shared\Config\Aviso;
+use App\Shared\Config\Instalacion;
 use App\Shared\Texto\Letras;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -176,21 +177,16 @@ final class Comprobantes
      */
     private static function credenciales(object $factura, string $entorno): CredencialesDeEnvio
     {
-        $conexion = DB::table('integration_connections as ic')
-            ->join('integration_providers as ip', 'ip.id', '=', 'ic.integration_provider_id')
-            ->where('ip.purpose', 'invoicing')
-            ->where('ic.status', 'active')
-            ->where('ic.environment', $entorno)
-            ->where('ic.legal_entity_id', $factura->legal_entity_id)
-            ->first(['ic.id', 'ic.name', 'ic.username']);
-
-        if ($conexion === null) {
-            throw new RuntimeException(sprintf(
-                'No hay ninguna conexion de facturacion activa para esa sociedad en el entorno «%s». '
-                .'Se configura en Integraciones.',
-                $entorno,
-            ));
-        }
+        // 9.22a: la eleccion de conexion pasa por LA PUERTA, que comprueba
+        // antes que nada si esta instalacion puede hablar con ese entorno
+        // (`DEC-029`). Antes esta consulta vivia aqui, y la barrera habria
+        // habido que acordarse de escribirla tambien en el correo y en los
+        // cobros --que es como se escriben las barreras que un dia faltan--.
+        $conexion = Integraciones::conexionParaUsar(
+            'invoicing',
+            (int) $factura->legal_entity_id,
+            $entorno,
+        );
 
         if (trim((string) $conexion->username) === '') {
             throw new RuntimeException(
@@ -509,6 +505,40 @@ final class Comprobantes
      * producción con el de pruebas produce comprobantes que SUNAT rechaza, y el
      * error que devuelve no dice que el problema sea el certificado.
      */
+    /**
+     * `null` si esta factura se puede mandar desde AQUÍ; el motivo si no (9.22a).
+     *
+     * Existe para que la pantalla lo diga **antes** del botón y no después del
+     * clic. Es la misma idea que `porQueNoPuede()` en `9.9e` y que `Esquema` en
+     * `9.17j`, y aquí importa más que en ninguno de los dos: los otros dos
+     * avisan de algo que va a fallar, y éste avisa de algo que va a **funcionar
+     * cuando no debía**.
+     *
+     * No mira si falta la contraseña ni el certificado. Eso son datos que faltan
+     * y su sitio es el error al intentarlo; esto contesta a otra pregunta —«¿es
+     * ésta la máquina desde la que se manda?»— que no depende de cómo esté
+     * configurada la conexión, y que por eso se puede contestar sin tocar
+     * ninguna credencial.
+     */
+    public static function porQueNoSePuedeMandar(object $factura): ?string
+    {
+        $entorno = self::entornoDe($factura);
+
+        if (($motivo = Instalacion::porQueNoPuedeUsar($entorno)) !== null) {
+            return $motivo;
+        }
+
+        $pais = (string) ($factura->issuer_country_snapshot ?? '');
+
+        if ($pais === '' || !Enviadores::hay($pais)) {
+            return $pais === ''
+                ? 'Esta factura no tiene congelado el país del emisor, así que no se sabe a qué administración va.'
+                : sprintf('No hay forma de entregar un comprobante electrónico en %s.', $pais);
+        }
+
+        return Enviadores::para($pais)->porQueNoPuede();
+    }
+
     private static function entornoDe(object $factura): string
     {
         $entorno = DB::table('document_numbers as dn')

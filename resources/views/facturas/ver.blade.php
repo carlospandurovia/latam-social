@@ -290,6 +290,16 @@
                   Un rechazo no se reintenta: el documento no es válido y reenviarlo dará lo mismo.
                   Anule esta factura, corrija y emita otra.
                 </p>
+              {{-- 9.22a: el motivo ANTES del boton y no despues del clic. Los
+                   otros avisos del sistema advierten de algo que va a fallar;
+                   este advierte de algo que iba a FUNCIONAR cuando no debia
+                   --un comprobante fiscal de verdad, mandado desde una copia--
+                   y por eso el boton no se pinta (`DEC-029`). --}}
+              @elseif ($noSePuedeMandar)
+                <p class="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                  <span class="font-semibold">Desde aquí no se manda.</span>
+                  {{ $noSePuedeMandar }}
+                </p>
               @else
                 <form method="POST" action="{{ route('facturas.enviar', ['uuid' => $factura->uuid]) }}">
                   @csrf

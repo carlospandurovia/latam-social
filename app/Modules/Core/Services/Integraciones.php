@@ -6,6 +6,8 @@ namespace App\Modules\Core\Services;
 
 use App\Shared\Audit\Bitacora;
 use App\Shared\Config\Aviso;
+use App\Shared\Config\Instalacion;
+use App\Shared\Integracion\EntornoAjeno;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
@@ -50,6 +52,23 @@ final class Integraciones
         'disabled' => 'Desactivada',
     ];
 
+    /**
+     * Los propósitos, en palabras.
+     *
+     * Sólo para los mensajes: «no hay conexión activa de invoicing» le habla al
+     * que escribió el esquema, no al que tiene que arreglarlo.
+     *
+     * @var array<string, string>
+     */
+    public const PROPOSITOS = [
+        'invoicing' => 'facturación electrónica',
+        'fx' => 'tipos de cambio',
+        'email' => 'correo',
+        'payment' => 'pagos',
+        'identity' => 'identidad',
+        'other' => 'otros',
+    ];
+
     /** @var array<string, string> */
     public const CLASES = [
         'api_key' => 'Clave de API',
@@ -58,6 +77,54 @@ final class Integraciones
         'webhook_secret' => 'Secreto de webhook',
         'client_secret' => 'Secreto de cliente',
     ];
+
+    /**
+     * La conexión que hay que usar para un propósito, o el motivo de que no.
+     *
+     * **Ésta es la puerta.** Antes de `9.22a` cada consumidor se armaba su
+     * propia consulta a `integration_connections`, y eso significaba que la
+     * barrera de entorno de `DEC-029` habría que acordarse de escribirla en cada
+     * uno —que es como se escriben las barreras que un día faltan justo donde
+     * hacía falta—. Aquí se pregunta una vez.
+     *
+     * El orden importa y no es casual: **primero se comprueba el entorno y
+     * después se busca**. Al revés, el secreto ya estaría descifrado en memoria
+     * antes de saber si esta máquina tenía derecho a mirarlo.
+     *
+     * @throws EntornoAjeno Si esta instalación no puede hablar con ese entorno.
+     * @throws RuntimeException Si no hay ninguna conexión activa que sirva.
+     */
+    public static function conexionParaUsar(string $proposito, ?int $sociedadId, string $entorno): object
+    {
+        if (($motivo = Instalacion::porQueNoPuedeUsar($entorno)) !== null) {
+            throw new EntornoAjeno($motivo);
+        }
+
+        Instalacion::anotarAnulacion($proposito, $entorno);
+
+        $consulta = DB::table('integration_connections as ic')
+            ->join('integration_providers as ip', 'ip.id', '=', 'ic.integration_provider_id')
+            ->where('ip.purpose', $proposito)
+            ->where('ic.status', 'active')
+            ->where('ic.environment', $entorno);
+
+        if ($sociedadId !== null) {
+            $consulta->where('ic.legal_entity_id', $sociedadId);
+        }
+
+        $conexion = $consulta->first(['ic.id', 'ic.uuid', 'ic.name', 'ic.username', 'ic.environment']);
+
+        if ($conexion === null) {
+            throw new RuntimeException(sprintf(
+                'No hay ninguna conexión activa de «%s» en el entorno «%s»%s. Se configura en Integraciones.',
+                self::PROPOSITOS[$proposito] ?? $proposito,
+                self::ENTORNOS[$entorno] ?? $entorno,
+                $sociedadId === null ? '' : ' para esa sociedad',
+            ));
+        }
+
+        return $conexion;
+    }
 
     /**
      * Las conexiones, con su proveedor y su sociedad.
