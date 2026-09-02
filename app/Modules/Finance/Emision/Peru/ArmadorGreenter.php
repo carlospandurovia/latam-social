@@ -47,12 +47,12 @@ use Throwable;
  * instalación: son constantes públicas de una administración, así que van en
  * código y no en una pantalla (`DEC-255`, la misma lección que las direcciones).
  *
- * ### 🔴 Lo que NO está revisado por un contador (§56)
+ * ### La exportación de servicios, confirmada (`DEC-272`)
  *
- * La exportación de servicios se arma con `tipoOperacion 0200` y afectación
- * `40`. Es lo que la documentación de SUNAT y los ejemplos de Greenter usan,
- * **pero no lo ha revisado un profesional**, y de eso depende que una factura de
- * exportación sea válida. Queda como `Q-67`.
+ * Se arma con `tipoOperacion 0200` y afectación `40`. Se puso sobre la mesa como
+ * supuesto legal sin revisar (§56) y **el negocio lo confirmó por experiencia
+ * propia**: es como emite su empresa hoy. Queda escrito aquí para que la
+ * siguiente persona que lo lea sepa que no es una suposición del código.
  */
 final class ArmadorGreenter implements ArmadorDeComprobante
 {

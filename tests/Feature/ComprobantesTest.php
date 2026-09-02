@@ -228,6 +228,83 @@ final class ComprobantesTest extends TestCase
         Comprobantes::xml($uuid);
     }
 
+    // ------------------------------------------------- la copia congelada
+
+    /**
+     * **La que justifica `T-87`.** Mudar la sociedad NO cambia el XML de una
+     * factura ya emitida.
+     *
+     * Hasta `9.9f` el ubigeo, el distrito y la provincia se leían de
+     * `legal_entities`, que está viva. Regenerar el comprobante de una factura
+     * del año pasado después de una mudanza producía **un documento distinto
+     * del que se emitió** — y los dos van firmados, así que no pueden ser los
+     * dos válidos para lo mismo.
+     */
+    public function test_mudar_la_sociedad_no_cambia_el_xml_de_una_factura_emitida(): void
+    {
+        $factura = $this->facturaEmitida();
+        $antes = Comprobantes::xml(Comprobantes::generar($factura->uuid, $this->autorId));
+
+        self::assertStringContainsString('150101', (string) $antes->xml_content, 'el ubigeo de entonces');
+        self::assertStringContainsString('MIRAFLORES', (string) $antes->xml_content);
+
+        // La sociedad se muda: otro distrito, otro ubigeo, otro local.
+        DB::table('legal_entities')->where('id', $this->sociedadId)->update([
+            'tax_location_code' => '040101',
+            'district' => 'CERCADO',
+            'city' => 'AREQUIPA',
+            'region' => 'AREQUIPA',
+            'establishment_code' => '0002',
+            'updated_at' => now(),
+        ]);
+
+        $despues = Comprobantes::xml(Comprobantes::generar($factura->uuid, $this->autorId));
+
+        self::assertStringContainsString('150101', (string) $despues->xml_content, 'sigue el de entonces');
+        self::assertStringContainsString('MIRAFLORES', (string) $despues->xml_content);
+        self::assertStringNotContainsString('040101', (string) $despues->xml_content);
+        self::assertStringNotContainsString('AREQUIPA', (string) $despues->xml_content);
+    }
+
+    /**
+     * La copia se refresca **al emitir**, no se queda con la del borrador.
+     *
+     * El borrador ya copia al abrirse —las columnas del emisor son obligatorias
+     * desde la Fase 2— pero entre abrirlo y emitirlo pueden pasar semanas. Lo
+     * que vale es lo que era el día en que el documento **existió ante la
+     * administración**, no el día en que alguien empezó a escribirlo.
+     *
+     * Escribir esta prueba fue lo que encontró que la copia de la localidad
+     * había caído sólo en `borrador()` y no en `emitir()`.
+     */
+    public function test_la_localidad_se_refresca_al_emitir_y_no_se_queda_con_la_del_borrador(): void
+    {
+        $uuid = Facturas::borrador($this->campanaFacturable(1000.0));
+
+        self::assertSame(
+            '150101',
+            (string) DB::table('invoices')->where('uuid', $uuid)->value('issuer_tax_location_snapshot'),
+            'el borrador copia lo de hoy',
+        );
+
+        // La sociedad se muda ANTES de emitir.
+        DB::table('legal_entities')->where('id', $this->sociedadId)->update([
+            'tax_location_code' => '040101', 'district' => 'CERCADO', 'updated_at' => now(),
+        ]);
+
+        Facturas::emitir($uuid, $this->serieId, $this->autorId);
+
+        self::assertSame(
+            '040101',
+            (string) DB::table('invoices')->where('uuid', $uuid)->value('issuer_tax_location_snapshot'),
+            'y al emitir se refresca',
+        );
+        self::assertSame(
+            'CERCADO',
+            (string) DB::table('invoices')->where('uuid', $uuid)->value('issuer_district_snapshot'),
+        );
+    }
+
     // -------------------------------------------------------- lo que impide
 
     /** Un borrador no tiene número, así que no hay comprobante que armar. */

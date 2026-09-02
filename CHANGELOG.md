@@ -46,6 +46,29 @@ ajuste del sistema exige ya entrar a la máquina.**
   y una regla que se convierte en columna obligatoria ya no se puede olvidar de
   comprobar.
 
+## [9.9f · La factura congela su localidad y deja de suponer Perú] — 2026-09-02
+
+Cierra `T-87` y `T-79`, las dos deudas que `9.9d` dejó a la vista.
+
+### Arreglado
+
+- 🔴 **`T-87` — la localidad del emisor no estaba congelada.** El ubigeo, el
+  distrito, la provincia, el departamento y el código de establecimiento se leían
+  de la tabla viva. Mudar la sociedad habría hecho que el XML regenerado de una
+  factura vieja fuese **distinto del que se emitió** (`DEC-273`).
+- **`T-79` — los cuatro tipos peruanos salían de un CHECK.** Ahora la regla
+  pregunta a `document_types` por el país del emisor (`DEC-274`).
+
+### Cambiado
+
+- `tools/pruebas/semilla.sql` siembra también la nota de crédito y la de débito
+  peruanas: son tipos reales de SUNAT (códigos 07 y 08) y sin ellos una aserción
+  de `2.13` se caía por un motivo que no era el suyo.
+
+### Quitado
+
+- `ck_invoice_type`.
+
 ## [9.9d · El XML firmado, detrás de una frontera] — 2026-09-02
 
 ### Añadido
@@ -67,6 +90,12 @@ ajuste del sistema exige ya entrar a la máquina.**
   la zona de la sociedad»; construirla en UTC hacía que Greenter la escribiera
   como el día anterior en hora de Lima. La zona del emisor viaja ahora en la
   estructura. **Salió de generar el primer XML de verdad**, no de una prueba.
+
+### Decidido
+
+- **`Q-67` cerrada el mismo día.** La exportación de servicios se emite con
+  `tipoOperacion 0200` y afectación `40`. Se identificó como supuesto legal sin
+  revisar (§56) y el negocio lo confirmó por experiencia propia (`DEC-272`).
 
 ### Nota para el despliegue
 

@@ -237,13 +237,22 @@ final class Comprobantes
         return (string) $codigo;
     }
 
+    /**
+     * El emisor, **todo desde las copias congeladas de la factura** (9.9f).
+     *
+     * Hasta `9.9f` la localidad se leia de `legal_entities`, que esta viva.
+     * Regenerar el XML de una factura del ano pasado despues de que la sociedad
+     * se mudara producia un documento DISTINTO del que se emitio --y los dos
+     * van firmados, asi que no pueden ser los dos validos para lo mismo--.
+     *
+     * Lo unico que sigue saliendo de la tabla viva es el **nombre comercial**, y
+     * a proposito: no es un dato fiscal --el RUC y la razon social si estan
+     * congelados-- y es el rotulo con el que la empresa se presenta hoy.
+     */
     private static function emisor(object $factura): Parte
     {
-        // La localidad se lee de la tabla VIVA porque `9.9b` no la congelo
-        // (`T-87`). Lo demas sale de las copias de la propia factura.
         $sociedad = DB::table('legal_entities')->where('id', $factura->legal_entity_id)
-            ->first(['trade_name', 'tax_location_code', 'district', 'region', 'city',
-                'establishment_code', 'tax_id_type']);
+            ->first(['trade_name', 'tax_id_type']);
 
         return new Parte(
             tipoIdentificacion: (string) ($sociedad->tax_id_type ?? 'RUC'),
@@ -252,11 +261,11 @@ final class Comprobantes
             direccion: (string) $factura->issuer_address_snapshot,
             paisIso: (string) $factura->issuer_country_snapshot,
             nombreComercial: $sociedad->trade_name ?? null,
-            ubigeo: $sociedad->tax_location_code ?? null,
-            distrito: $sociedad->district ?? null,
-            provincia: $sociedad->city ?? null,
-            departamento: $sociedad->region ?? null,
-            codigoLocal: $sociedad->establishment_code ?? null,
+            ubigeo: $factura->issuer_tax_location_snapshot,
+            distrito: $factura->issuer_district_snapshot,
+            provincia: $factura->issuer_province_snapshot,
+            departamento: $factura->issuer_region_snapshot,
+            codigoLocal: $factura->issuer_establishment_snapshot,
         );
     }
 

@@ -92,6 +92,24 @@ INSERT INTO document_types (country_id,code,name,official_code,series_pattern,se
  SELECT id,'boleta','Boleta de venta electronica','03','^B[A-Z0-9]{3}$','Serie: B y tres mas',8,0,1,20,NOW(3)
  FROM countries WHERE iso2='PE';
 
+-- 9.9f: las notas peruanas tambien.
+--
+-- Hacian falta desde que `tg_invoice_tipo_*` comprueba el tipo contra el
+-- CATALOGO del pais (`T-79`): la suite 2.13 emite una `credit_note` para
+-- afirmar que el mismo correlativo puede repetirse en otro tipo de documento, y
+-- sin la fila en el catalogo esa asercion se caia por un motivo que no era el
+-- suyo. Son tipos reales de SUNAT, no relleno de prueba: codigos oficiales 07 y
+-- 08, y su serie va como la del comprobante que corrigen.
+INSERT INTO document_types (country_id,code,name,official_code,number_length,
+   requires_customer_tax_id,is_active,sort_order,created_at)
+ SELECT id,'credit_note','Nota de credito electronica','07',8,1,1,30,NOW(3)
+ FROM countries WHERE iso2='PE';
+
+INSERT INTO document_types (country_id,code,name,official_code,number_length,
+   requires_customer_tax_id,is_active,sort_order,created_at)
+ SELECT id,'debit_note','Nota de debito electronica','08',8,1,1,40,NOW(3)
+ FROM countries WHERE iso2='PE';
+
 INSERT INTO document_types (country_id,code,name,official_code,number_length,is_active,sort_order,created_at)
  SELECT id,'invoice','Factura electronica','01',8,1,10,NOW(3) FROM countries WHERE iso2='CO';
 

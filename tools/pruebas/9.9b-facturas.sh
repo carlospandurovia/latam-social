@@ -265,4 +265,55 @@ porque "dos facturas apuntando al mismo numero reservado" \
      'E','20603203896','Lima','PE','R','20123456789','Lima','PE',NOW(3));" \
   "uq_invoice_dnumber|Duplicate"
 
+echo ""
+echo "-- 9.9f: el tipo lo declara el catalogo del pais, no una lista (T-79) --"
+
+# Hasta 9.9f esto lo guardaba `ck_invoice_type` con los cuatro tipos de Peru
+# escritos dentro. Ahora la pregunta es CRUZADA --.existe este tipo en el pais
+# de ESTE emisor?-- y la contesta `document_types`, que es donde `DEC-190` dice
+# que viven los valores.
+porque "un tipo que el catalogo del pais no declara" \
+  "INSERT INTO invoices (uuid,legal_entity_id,client_organization_id,client_tax_profile_id,
+     document_type,series,number,document_number_id,issue_date,due_date,currency_code,
+     tax_regime,tax_rate_snapshot,subtotal_amount,tax_amount,total_amount,status,issued_at,
+     issuer_legal_name_snapshot,issuer_tax_id_snapshot,issuer_address_snapshot,issuer_country_snapshot,
+     receiver_legal_name_snapshot,receiver_tax_id_snapshot,receiver_address_snapshot,
+     receiver_country_snapshot,created_at)
+   VALUES ('f99f0000-0000-4000-8000-000000000001',$LE,$CO,$TP,
+     'factura_cfdi','F001',9902,NULL,'2026-09-01','2026-10-01','PEN',
+     'gravado',18.0000,900.0000,162.0000,1062.0000,'issued',NOW(3),
+     'E','20603203896','Lima','PE','R','20123456789','Lima','PE',NOW(3));" \
+  "tg_invoice_tipo_ins|no existe en el catalogo"
+
+# Y un BORRADOR si puede tener cualquier cosa: todavia no ha elegido serie, asi
+# que su `document_type` es el valor por defecto y no significa nada.
+probar "pero un borrador con ese mismo tipo si entra" \
+  "INSERT INTO invoices (uuid,legal_entity_id,client_organization_id,client_tax_profile_id,
+     document_type,issue_date,due_date,currency_code,tax_regime,tax_rate_snapshot,
+     subtotal_amount,tax_amount,total_amount,status,
+     issuer_legal_name_snapshot,issuer_tax_id_snapshot,issuer_address_snapshot,issuer_country_snapshot,
+     receiver_legal_name_snapshot,receiver_tax_id_snapshot,receiver_address_snapshot,
+     receiver_country_snapshot,created_at)
+   VALUES ('f99f0000-0000-4000-8000-000000000002',$LE,$CO,$TP,
+     'factura_cfdi','2026-09-01','2026-10-01','PEN','gravado',18.0000,
+     900.0000,162.0000,1062.0000,'draft',
+     'E','20603203896','Lima','PE','R','20123456789','Lima','PE',NOW(3));" OK
+
+# Con su LINEA: sin ella el rechazo lo daria `tg_invoice_emision` --«una factura
+# sin lineas no dice que se cobra»-- y la asercion pasaria por el motivo
+# equivocado, que es como se cuelan las reglas que no funcionan.
+probar "con su linea, que suma la cabecera" \
+  "INSERT INTO invoice_lines (invoice_id,line_number,description,quantity,unit_price,
+     line_subtotal,tax_rate,line_tax,line_total)
+   SELECT id,1,'Servicio',1,900.0000,900.0000,18.0000,162.0000,1062.0000
+     FROM invoices WHERE uuid='f99f0000-0000-4000-8000-000000000002';" OK
+
+porque "y al emitirlo se le exige el catalogo" \
+  "UPDATE invoices SET status='issued', issued_at=NOW(3)
+    WHERE uuid='f99f0000-0000-4000-8000-000000000002';" \
+  "tg_invoice_tipo_upd|no existe en el catalogo"
+
+probar "se limpia el borrador de esta seccion" \
+  "DELETE FROM invoices WHERE uuid='f99f0000-0000-4000-8000-000000000002';" OK
+
 resumen

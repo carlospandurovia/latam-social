@@ -302,6 +302,19 @@ CREATE TABLE invoices (
   -- 9.9b: el pais del emisor faltaba, y sin el la regla de DEC-047 no se podia
   -- escribir sin nombrar a Peru dentro de un CHECK.
   issuer_country_snapshot    CHAR(2)      NULL,
+  -- 9.9f (T-87) -- LA LOCALIDAD TAMBIEN SE CONGELA.
+  --
+  -- `BR-LE-005` congelaba el nombre, el identificador y el domicilio, pero no
+  -- el ubigeo ni el distrito, que son justo los campos que el comprobante
+  -- electronico lleva dentro. `9.9d` los estaba leyendo de la tabla VIVA, asi
+  -- que el dia que una sociedad se mudara, regenerar el XML de una factura del
+  -- ano pasado habria producido un documento DISTINTO del que se emitio --y los
+  -- dos van firmados, luego no pueden ser los dos validos para lo mismo--.
+  issuer_tax_location_snapshot  VARCHAR(12)  NULL,
+  issuer_district_snapshot      VARCHAR(100) NULL,
+  issuer_province_snapshot      VARCHAR(100) NULL,
+  issuer_region_snapshot        VARCHAR(100) NULL,
+  issuer_establishment_snapshot VARCHAR(10)  NULL,
   -- Y del receptor, por lo mismo.
   receiver_legal_name_snapshot VARCHAR(200) NOT NULL,
   receiver_tax_id_snapshot     VARCHAR(40)  NOT NULL,
@@ -344,7 +357,6 @@ CREATE TABLE invoices (
   CONSTRAINT fk_invoice_tax_rate FOREIGN KEY (tax_rate_id) REFERENCES tax_rates(id) ON DELETE RESTRICT,
   CONSTRAINT fk_invoice_issuer_user FOREIGN KEY (issued_by_user_id) REFERENCES users(id) ON DELETE RESTRICT,
   CONSTRAINT ck_invoice_status CHECK (status IN ('draft','issued','sent','paid','partially_paid','voided','rejected')),
-  CONSTRAINT ck_invoice_type CHECK (document_type IN ('invoice','boleta','credit_note','debit_note')),
   CONSTRAINT ck_invoice_amounts CHECK (subtotal_amount >= 0 AND tax_amount >= 0 AND total_amount >= 0),
   -- La aritmetica la comprueba la base, no quien teclea.
   CONSTRAINT ck_invoice_math CHECK (total_amount = subtotal_amount + tax_amount),
@@ -931,6 +943,62 @@ BEGIN
   IF OLD.superseded_at IS NOT NULL AND NEW.superseded_at IS NULL THEN
     SIGNAL SQLSTATE '45000'
       SET MESSAGE_TEXT = 'Un documento reemplazado no vuelve a ser el vigente.';
+  END IF;
+END//
+
+-- 9.9f (T-79) -- El tipo de comprobante lo declara el CATALOGO, no un CHECK.
+--
+-- `ck_invoice_type` decia `document_type IN ('invoice','boleta','credit_note',
+-- 'debit_note')`: la lista de Peru escrita en el esquema. `DEC-190` dice que
+-- las reglas van en el codigo y los VALORES en la configuracion, y el catalogo
+-- --`document_types`, por pais-- existe desde la Fase 2; `9.9d` ya lee de el el
+-- codigo oficial que viaja en el XML. Lo que faltaba era que la regla mirase
+-- ahi en vez de a una lista suya.
+--
+-- Disparador y no clave ajena, por lo mismo que `9.17e` con `ck_iconn_url`: la
+-- pregunta es CRUZADA --«.existe este tipo en el pais de ESTE emisor?»-- y una
+-- foranea a `document_types(id)` obligaria a cambiar `uq_invoice_number`, que
+-- es la unicidad que SUNAT exige.
+--
+-- Solo con pais congelado --las facturas anteriores a 9.9b no lo tienen, y
+-- rechazar un UPDATE sobre ellas convertiria una regla nueva en un bloqueo para
+-- arreglar datos viejos-- y solo al emitir: un borrador todavia no ha elegido
+-- serie, asi que su `document_type` es el valor por defecto y no significa nada.
+CREATE TRIGGER tg_invoice_tipo_ins BEFORE INSERT ON invoices
+FOR EACH ROW
+BEGIN
+  DECLARE v_existe INT DEFAULT 0;
+
+  IF NEW.status <> 'draft' AND NEW.issuer_country_snapshot IS NOT NULL THEN
+    SELECT COUNT(*) INTO v_existe
+      FROM document_types dt
+      JOIN countries c ON c.id = dt.country_id
+     WHERE c.iso2 = NEW.issuer_country_snapshot
+       AND dt.code = NEW.document_type;
+
+    IF v_existe = 0 THEN
+      SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'Ese tipo de comprobante no existe en el catalogo del pais del emisor.';
+    END IF;
+  END IF;
+END//
+
+CREATE TRIGGER tg_invoice_tipo_upd BEFORE UPDATE ON invoices
+FOR EACH ROW
+BEGIN
+  DECLARE v_existe INT DEFAULT 0;
+
+  IF NEW.status <> 'draft' AND NEW.issuer_country_snapshot IS NOT NULL THEN
+    SELECT COUNT(*) INTO v_existe
+      FROM document_types dt
+      JOIN countries c ON c.id = dt.country_id
+     WHERE c.iso2 = NEW.issuer_country_snapshot
+       AND dt.code = NEW.document_type;
+
+    IF v_existe = 0 THEN
+      SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'Ese tipo de comprobante no existe en el catalogo del pais del emisor.';
+    END IF;
   END IF;
 END//
 

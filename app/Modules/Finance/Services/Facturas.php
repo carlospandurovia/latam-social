@@ -215,6 +215,17 @@ final class Facturas
                 'issuer_tax_id_snapshot' => (string) $emisor->tax_id_number,
                 'issuer_address_snapshot' => self::domicilio($emisor),
                 'issuer_country_snapshot' => (string) $emisor->iso2,
+                // 9.9f (`T-87`): la LOCALIDAD tambien. `9.9b` congelo el nombre,
+                // el identificador y el domicilio, pero no el ubigeo ni el
+                // distrito --y son justo los campos que el comprobante
+                // electronico lleva dentro--. Sin esto, regenerar el XML de una
+                // factura vieja despues de que la sociedad se mude produce un
+                // documento DISTINTO del que se emitio, y los dos van firmados.
+                'issuer_tax_location_snapshot' => $emisor->tax_location_code,
+                'issuer_district_snapshot' => $emisor->district,
+                'issuer_province_snapshot' => $emisor->city,
+                'issuer_region_snapshot' => $emisor->region,
+                'issuer_establishment_snapshot' => $emisor->establishment_code,
                 'receiver_legal_name_snapshot' => (string) $receptor->legal_name,
                 'receiver_tax_id_snapshot' => (string) $receptor->tax_id_number,
                 'receiver_address_snapshot' => self::domicilio($receptor),
@@ -407,6 +418,16 @@ final class Facturas
                 'issuer_tax_id_snapshot' => (string) $emisor->tax_id_number,
                 'issuer_address_snapshot' => self::domicilio($emisor),
                 'issuer_country_snapshot' => (string) $emisor->iso2,
+                // 9.9f (`T-87`): la LOCALIDAD tambien se vuelve a copiar aqui.
+                // El borrador ya la copio al abrirse, pero entre abrirlo y
+                // emitirlo la sociedad pudo mudarse, y lo que vale es lo que
+                // era el dia en que el documento EXISTIO ante la
+                // administracion, no el dia en que alguien empezo a escribirlo.
+                'issuer_tax_location_snapshot' => $emisor->tax_location_code,
+                'issuer_district_snapshot' => $emisor->district,
+                'issuer_province_snapshot' => $emisor->city,
+                'issuer_region_snapshot' => $emisor->region,
+                'issuer_establishment_snapshot' => $emisor->establishment_code,
                 'receiver_legal_name_snapshot' => (string) $receptor->legal_name,
                 'receiver_tax_id_snapshot' => (string) $receptor->tax_id_number,
                 'receiver_address_snapshot' => self::domicilio($receptor),
@@ -575,6 +596,8 @@ final class Facturas
             ->where('le.id', $id)
             ->first(['le.id', 'le.legal_name', 'le.tax_id_number', 'le.address_line1',
                 'le.address_line2', 'le.city', 'le.region', 'le.country_id', 'le.timezone',
+                // 9.9f: lo que hace falta para congelar la localidad al emitir.
+                'le.tax_location_code', 'le.district', 'le.establishment_code',
                 'c.iso2', 'c.name as pais']);
 
         if ($fila === null) {
