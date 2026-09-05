@@ -16,7 +16,9 @@ use App\Modules\Core\Services\Impuestos;
 use App\Modules\Core\Services\Integraciones;
 use App\Modules\Core\Services\Landing;
 use App\Modules\Core\Services\Marca;
+use App\Modules\Core\Services\Paginas;
 use App\Modules\Core\Services\Politica;
+use App\Modules\Core\Services\Sitio;
 use App\Modules\Core\Services\Terminos;
 use App\Modules\Core\Services\TraidaDeCambio;
 use App\Shared\Config\Aviso;
@@ -28,6 +30,7 @@ use App\Shared\Files\Vigilante;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
 
@@ -57,6 +60,23 @@ final class CoreServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        // L-1: si la aplicacion se sirve por `https`, TODO lo que genere URLs
+        // tiene que decir `https`.
+        //
+        // No es cosmetica. En produccion detras de un proxy que termina el TLS,
+        // Laravel ve la peticion como `http` y `url()->current()` devuelve
+        // `http://…`. Eso va directo al `canonical`, al `og:url` y al
+        // `sitemap.xml`, asi que **el sitio se declara a si mismo en la URL
+        // equivocada** ante Google y ante quien comparte el enlace. Es de los
+        // fallos que no dan ningun error y se descubren meses despues, cuando
+        // alguien mira por que el dominio no posiciona.
+        //
+        // La fuente es `APP_URL`, que es donde ya esta escrito con que esquema
+        // se sirve esto.
+        if (str_starts_with((string) config('app.url'), 'https://')) {
+            URL::forceScheme('https');
+        }
+
         // 9.17: la marca en las plantillas. Un compositor y no `View::share()`:
         // `share` se evalua en CADA peticion, incluidas las que devuelven un
         // archivo o un redirect y no pintan nada, y eso es una consulta por
@@ -103,6 +123,17 @@ final class CoreServiceProvider extends ServiceProvider
             // esto lo que creo que es?»-- y separarlos solo garantizaria que
             // uno de los dos se olvide en la siguiente plantilla.
             $vista->with('avisoInstalacion', Instalacion::aviso());
+        });
+
+        // L-2a: los datos de la calle, en la plantilla publica. Un compositor y
+        // no una variable de cada controlador, por lo mismo que `9.17j`: son
+        // cuatro rutas publicas hoy y la que se olvidara seria justo la que
+        // dejara el pie sin contacto.
+        View::composer('layouts.publico', static function (\Illuminate\View\View $vista): void {
+            $vista->with('sitio', Sitio::datos());
+            $vista->with('redesDelPie', Sitio::redes());
+            // L-2b: las paginas legales del pie.
+            $vista->with('paginasDelPie', Paginas::delPie());
         });
 
         // 9.17: el logotipo y el favicon de la plataforma.
@@ -193,6 +224,21 @@ final class CoreServiceProvider extends ServiceProvider
     {
         Preparacion::area('Marca', 'brand.manage', 'marca.index',
             static fn (): array => Aviso::desdeArrays(Marca::avisos()), orden: 10,
+            grupo: Preparacion::IDENTIDAD);
+
+        // L-2a: los datos de la calle. Justo detras de Marca porque contestan
+        // la otra mitad de la misma pregunta --como nos llamamos, y como nos
+        // contactan-- y porque de aqui sale la sociedad que nombran los textos
+        // legales.
+        Preparacion::area('Sitio público', 'brand.manage', 'sitio.index',
+            static fn (): array => Sitio::avisos(), orden: 12,
+            grupo: Preparacion::IDENTIDAD);
+
+        // L-2b: las paginas publicas. En Identidad y junto a Terminos, porque
+        // la politica de privacidad y los terminos son la misma clase de cosa:
+        // lo que decimos de nosotros por escrito y con fecha.
+        Preparacion::area('Páginas', 'brand.manage', 'paginas.index',
+            static fn (): array => Paginas::avisos(), orden: 14,
             grupo: Preparacion::IDENTIDAD);
 
         // 9.18: delante de los terminos porque de estos dos numeros sale el

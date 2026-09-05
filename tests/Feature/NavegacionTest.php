@@ -234,6 +234,11 @@ final class NavegacionTest extends TestCase
             // pidieran sesión no servirían para nada.
             'portada.marcas', 'portada.creadores', 'portada.gracias', 'postular',
             'contacto', 'contacto.gracias',
+            // L-1: lo que lee un buscador, que no tiene sesion que ofrecer. No
+            // aceptan ningun parametro y solo devuelven lo que ya es publico.
+            'robots', 'sitemap',
+            // L-2b: las paginas publicas del sitio.
+            'pagina',
         ];
 
         $fuera = [];

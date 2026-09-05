@@ -142,12 +142,22 @@ final class MarcaPlataformaTest extends TestCase
         $this->assertSame('rojo', $avisos[0]['nivel']);
     }
 
-    /** Sin logotipo y sin correo de soporte: dos rojos, y la pantalla abre. */
-    public function test_sin_logotipo_ni_correo_de_soporte_hay_dos_avisos_rojos(): void
+    /**
+     * Sin correo de soporte: **un** rojo, y la pantalla abre.
+     *
+     * Eran dos hasta `L-1`, y el que falta es el del logotipo: bajó a ámbar
+     * porque **cambió el hecho**. Antes, sin archivo subido se dibujaba un
+     * cuadrado de color —eso sí lo ve mal un tercero—; ahora sale el logotipo
+     * del kit, que lleva en el repositorio desde agosto sin que nadie lo
+     * enseñara. Sigue conviniendo subir el propio en una instalación con otra
+     * marca, pero ya no hay nada roto en la cara de nadie.
+     */
+    public function test_sin_correo_de_soporte_hay_un_aviso_rojo(): void
     {
         $niveles = array_column(Marca::avisos(), 'nivel');
 
-        $this->assertSame(2, count(array_filter($niveles, static fn ($n) => $n === 'rojo')));
+        $this->assertSame(1, count(array_filter($niveles, static fn ($n) => $n === 'rojo')));
+        $this->assertContains('ambar', $niveles, 'el del logotipo, que ya no es rojo');
 
         $this->actingAs($this->usuarioCon('admin'))->get(route('marca.index'))->assertOk();
     }
@@ -229,7 +239,8 @@ final class MarcaPlataformaTest extends TestCase
             ->update(['primary_color' => null, 'sidebar_color' => null]);
         Marca::olvidar();
 
-        $this->assertSame('#7C3AED', Marca::datos()['color']);
+        // L-1: el de partida es el morado APROBADO, no el violeta de Tailwind.
+        $this->assertSame('#6635D8', Marca::datos()['color']);
         $this->assertSame('#070A2B', Marca::datos()['barra']);
     }
 

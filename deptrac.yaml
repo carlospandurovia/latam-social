@@ -79,7 +79,12 @@ deptrac:
     - name: Framework
       collectors:
         - type: classLike
-          value: '^(Illuminate|Symfony|Carbon|Psr|Ramsey|Doctrine|Laravel|Monolog)\\.*'
+          # L-2b: `League\CommonMark` entra aqui y no en una capa propia --como
+          # Greenter en `9.9d`-- porque no es una dependencia PELIGROSA de
+          # esparcir: convierte texto y no habla con nadie. Greenter esta
+          # apartado porque es de UN PAIS y su fuga significaria acoplar el
+          # sistema entero a la fiscalidad peruana; esto no tiene ese problema.
+          value: '^(Illuminate|Symfony|Carbon|Psr|Ramsey|Doctrine|Laravel|Monolog|League\\CommonMark)\\.*'
 
     # ------------------------------------------------------------------------
     # Greenter, en su propia capa (9.9d).

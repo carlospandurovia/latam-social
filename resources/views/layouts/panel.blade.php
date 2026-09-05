@@ -12,7 +12,7 @@
   {{-- Barra lateral --}}
   <aside class="w-64 shrink-0 bg-navy text-slate-300 flex flex-col">
     <div class="h-16 flex items-center gap-3 px-5 border-b border-white/10">
-      @include('parciales.marca-logo', ['clase' => 'w-8 h-8'])
+      @include('parciales.marca-logo', ['clase' => 'w-8 h-8', 'conNombre' => true])
       <span class="font-bold text-white tracking-tight">{{ $marca['nombre'] }}</span>
     </div>
 

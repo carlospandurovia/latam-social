@@ -96,7 +96,15 @@ final class AterrizajeTest extends TestCase
         ]);
     }
 
-    /** **La del fallo reportado.** Una dirección de antes de la mudanza no manda. */
+    /**
+     * **La del fallo reportado.** Una dirección de antes de la mudanza no manda.
+     *
+     * Se volvió a poner roja en `L-2b`, y con razón: la ruta comodín `/{slug}`
+     * de las páginas del sitio **resucitó todas las direcciones muertas de un
+     * solo segmento**, así que `/panel` volvía a «resolver» y esta puerta lo
+     * daba por bueno. Es la clase de daño que hace una ruta comodín: no rompe
+     * nada de lo suyo, revive lo ajeno.
+     */
     public function test_una_direccion_guardada_que_ya_no_existe_no_manda_a_un_404(): void
     {
         $this->withSession(['url.intended' => 'http://localhost/panel'])

@@ -21,7 +21,7 @@
   <div class="w-full max-w-sm">
 
     <div class="flex items-center gap-3 mb-8">
-      @include('parciales.marca-logo', ['clase' => 'w-11 h-11'])
+      @include('parciales.marca-logo', ['clase' => 'w-11 h-11', 'conNombre' => true])
       <div>
         <p class="text-white font-bold text-lg leading-tight">{{ $marca['nombre'] }}</p>
         @if ($marca['lema'])

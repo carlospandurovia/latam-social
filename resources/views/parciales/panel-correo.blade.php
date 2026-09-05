@@ -9,15 +9,23 @@
     'titulo' => 'Servidor de correo (SMTP)',
     'explica' => 'Es la cuenta con la que sale TODO el correo del sistema: el enlace de alta de un '
         .'creador, el aviso de una campaña, el comprobante que se manda al cliente.',
-    'destacado' => $efecto['sale_de_aqui']
-        ? 'Si la apagas, se vuelve a usar la del servidor (.env) y no se borra nada.'
-        : 'Mientras no guardes una cuenta aquí, se usa la del servidor — y ahora mismo esa no manda '
-            .'nada: se escribe en el registro y el sistema no da ningún error.',
+    {{-- 9.22b: desviado es un estado propio y no se confunde con «mal
+         configurado». En un servidor de pruebas es lo CORRECTO, y llamarlo
+         «falta algo» haría que se intentara arreglar lo que está bien. --}}
+    'destacado' => $efecto['desviado']
+        ?: ($efecto['sale_de_aqui']
+            ? 'Si la apagas, se vuelve a usar la del servidor (.env) y no se borra nada.'
+            : 'Mientras no guardes una cuenta aquí, se usa la del servidor — y ahora mismo esa no manda '
+                .'nada: se escribe en el registro y el sistema no da ningún error.'),
     'estado' => [
-        'nivel' => $efecto['origen'] === 'base' ? 'activo' : ($efecto['sale_de_aqui'] ? 'apagado' : 'falta'),
-        'texto' => $efecto['origen'] === 'base'
-            ? 'Activo'
-            : ($efecto['sale_de_aqui'] ? 'Usando el .env' : 'No sale ningún correo'),
+        'nivel' => $efecto['desviado']
+            ? 'parcial'
+            : ($efecto['origen'] === 'base' ? 'activo' : ($efecto['sale_de_aqui'] ? 'apagado' : 'falta')),
+        'texto' => $efecto['desviado']
+            ? 'Desviado al registro'
+            : ($efecto['origen'] === 'base'
+                ? 'Activo'
+                : ($efecto['sale_de_aqui'] ? 'Usando el .env' : 'No sale ningún correo')),
     ],
     'avisos' => $avisosCorreo ?? [],
     'enlaces' => [

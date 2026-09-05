@@ -67,14 +67,42 @@ final class Marca
     private const RESPALDO = [
         'nombre' => 'LATAM Social',
         'lema' => null,
-        'color' => '#7C3AED',
-        'color2' => '#22D3EE',
+        // L-1: los colores aprobados en `docs/14`, no los de Tailwind. Hasta
+        // hoy este respaldo decia `#7C3AED` y `#22D3EE` --violeta 600 y cian
+        // 400 del framework-- y ninguno de los dos es un color de esta marca.
+        'color' => '#6635D8',
+        'color2' => '#D73382',
+        'degradadoDesde' => '#FF7447',
         'barra' => '#070A2B',
+        'angulo' => 45,
         'tipografia' => 'Plus Jakarta Sans',
+        'tipografiaTitulos' => 'Sora',
         'pieLegal' => null,
         'web' => null,
         'correoSoporte' => null,
     ];
+
+    /**
+     * El logotipo de partida, servido del disco.
+     *
+     * `9.17` decidio --con razon-- no pintar un `<img>` a una ruta que devolveria
+     * 404, y en su momento eso significaba dibujar un cuadrado de degradado
+     * porque no habia ningun archivo. **Pero si lo habia**: el kit de marca esta
+     * en el repositorio desde el 22 de agosto y nadie lo referenciaba, asi que
+     * el logotipo de LATAM Social no habia salido nunca a la calle.
+     */
+    private const LOGOTIPO_DE_PARTIDA = 'img/brand/logo-horizontal.svg';
+
+    /**
+     * El isotipo de partida: la marca en cuadrado.
+     *
+     * Hacen falta **los dos**, y `docs/14 §7` dice cuál va dónde: el horizontal
+     * en las landings públicas —«es donde la marca tiene que explicarse»— y el
+     * isotipo en el back-office, junto al nombre en texto. Meter el horizontal
+     * en un hueco cuadrado no es un detalle estético: mide 1122×530, así que
+     * `object-contain` lo deja del alto de un sello.
+     */
+    private const ISOTIPO_DE_PARTIDA = 'img/brand/isotipo.svg';
 
     /** @var array<string, mixed>|null */
     private static ?array $memoria = null;
@@ -98,6 +126,22 @@ final class Marca
     }
 
     /**
+     * El id de la marca por defecto, o `null` si todavía no hay ninguna.
+     *
+     * Existe porque a partir de `L-2a` hay tres cosas que **cuelgan de la
+     * marca** —los ajustes del sitio, las redes y las páginas— y las tres
+     * necesitaban el id, no la fila entera. Sin esto cada una escribía su propio
+     * `->where('is_default', 1)`, que es la misma regla copiada cuatro veces y
+     * corregida en tres.
+     */
+    public static function idActual(): ?int
+    {
+        $fila = self::actual();
+
+        return $fila === null ? null : (int) $fila->id;
+    }
+
+    /**
      * Todo lo que una plantilla necesita para vestirse, completo siempre.
      *
      * @return array<string, mixed>
@@ -115,18 +159,41 @@ final class Marca
             'lema' => self::texto($fila->tagline ?? null),
             'color' => self::color($fila->primary_color ?? null, self::RESPALDO['color']),
             'color2' => self::color($fila->secondary_color ?? null, self::RESPALDO['color2']),
+            // L-1: la primera parada del degradado. `null` en la base significa
+            // «degradado de dos colores», que sigue siendo legitimo.
+            'degradadoDesde' => isset($fila->gradient_from)
+                ? self::color($fila->gradient_from, self::RESPALDO['degradadoDesde'])
+                : null,
             'barra' => self::color($fila->sidebar_color ?? null, self::RESPALDO['barra']),
             'tipografia' => self::tipografia($fila->font_family ?? null),
+            // L-1: la de TITULARES. `docs/14 §5` separa display de interfaz, y
+            // las landings son donde se nota.
+            'tipografiaTitulos' => self::tipografia(
+                $fila->display_font_family ?? null, self::RESPALDO['tipografiaTitulos'],
+            ),
             'pieLegal' => self::texto($fila->legal_footer ?? null),
             'web' => self::texto($fila->website ?? null),
             'correoSoporte' => self::texto($fila->support_email ?? null),
             // `null` significa «no hay logotipo subido», y la plantilla dibuja
             // entonces el cuadrado con el degradado. No se inventa una ruta a un
             // archivo que no existe: una imagen rota es peor que un cuadro.
-            'logo' => self::hayArchivo($fila->logo_file_id ?? null) ? route('marca.logo') : null,
+            // L-1: con archivo subido, el suyo; sin el, el del kit que vive en
+            // `public/`. Deja de haber cuadrado de color: SI hay un logotipo, y
+            // llevaba en el repositorio desde agosto sin que nadie lo enseñara.
+            'logo' => self::hayArchivo($fila->logo_file_id ?? null)
+                ? route('marca.logo')
+                : asset(self::LOGOTIPO_DE_PARTIDA),
+            // El cuadrado. Si hay archivo subido se usa el mismo --quien sube su
+            // logotipo sube uno, no dos-- y si no, el isotipo del kit.
+            'isotipo' => self::hayArchivo($fila->logo_file_id ?? null)
+                ? route('marca.logo')
+                : asset(self::ISOTIPO_DE_PARTIDA),
+            'logoPropio' => self::hayArchivo($fila->logo_file_id ?? null),
             'favicon' => self::rutaFavicon($fila),
             'configurada' => $fila !== null,
         ];
+
+        $datos['degradado'] = self::degradado($datos, $fila);
 
         self::$memoria = $datos;
 
@@ -162,10 +229,15 @@ final class Marca
 
         $avisos = [];
 
+        // L-1: baja de rojo a ambar, y el texto cambia porque cambio el hecho.
+        // Hasta hoy sin logotipo salia un CUADRADO DE COLOR --eso si lo ve mal
+        // un tercero, y por eso era rojo--; ahora sale el logotipo del kit que
+        // vive en `public/`. Sigue conviniendo subir el propio en una
+        // instalacion de marca blanca, pero ya no hay nada roto que enseñar.
         if (self::hayArchivo($fila->logo_file_id) === false) {
-            $avisos[] = ['nivel' => 'rojo',
-                'texto' => 'No hay logotipo. En la barra lateral y en la pantalla de acceso sale un '
-                    .'cuadrado de color en su sitio, y eso lo ve todo el que entra.'];
+            $avisos[] = ['nivel' => 'ambar',
+                'texto' => 'No hay logotipo subido: se está usando el que trae el repositorio. '
+                    .'Para una instalación con otra marca, suba el suyo aquí.'];
         }
 
         if (self::texto($fila->support_email) === null) {
@@ -184,6 +256,23 @@ final class Marca
             $avisos[] = ['nivel' => 'ambar',
                 'texto' => 'No hay pie legal. Es la línea que acompaña a la marca en los correos y '
                     .'en los documentos que se le mandan a un creador.'];
+        }
+
+        // L-1: el idioma con el que la pagina se declara a si misma.
+        //
+        // `APP_LOCALE` no viene puesto de fabrica en Laravel: su valor por
+        // defecto es `en`. Una instalacion a la que se le olvide publica un
+        // sitio en español declarado como INGLES --`<html lang="en">` y
+        // `og:locale`--, y eso lo leen un buscador y un lector de pantalla,
+        // ninguno de los dos avisa, y no se nota mirando la pagina.
+        if (!str_starts_with((string) config('app.locale', 'en'), 'es')) {
+            $avisos[] = ['nivel' => 'ambar',
+                'texto' => sprintf(
+                    'Las portadas se declaran en «%s» y el texto está en español. Se arregla con '
+                    .'APP_LOCALE=es_PE en el entorno del servidor; hasta entonces un buscador y un '
+                    .'lector de pantalla creen que la página está en otro idioma.',
+                    (string) config('app.locale', 'en'),
+                )];
         }
 
         if (self::texto($fila->website) === null) {
@@ -331,12 +420,38 @@ final class Marca
     }
 
     /** Igual: lo que no sean letras, números y espacios no llega a la URL. */
-    private static function tipografia(mixed $valor): string
+    private static function tipografia(mixed $valor, ?string $respaldo = null): string
     {
         $familia = trim((string) ($valor ?? ''));
 
         return preg_match('/^[A-Za-z0-9 ]{2,80}$/', $familia) === 1
             ? $familia
-            : (string) self::RESPALDO['tipografia'];
+            : ($respaldo ?? (string) self::RESPALDO['tipografia']);
+    }
+
+    /**
+     * El degradado entero, ya escrito en CSS.
+     *
+     * Se arma **aquí y no en la plantilla** por lo mismo que el enlace de
+     * WhatsApp en `L-2a`: componer una regla CSS con valores que vienen de la
+     * base es código, no maquetación. Y aquí además importa que los valores ya
+     * pasaron por `color()`, que sólo deja salir `#RRGGBB`: lo que llega a la
+     * hoja de estilo no puede llevar ni comillas ni `;`.
+     *
+     * Con tres paradas si hay naranja; con dos si no, que es lo que había hasta
+     * `L-1` y sigue valiendo para una marca blanca que no tenga una tercera.
+     *
+     * @param array<string, mixed> $datos
+     */
+    private static function degradado(array $datos, ?object $fila): string
+    {
+        $angulo = (int) ($fila->gradient_angle ?? self::RESPALDO['angulo']);
+        $angulo = $angulo >= 0 && $angulo < 360 ? $angulo : (int) self::RESPALDO['angulo'];
+
+        $paradas = $datos['degradadoDesde'] === null
+            ? [$datos['color2'], $datos['color']]
+            : [$datos['degradadoDesde'], $datos['color2'], $datos['color']];
+
+        return sprintf('linear-gradient(%ddeg, %s)', $angulo, implode(', ', $paradas));
     }
 }

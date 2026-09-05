@@ -144,3 +144,16 @@
 # quien deja uno es aquella. Y como 9.9d, tiene que quitar sus propios
 # disparadores para poder limpiar.
 9.9e-envio
+
+# L-1 va antes que L-2a: las dos tocan la marca, y esta la deja como la dejo
+# la semilla --con los colores aprobados-- para que la siguiente la lea igual.
+L1-marca
+
+# L-2a va al final: los datos del sitio publico no dependen de nada del
+# negocio --solo de que exista una marca y una sociedad, que la semilla ya
+# trae-- y no dejan nada escrito que otra suite pudiera leer.
+L2a-sitio
+
+# L-2b va detras de L-2a: necesita una marca y un usuario, que ya estan, y no
+# deja nada escrito --se limpia sola-- para que la pasada sea repetible.
+L2b-paginas

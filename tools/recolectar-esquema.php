@@ -204,6 +204,26 @@ class Blueprint {
     public function timestamp(string $n, int $p = 0): Columna { return $this->col($n, $p ? "TIMESTAMP($p)" : 'TIMESTAMP'); }
     public function decimal(string $n, int $t = 8, int $p = 2): Columna { return $this->col($n, "DECIMAL($t,$p)"); }
     public function json(string $n): Columna { return $this->col($n, 'JSON'); }
+    // T-89: faltaban, y `__call` se los tragaba EN SILENCIO. `uuid()` y
+    // `mediumText()` los usan las migraciones de `9.9d` y `9.9e`, asi que
+    // `verificar-migraciones.py` llevaba desde entonces denunciando tres
+    // columnas «que la migracion no crea» y que la migracion SI crea. Un
+    // verificador que miente es peor que no tenerlo: se deja de mirar, y el dia
+    // que dice algo cierto tampoco se mira.
+    public function uuid(string $n = 'uuid'): Columna { return $this->col($n, 'CHAR(36)'); }
+    public function mediumText(string $n): Columna { return $this->col($n, 'MEDIUMTEXT'); }
+    public function tinyText(string $n): Columna { return $this->col($n, 'TINYTEXT'); }
+    public function tinyInteger(string $n): Columna { return $this->col($n, 'TINYINT'); }
+    public function smallInteger(string $n): Columna { return $this->col($n, 'SMALLINT'); }
+    public function mediumInteger(string $n): Columna { return $this->col($n, 'MEDIUMINT'); }
+    public function bigInteger(string $n): Columna { return $this->col($n, 'BIGINT'); }
+    public function unsignedDecimal(string $n, int $t = 8, int $p = 2): Columna { return $this->col($n, "DECIMAL($t,$p) UNSIGNED"); }
+    public function float(string $n, int $t = 53): Columna { return $this->col($n, 'DOUBLE'); }
+    public function double(string $n): Columna { return $this->col($n, 'DOUBLE'); }
+    public function time(string $n, int $p = 0): Columna { return $this->col($n, $p ? "TIME($p)" : 'TIME'); }
+    public function year(string $n): Columna { return $this->col($n, 'YEAR'); }
+    public function ipAddress(string $n): Columna { return $this->col($n, 'VARCHAR(45)'); }
+    public function macAddress(string $n): Columna { return $this->col($n, 'VARCHAR(17)'); }
 
     public function index($cols, ?string $nombre = null): void {
         \Recolector::$tablas[$this->tabla]['indices'][$nombre ?? '?'] = (array) $cols; }
@@ -223,7 +243,26 @@ class Blueprint {
         unset(\Recolector::$tablas[$this->tabla]['indices'][is_array($nombre) ? '?' : $nombre]); }
     public function dropColumn($c): void {
         foreach ((array) $c as $x) unset(\Recolector::$tablas[$this->tabla]['columnas'][$x]); }
-    public function __call($n, $a) { return new Columna($this->tabla, (string)($a[0] ?? '?')); }
+    /**
+     * T-89: un metodo desconocido REVIENTA, no se traga.
+     *
+     * Antes esto devolvia un `Columna` y la columna no quedaba registrada en
+     * ninguna parte: un tipo nuevo de Laravel desaparecia del esquema
+     * reconstruido y `verificar-migraciones.py` lo denunciaba como «columna que
+     * la migracion no crea», acusando a la migracion de un defecto del
+     * recolector. Asi estuvieron `uuid()` y `mediumText()` desde `9.9d`.
+     *
+     * Fallar aqui cuesta un minuto --se anade el metodo arriba-- y ahorra
+     * perseguir una discrepancia inventada.
+     */
+    public function __call($n, $a) {
+        throw new \RuntimeException(sprintf(
+            'recolectar-esquema.php no conoce el tipo de columna «%s()» (tabla %s, columna %s). '
+            .'Anadalo a la clase Blueprint de esta herramienta: si no, la columna desaparece del '
+            .'esquema reconstruido y el contraste acusa a la migracion.',
+            $n, $this->tabla, (string) ($a[0] ?? '?'),
+        ));
+    }
 }
 }
 

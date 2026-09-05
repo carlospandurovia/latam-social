@@ -560,10 +560,21 @@ final class CimientosSeeder extends Seeder
                 // acceso. Los datos completos de la sociedad estan en
                 // `legal_entities`; esto es solo lo que acompana a la marca.
                 'legal_footer' => 'Soluciones Tecnológicas a Medida S.A.C. · RUC 20603203896',
-                'primary_color' => '#7C3AED',
-                'secondary_color' => '#22D3EE',
+                // L-1: los colores APROBADOS de `docs/14`, no los de Tailwind.
+                // Hasta hoy esto sembraba `#7C3AED` y `#22D3EE` --violeta 600 y
+                // cian 400 del framework-- y una instalacion nueva arrancaba
+                // vestida con el degradado por defecto de Tailwind.
+                //
+                // El degradado tiene TRES paradas: naranja, magenta y morado, y
+                // termina en el morado porque ese es tambien el unico color de
+                // marca plano de la interfaz (`docs/14 §3`).
+                'primary_color' => '#6635D8',
+                'secondary_color' => '#D73382',
+                'gradient_from' => '#FF7447',
+                'gradient_angle' => 45,
                 'sidebar_color' => '#070A2B',
                 'font_family' => 'Plus Jakarta Sans',
+                'display_font_family' => 'Sora',
                 'is_active' => true,
                 'is_default' => true,
                 'updated_at' => $ahora, 'created_at' => $ahora,
@@ -904,6 +915,108 @@ final class CimientosSeeder extends Seeder
                             'is_visible' => true, 'updated_at' => $ahora, 'created_at' => $ahora],
                     );
                 }
+            }
+        }
+
+        // L-2a: los datos de la calle. Se siembra la FILA, no los valores: el
+        // WhatsApp y el correo publico son de la empresa y nadie los puede
+        // inventar. Lo unico que se siembra con valor es el mensaje de arranque
+        // --que es copy, y un copy de partida es mejor que un campo vacio-- y
+        // la sociedad operadora, que aqui se sabe con certeza porque la acaba de
+        // sembrar esta misma clase.
+        //
+        // Lo que falta sale en rojo y en ambar en Configuracion (`DEC-190`): el
+        // sistema arranca, y dice que le falta.
+        if ($marcaId !== null) {
+            self::sembrarSiFalta(
+                'site_settings',
+                ['platform_brand_id' => $marcaId],
+                [
+                    'operator_legal_entity_id' => DB::table('legal_entities')
+                        ->where('code', 'CTS_PE')->value('id'),
+                    'whatsapp_message' => 'Hola, estoy interesado en hacer una campaña con creadores. '
+                        .'¿Me cuentan cómo funciona?',
+                    'updated_at' => $ahora, 'created_at' => $ahora,
+                ],
+            );
+        }
+
+        // L-2b/L-2c: las dos paginas legales del sitio, con su version 1
+        // publicada y marcada `sin_revisar`.
+        //
+        // §56 al pie de la letra: **un supuesto legal se identifica
+        // EXPLICITAMENTE para revision juridica**. El texto esta escrito a
+        // estandar de industria --Ley 29733 y su reglamento para la privacidad--
+        // y el propio documento lo dice en su primera linea. No es un dictamen y
+        // no lo firma nadie; es lo que hace falta para que el sitio no se
+        // publique sin politica de privacidad, que es peor.
+        //
+        // El texto NO lleva escrita la razon social: lleva marcadores que
+        // `Reemplazos` sustituye con lo configurado. Escribirla dentro seria
+        // `DEC-190` roto en el peor sitio: el dia que cambie, habria que editar
+        // un documento legal a mano buscando donde se nombra a la empresa.
+        if ($marcaId !== null && Schema::hasTable('content_pages')) {
+            $paginas = [
+                ['slug' => 'politica-de-privacidad', 'title' => 'Política de privacidad',
+                    'archivo' => 'politica-de-privacidad.md', 'orden' => 10,
+                    'meta' => 'Cómo tratamos los datos personales que nos confías: qué recogemos, '
+                        .'para qué, con quién los compartimos y cómo ejercer tus derechos.'],
+                ['slug' => 'terminos-y-condiciones', 'title' => 'Términos y condiciones',
+                    'archivo' => 'terminos-y-condiciones.md', 'orden' => 20,
+                    'meta' => 'Las condiciones de uso de este sitio y de los servicios de '
+                        .'campañas con creadores.'],
+            ];
+
+            foreach ($paginas as $p) {
+                self::sembrarSiFalta(
+                    'content_pages',
+                    ['platform_brand_id' => $marcaId, 'slug' => $p['slug']],
+                    [
+                        'uuid' => (string) Str::uuid(),
+                        'title' => $p['title'],
+                        'meta_title' => $p['title'],
+                        'meta_description' => $p['meta'],
+                        'show_in_footer' => true,
+                        'sort_order' => $p['orden'],
+                        'is_system' => true,
+                        'updated_at' => $ahora, 'created_at' => $ahora,
+                    ],
+                );
+
+                $paginaId = (int) DB::table('content_pages')
+                    ->where('platform_brand_id', $marcaId)->where('slug', $p['slug'])->value('id');
+
+                // Si ya hay alguna version, no se toca. Volver a sembrar no
+                // puede pisar un documento legal --`T-77` en el peor sitio--.
+                if (DB::table('content_page_versions')->where('content_page_id', $paginaId)->exists()) {
+                    continue;
+                }
+
+                $texto = (string) file_get_contents(__DIR__.'/textos/'.$p['archivo']);
+
+                // **Se siembra como BORRADOR, nunca publicado**, y es
+                // deliberado. `ck_cpv_publicada` dice que publicar es un acto
+                // con responsable, y al sembrar no hay ninguno: atribuirselo al
+                // usuario de id mas bajo seria poner el nombre de una persona al
+                // pie de un documento legal que no ha leido.
+                //
+                // Que la primera publicacion de la politica de privacidad la
+                // haga una persona, con un clic, no es un rodeo: es la parte del
+                // proceso que importa. El area de Paginas lo pide en rojo hasta
+                // que ocurra, y el sitio mientras tanto no enseña un enlace roto
+                // --el pie solo pinta lo publicado--.
+                DB::table('content_page_versions')->insert([
+                    'uuid' => (string) Str::uuid(),
+                    'content_page_id' => $paginaId,
+                    'version' => '1.0',
+                    'body_markdown' => $texto,
+                    'content_sha256' => hash('sha256', $texto),
+                    'effective_from' => $ahora->toDateString(),
+                    'review_status' => 'sin_revisar',
+                    'review_note' => 'Texto de partida escrito a estándar de industria. '
+                        .'Pendiente de revisión por un abogado (§56, T-09).',
+                    'updated_at' => $ahora, 'created_at' => $ahora,
+                ]);
             }
         }
 

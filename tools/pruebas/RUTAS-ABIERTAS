@@ -69,3 +69,13 @@ portada.gracias         # el «gracias» de la postulacion
 postular                # 9.21b, throttle:5,1 + campo trampa; escribe en creator_applications
 contacto                # 9.21c, throttle:5,1 + campo trampa; escribe en client_leads
 contacto.gracias        # pantalla final
+
+# L-1 -- Lo que lee un buscador. No aceptan ningun parametro y solo devuelven
+# lo que ya es publico; un buscador no tiene sesion que ofrecer.
+robots                  # robots.txt; en una instalacion que no es produccion dice «Disallow: /»
+sitemap                 # sitemap.xml; solo las portadas publicadas
+
+# L-2b -- Las paginas del sitio. Publicas porque ese es su trabajo: la politica
+# de privacidad la tiene que poder leer cualquiera, sin cuenta. No acepta
+# identificador --recibe una direccion-- y solo devuelve lo PUBLICADO.
+pagina                  # /{slug}; 404 si no existe o no esta publicada

@@ -1,0 +1,27 @@
+# Quien elige una conexion ACTIVA de `integration_connections` para hablar con
+# alguien de fuera, y si consulta la barrera de entorno de `DEC-029`.
+#
+# Mismo criterio que RUTAS-ABIERTAS: no se prohibe la excepcion, se EXIGE QUE
+# ESTE ESCRITA. Lo que este verificador impide no es que exista un consumidor sin
+# barrera --puede ser correcto-- sino que aparezca uno NUEVO sin que nadie haya
+# decidido nada.
+#
+# Formato:  ruta/relativa/del/archivo.php  # el motivo
+#
+# Solo se listan aqui los que NO consultan `Instalacion`. Los que si la
+# consultan no hacen falta: se ven en el propio codigo.
+
+app/Modules/Core/Services/CredencialFuente.php  # 9.22b: los tipos de cambio se TRAEN, no se mandan. Pedir la tasa del dolar a Decolecta desde una copia de pruebas no le hace nada a nadie --es una lectura, no deja rastro en un tercero y no se puede deshacer porque no hay nada que deshacer--. Someterla a la barrera le quitaria a la maquina de pruebas la capacidad de tener tasas, que es justo lo que hace falta ahi para probar una factura. Si algun dia esa integracion pasa a ESCRIBIR algo, esta linea se borra.
+
+# L-5: y la SEGUNDA clase de salida, que este verificador no veia hasta hoy.
+#
+# El criterio de arriba reconoce al consumidor por pedir la direccion o la clave
+# de una conexion. Una plantilla que carga un `<script>` o una hoja de estilo de
+# un tercero no pide ninguna de las dos --y sin embargo le manda la IP de cada
+# visitante-- asi que se mira tambien en las vistas. Aqui van las que cargan algo
+# de fuera y NO consultan la barrera de entorno.
+#
+# `parciales/analitica.blade.php` NO esta en esta lista a proposito: si la
+# consulta, y por eso no hace falta escribirla.
+
+vistas/parciales/marca.blade.php  # L-5: la tipografia se sirve desde fonts.bunny.net, en TODAS las paginas --tambien la de acceso--. No pasa por la barrera de entorno porque una maquina de pruebas tambien necesita verse bien, y porque no viaja ningun dato NUESTRO: lo unico que sale es la peticion del navegador del visitante. Pero SI sale su IP hacia un tercero, y eso lo tiene que decir la politica de privacidad (`T-94`, §56). La alternativa --servir las fuentes desde nuestro propio dominio-- es real y esta escrita como tarea, no como imposible.

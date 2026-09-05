@@ -7,6 +7,7 @@ namespace App\Modules\Communication\Services;
 use App\Modules\Core\Services\Integraciones;
 use App\Shared\Audit\Bitacora;
 use App\Shared\Config\Aviso;
+use App\Shared\Config\Instalacion;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Schema;
@@ -123,28 +124,140 @@ final class CuentaDeCorreo
     }
 
     /**
+     * Transportes que **no** sacan nada de la máquina.
+     *
+     * @var list<string>
+     */
+    private const CAPTURADORES = ['log', 'array', 'null'];
+
+    /**
+     * Dónde queda escrito que ya se desvió, para esta petición.
+     *
+     * Hace falta acordarse porque `aplicar()` reescribe el transporte a `log`, y
+     * sin esto una segunda llamada leería ese valor —el que ella misma puso—,
+     * concluiría que ya no hace falta desviar, y aplicaría la cuenta de
+     * producción que acababa de rechazar. Un desvío que se desactiva a sí mismo
+     * en la segunda vuelta es peor que no tenerlo: funciona en la prueba.
+     *
+     * Vive en la **configuración** y no en una propiedad estática. Una estática
+     * sobrevive a la petición, y en la suite eso significa que lo que decida una
+     * prueba lo hereda la siguiente: exactamente el defecto que apareció al
+     * escribir esto —una prueba de `9.17b` se puso roja porque arrastraba el
+     * transporte que había fijado la anterior—. La configuración se rehace en
+     * cada petición y en cada prueba, que es la vida que esta decisión tiene.
+     */
+    private const MARCA_DESVIO = 'mail.desviado';
+
+    /**
+     * `null` si el correo sale de verdad desde aquí; el motivo si se desvía
+     * al capturador (9.22b, la otra mitad de `DEC-029`).
+     *
+     * ### El agujero que esto tapa
+     *
+     * Desde `9.17g` la cuenta SMTP vive **en la base**. Eso fue un acierto —era
+     * el último ajuste que obligaba a entrar a la máquina— y a la vez abrió esto:
+     * una copia del volcado de producción en un servidor de pruebas trae dentro
+     * la cuenta de correo buena, y el sistema **manda correos de verdad a los
+     * creadores** sin que nadie haya configurado nada.
+     *
+     * Y no es un correo suelto: `9.19b` escribe a **cada creador activo** al
+     * publicar una versión de los términos. El destinatario es un tercero, y un
+     * correo mandado no se retira.
+     *
+     * ### La regla, en una frase
+     *
+     * En una instalación que no es producción, el correo **sólo sale** si la
+     * cuenta en efecto es una conexión de **pruebas guardada en la base**.
+     * Cualquier otra cosa —una conexión de producción, o el `.env`— va al
+     * capturador.
+     *
+     * Deja abierto el camino legítimo —una cuenta de ensayo configurada **en el
+     * panel**, que es donde `DEC-190` quiere la configuración— y cierra los dos
+     * que muerden: el volcado restaurado y el `.env` copiado de producción para
+     * levantar el servidor de pruebas deprisa.
+     *
+     * ### Desviar y no negarse
+     *
+     * `9.22a` se **niega** cuando el envío a la administración no toca; aquí se
+     * **desvía**. Son remedios distintos porque los fallos lo son: no emitir un
+     * comprobante deja el trabajo a medias y hay que enterarse; no mandar un
+     * correo de prueba no rompe nada, y con el capturador el mensaje sigue
+     * escrito y se puede leer. Negarse aquí convertiría cada pantalla que manda
+     * un correo en un error.
+     */
+    public static function desviado(): ?string
+    {
+        if (Instalacion::esProduccion() || Instalacion::anulacionAbierta()) {
+            return null;
+        }
+
+        $yaDesviado = config(self::MARCA_DESVIO);
+
+        if (is_string($yaDesviado)) {
+            return $yaDesviado;
+        }
+
+        $cuenta = self::vigente();
+
+        if ($cuenta !== null) {
+            if (Instalacion::porQueNoPuedeUsar((string) $cuenta->environment) === null) {
+                // Una conexion de PRUEBAS guardada en el panel: ese es el camino
+                // bueno para ensayar el correo desde una maquina que no es la de
+                // verdad, y no se toca.
+                return null;
+            }
+
+            return sprintf(
+                'La cuenta activa «%s» es de PRODUCCIÓN y esta instalación es «%s», '
+                .'así que el correo se escribe en el registro y no sale. '
+                .'Para ensayar de verdad desde aquí, guarde una conexión de correo en entorno Pruebas.',
+                (string) $cuenta->name,
+                Instalacion::nombre(),
+            );
+        }
+
+        if (in_array((string) config('mail.default'), self::CAPTURADORES, true)) {
+            // Ya no sale nada: no hay nada que desviar.
+            return null;
+        }
+
+        return sprintf(
+            'El servidor de correo sale del archivo de entorno y esta instalación es «%s», '
+            .'así que el correo se escribe en el registro y no sale. Suele pasar al copiar el '
+            .'.env de producción para levantar un servidor de pruebas.',
+            Instalacion::nombre(),
+        );
+    }
+
+    /**
      * Qué configuración está en efecto y de dónde sale.
      *
-     * @return array{origen: string, transporte: string, host: ?string, port: ?int, encryption: ?string, from_address: ?string, from_name: ?string, sale_de_aqui: bool}
+     * @return array{origen: string, transporte: string, host: ?string, port: ?int, encryption: ?string, from_address: ?string, from_name: ?string, sale_de_aqui: bool, desviado: ?string}
      */
     public static function enEfecto(): array
     {
         $cuenta = self::vigente();
+        // 9.22b: si el correo se desvia, `sale_de_aqui` tiene que decir que NO.
+        // Una pantalla que afirma «sale de aqui» cuando el mensaje termina en un
+        // archivo de registro es peor que una que no dice nada: hace perder la
+        // tarde buscando el correo en la bandeja del destinatario.
+        $desviado = self::desviado();
 
         if ($cuenta !== null) {
             return [
                 'origen' => self::DE_LA_BASE,
-                'transporte' => 'smtp',
+                'transporte' => $desviado === null ? 'smtp' : 'log',
                 'host' => (string) $cuenta->host,
                 'port' => (int) $cuenta->port,
                 'encryption' => $cuenta->encryption === null ? null : (string) $cuenta->encryption,
                 'from_address' => (string) $cuenta->from_address,
                 'from_name' => (string) $cuenta->from_name,
-                'sale_de_aqui' => true,
+                'sale_de_aqui' => $desviado === null,
+                'desviado' => $desviado,
             ];
         }
 
-        $transporte = (string) config('mail.default');
+        $transporte = $desviado === null ? (string) config('mail.default') : 'log';
 
         return [
             'origen' => self::DEL_ENTORNO,
@@ -156,7 +269,8 @@ final class CuentaDeCorreo
             'from_name' => config('mail.from.name') === null ? null : (string) config('mail.from.name'),
             // Con el transporte en «log», «array» o «null» nada sale de la
             // maquina: se escribe en el registro y no da ningun error.
-            'sale_de_aqui' => !in_array($transporte, ['log', 'array', 'null'], true),
+            'sale_de_aqui' => !in_array($transporte, self::CAPTURADORES, true),
+            'desviado' => $desviado,
         ];
     }
 
@@ -168,6 +282,15 @@ final class CuentaDeCorreo
      */
     public static function aplicar(): void
     {
+        // 9.22b: el desvio se decide ANTES de mirar la cuenta y ANTES de tocar
+        // nada, porque tambien alcanza al `.env` --el caso de «copie el .env de
+        // produccion para levantar el servidor de pruebas»--.
+        if (($motivo = self::desviado()) !== null) {
+            config([self::MARCA_DESVIO => $motivo, 'mail.default' => 'log']);
+
+            return;
+        }
+
         $cuenta = self::vigente();
 
         if ($cuenta === null) {
@@ -249,6 +372,15 @@ final class CuentaDeCorreo
             );
         }
 
+        // 9.22b: probar con el correo desviado habria dicho «funciona» sin haber
+        // mandado nada --el capturador nunca falla-- y habria estampado
+        // `last_success_at`, que es la fecha en la que el sistema afirma que esa
+        // cuenta funcionaba. Una prueba que no puede fallar no es una prueba, y
+        // una que ademas deja escrito que salio bien es peor que no tenerla.
+        if (($motivo = self::desviado()) !== null) {
+            throw new RuntimeException('No se puede probar la cuenta desde aquí. '.$motivo);
+        }
+
         self::aplicar();
 
         try {
@@ -290,7 +422,13 @@ final class CuentaDeCorreo
         $avisos = [];
         $efecto = self::enEfecto();
 
-        if (!$efecto['sale_de_aqui']) {
+        // 9.22b: desviado NO es lo mismo que mal configurado, y pintarlos igual
+        // seria un error de los que cuestan caro: en un servidor de pruebas el
+        // desvio es el estado CORRECTO, y un rojo permanente ahi acabaria
+        // haciendo que tampoco se lea el rojo de produccion, que si importa.
+        if ($efecto['desviado'] !== null) {
+            $avisos[] = Aviso::ambar($efecto['desviado']);
+        } elseif (!$efecto['sale_de_aqui']) {
             $avisos[] = Aviso::rojo(sprintf(
                 'El correo está en «%s»: no sale de este servidor, se escribe en el registro. '
                 .'Nadie recibe nada —ni el enlace de alta de un creador— y el sistema no da '

@@ -99,6 +99,13 @@ python3 tools/verificar-cobertura-sql.py || tot_fail=$((tot_fail+1))
 echo ""; echo "===== el muro: rutas sin permiso ====="
 python3 tools/verificar-muro.py || tot_fail=$((tot_fail+1))
 
+# 9.22b: quien puede hablar con el mundo real mira antes desde que maquina.
+python3 tools/verificar-salidas.py || tot_fail=$((tot_fail+1))
+
+# L-6 (§26): ninguna frase de la calle escrita a mano en una plantilla. Sacarlas
+# una vez es facil; que sigan fuera dentro de seis iteraciones no lo es.
+python3 tools/verificar-rotulos.py || tot_fail=$((tot_fail+1))
+
 echo ""; echo "===== nombres entre capas ====="
 python3 tools/verificar-pantallas.py || tot_fail=$((tot_fail+1))
 

@@ -45,6 +45,13 @@ final class CuentaDeCorreoTest extends TestCase
         // Una credencial dice QUIEN la puso, y la foránea lo exige: el `1` de
         // usuario no existe en una base recién sembrada.
         $this->autorId = (int) $this->usuarioCon('admin')->id;
+
+        // 9.22b: la cuenta que usan estas pruebas es una conexión de
+        // PRODUCCIÓN, así que declaran que simulan la máquina de verdad. Se dice
+        // aquí en vez de apagar el desvío: el desvío se prueba entero en
+        // `CorreoDesviadoTest`, y una prueba que baja una barrera sin decirlo
+        // tapa justo el defecto que la barrera evita.
+        config(['instalacion.entorno' => 'production']);
     }
 
     // ---------------------------------------------------------- precedencia

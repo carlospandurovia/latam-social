@@ -121,6 +121,16 @@ def main() -> int:
             for nombre in sorted(por_tabla[tabla]):
                 print(f'{GRIS}      {nombre}{FIN}')
 
+    # El techo sube de 139 a 141 en `L-2b`, y con motivo escrito:
+    # `tg_cpv_sin_solape_ins` y `_upd`. Las DOS estan preguntadas en
+    # `L2b-paginas.sh` --hay una asercion por cada una-- pero este verificador
+    # reconoce una regla por su NOMBRE dentro del error, y un `SIGNAL` solo
+    # devuelve su MENSAJE. Por eso las **16 reglas de solape del proyecto** estan
+    # en esta lista, incluidas las diez que llevan meses comprobadas.
+    #
+    # No se arregla poniendo el nombre del disparador dentro del mensaje: los
+    # mensajes los lee una persona --caben en 128 caracteres y se comprueba-- y
+    # «tg_cpv_sin_solape_ins» no le dice nada a nadie.
     base = RAIZ / 'tools' / 'pruebas' / 'MUDAS-BASE'
     if base.is_file():
         techo = int(base.read_text().strip())

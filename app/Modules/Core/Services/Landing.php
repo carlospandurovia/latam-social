@@ -48,6 +48,10 @@ final class Landing
      * Devuelve `null` y no lanza: una instalación recién migrada y sin sembrar
      * no tiene portada, y eso **no puede ser un 500 en la cara de un visitante**.
      * Quien llama decide —y decide llevar al acceso, que es lo que había antes—.
+     *
+     * Una portada **apagada** también devuelve `null`: para quien mira desde
+     * fuera, apagada y sin sembrar son lo mismo. El editor del admin no pasa por
+     * aquí —usa `todas()`— así que sigue viéndolas todas.
      */
     public static function portada(string $code): ?object
     {
@@ -64,6 +68,13 @@ final class Landing
         $pagina = DB::table('landing_pages')
             ->where('platform_brand_id', $marcaId)
             ->where('code', $code)
+            // L-1: la publicacion se comprueba AQUI y no en cada consumidor.
+            // Hasta hoy la regla vivia dentro de `PortadaController` --el unico
+            // que la habia necesitado-- y al escribir el `sitemap.xml` salio lo
+            // que eso significa: el mapa ofrecia a un buscador una portada
+            // apagada, que redirige al acceso. Una regla que vive en un
+            // consumidor es una regla que el segundo consumidor no tiene.
+            ->where('is_published', true)
             ->first();
 
         if ($pagina === null) {

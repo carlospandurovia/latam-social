@@ -30,10 +30,13 @@ use App\Modules\Core\Http\Controllers\ImpuestosController;
 use App\Modules\Core\Http\Controllers\IntegracionesController;
 use App\Modules\Core\Http\Controllers\LandingController;
 use App\Modules\Core\Http\Controllers\MarcaController;
+use App\Modules\Core\Http\Controllers\PaginasController;
 use App\Modules\Core\Http\Controllers\PanelController;
 use App\Modules\Core\Http\Controllers\PoliticaController;
 use App\Modules\Core\Http\Controllers\PortadaController;
+use App\Modules\Core\Http\Controllers\RastreoController;
 use App\Modules\Core\Http\Controllers\SeriesController;
+use App\Modules\Core\Http\Controllers\SitioController;
 use App\Modules\Core\Http\Controllers\TerminosController;
 use App\Modules\Core\Http\Controllers\TiposDeCambioController;
 use App\Modules\Creator\Http\Controllers\ActivacionController;
@@ -71,6 +74,16 @@ use Illuminate\Support\Facades\Route;
 // Sin portada publicada estas rutas llevan al acceso, no a un 404: una
 // instalacion recien migrada no tiene contenido que ensenar, y eso no puede ser
 // un error en la cara de un visitante.
+// L-1 -- Lo que lee un buscador. Sin sesion, porque un buscador no la tiene, y
+// sin ningun parametro, que es lo que las hace seguras. Estan en RUTAS-ABIERTAS.
+//
+// No son dos archivos en `public/` porque los dos DEPENDEN DE LA CONFIGURACION:
+// el mapa lista solo las portadas publicadas, y `robots.txt` dice «no me
+// rastrees» en una instalacion que no es produccion --un servidor de pruebas
+// indexado compite en Google con el de verdad--.
+Route::get('/robots.txt', [RastreoController::class, 'robots'])->name('robots');
+Route::get('/sitemap.xml', [RastreoController::class, 'sitemap'])->name('sitemap');
+
 Route::get('/', [PortadaController::class, 'marcas'])->name('portada.marcas');
 Route::get('/creadores', [PortadaController::class, 'creadores'])->name('portada.creadores');
 Route::get('/creadores/gracias', [PortadaController::class, 'gracias'])->name('portada.gracias');
@@ -967,6 +980,67 @@ Route::middleware('auth')->prefix('backoffice')->group(function (): void {
         ->whereUuid('uuid')
         ->name('prospectos.convertir');
 
+    // L-2b -- Las paginas del sitio: privacidad, terminos, y las que se quieran.
+    // Mismo permiso que la portada: es contenido publico.
+    Route::get('/paginas', [PaginasController::class, 'index'])
+        ->middleware('permiso:brand.manage')
+        ->name('paginas.index');
+
+    Route::get('/paginas/{uuid}', [PaginasController::class, 'editar'])
+        ->middleware('permiso:brand.manage')
+        ->whereUuid('uuid')
+        ->name('paginas.editar');
+
+    Route::post('/paginas/{uuid?}', [PaginasController::class, 'guardar'])
+        ->middleware('permiso:brand.manage')
+        ->whereUuid('uuid')
+        ->name('paginas.guardar');
+
+    Route::post('/paginas/{uuid}/texto', [PaginasController::class, 'guardarTexto'])
+        ->middleware('permiso:brand.manage')
+        ->whereUuid('uuid')
+        ->name('paginas.texto');
+
+    Route::post('/paginas/{uuid}/publicar', [PaginasController::class, 'publicar'])
+        ->middleware('permiso:brand.manage')
+        ->whereUuid('uuid')
+        ->name('paginas.publicar');
+
+    // La revision juridica se anota sobre la version VIGENTE aunque este
+    // publicada: el disparador protege el TEXTO, no el estado de la revision.
+    Route::post('/paginas/{uuid}/revision', [PaginasController::class, 'revisar'])
+        ->middleware('permiso:brand.manage')
+        ->whereUuid('uuid')
+        ->name('paginas.revision');
+
+    Route::delete('/paginas/{uuid}', [PaginasController::class, 'borrar'])
+        ->middleware('permiso:brand.manage')
+        ->whereUuid('uuid')
+        ->name('paginas.borrar');
+
+    // L-2a -- Los datos que se pintan en la calle: WhatsApp, contacto, redes y
+    // que sociedad opera la marca. Mismo permiso que la portada y por el mismo
+    // motivo: quien decide como nos llamamos decide que telefono damos.
+    Route::get('/sitio', [SitioController::class, 'index'])
+        ->middleware('permiso:brand.manage')
+        ->name('sitio.index');
+
+    Route::put('/sitio', [SitioController::class, 'update'])
+        ->middleware('permiso:brand.manage')
+        ->name('sitio.update');
+
+    Route::post('/sitio/redes/{red?}', [SitioController::class, 'guardarRed'])
+        ->middleware('permiso:brand.manage')
+        ->whereNumber('red')
+        ->name('sitio.red');
+
+    // Una red SI se borra: el Instagram de la empresa no es informacion
+    // financiera y no hay nada que defender ante un tercero.
+    Route::delete('/sitio/redes/{red}', [SitioController::class, 'borrarRed'])
+        ->middleware('permiso:brand.manage')
+        ->whereNumber('red')
+        ->name('sitio.red.borrar');
+
     // 9.21b -- El texto de la portada publica. `brand.manage` y no un permiso
     // nuevo: quien decide como nos llamamos decide que dice la portada.
     Route::get('/landing', [LandingController::class, 'index'])
@@ -1264,3 +1338,21 @@ Route::middleware('auth')->prefix('backoffice')->group(function (): void {
         ->whereUuid('uuid')
         ->name('campanas.estado');
 });
+
+// ---------------------------------------------------------------------------
+// L-2b -- Las paginas del sitio, en la raiz.
+//
+// **Esta ruta va la ULTIMA del archivo, y no es un detalle.** Laravel resuelve
+// por orden, asi que cualquier ruta declarada arriba gana; puesta antes, este
+// comodin se tragaria `/creadores`, `/entrar` y `/contacto`.
+//
+// Y en la raiz y no bajo `/p/`: una politica de privacidad se enlaza desde
+// correos, contratos y formularios de terceros. `latamsocial.com/politica-de-privacidad`
+// es una direccion que se puede leer en voz alta; `/p/17` no.
+//
+// Lo que impide que alguien cree una pagina que tape una pantalla no es este
+// `where`, es `Paginas::reservadas()`, que le pregunta al enrutador cuales son
+// sus primeros segmentos. Una lista escrita a mano se queda vieja.
+Route::get('/{slug}', [PaginasController::class, 'ver'])
+    ->where('slug', '[a-z0-9][a-z0-9-]*')
+    ->name('pagina');

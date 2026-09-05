@@ -95,6 +95,12 @@ final class MuroTest extends TestCase
         // `creator_applications`, en estado `submitted`, sin tocar nada mas.
         'portada.marcas', 'portada.creadores', 'portada.gracias', 'postular',
         'contacto', 'contacto.gracias',
+        // L-1: lo que lee un buscador. No aceptan ningun parametro y solo
+        // devuelven lo que ya es publico.
+        'robots', 'sitemap',
+        // L-2b: las paginas del sitio. La politica de privacidad la tiene que
+        // poder leer cualquiera, sin cuenta.
+        'pagina',
     ];
 
     protected function setUp(): void

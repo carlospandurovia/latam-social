@@ -53,11 +53,16 @@ final class GuardarMarcaRequest extends FormRequest
             'support_email' => ['nullable', 'email:filter', 'max:255'],
             'primary_color' => $hex,
             'secondary_color' => $hex,
+            // L-1: la primera parada del degradado. NULL = degradado de dos
+            // colores, que sigue siendo legitimo.
+            'gradient_from' => $hex,
+            'gradient_angle' => ['nullable', 'integer', 'min:0', 'max:359'],
             'sidebar_color' => $hex,
             // Lo mismo que `ck_pb_tipografia`: lo que no sean letras, numeros y
             // espacios no llega a la URL del servidor de fuentes ni a la hoja
             // de estilo. Un nombre con comillas es una inyeccion, no una errata.
             'font_family' => ['nullable', 'string', 'max:80', 'regex:/^[A-Za-z0-9 ]{2,80}$/'],
+            'display_font_family' => ['nullable', 'string', 'max:80', 'regex:/^[A-Za-z0-9 ]{2,80}$/'],
             // La lista de extensiones sale de `Almacen`, en un solo sitio: si
             // se repitiera aqui, algun dia el formulario admitiria un tipo que
             // `Almacen` rechaza y el operador se enteraria despues de subir.
@@ -79,6 +84,9 @@ final class GuardarMarcaRequest extends FormRequest
             'primary_color.regex' => 'El color de marca debe ser hexadecimal (#RRGGBB).',
             'secondary_color.regex' => 'El color secundario debe ser hexadecimal (#RRGGBB).',
             'sidebar_color.regex' => 'El color de la barra debe ser hexadecimal (#RRGGBB).',
+            'gradient_from.regex' => 'El primer color del degradado debe ser hexadecimal (#RRGGBB).',
+            'gradient_angle.max' => 'El ángulo del degradado va entre 0 y 359 grados.',
+            'display_font_family.regex' => 'La tipografía de titulares sólo admite letras, números y espacios.',
         ];
     }
 }

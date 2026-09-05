@@ -54,7 +54,10 @@ final class PortadaController
     {
         $pagina = Landing::portada($code);
 
-        if ($pagina === null || (int) $pagina->is_published !== 1) {
+        // L-1: ya no se comprueba `is_published` aqui. Lo hace `portada()`, que
+        // es donde tiene que estar para que el `sitemap.xml` obedezca la misma
+        // regla sin volver a escribirla.
+        if ($pagina === null) {
             return redirect()->route('acceso');
         }
 

@@ -220,9 +220,16 @@ final class ConfiguracionTest extends TestCase
             // perdieron: el revisor de Integraciones los suma, y hay una prueba
             // que lo afirma --sin ella, meterlos dentro habria apagado en
             // silencio el «sin certificado» del panel--.
+            // Novena: `L-2a` anade «Sitio publico» --el WhatsApp, el contacto,
+            // las redes y la sociedad que nombran los textos legales--. Se puso
+            // roja sola, que es exactamente para lo que existe.
+            // Y decima: `L-2b` anade «Paginas» --la politica de privacidad, los
+            // terminos y las que se quieran--. Vuelve a ponerse roja sola.
             ['Catálogos', 'Correo', 'Creadores', 'Entidades legales', 'Impuestos',
-                'Integraciones', 'Marca', 'Política de precios', 'Portada pública',
-                'Tipos de cambio', 'Términos'],
+                // «Páginas» va DESPUES de «Portada pública»: la lista se ordena
+                // por bytes y la «á» pesa mas que cualquier letra sin tilde.
+                'Integraciones', 'Marca', 'Política de precios', 'Portada pública', 'Páginas',
+                'Sitio público', 'Tipos de cambio', 'Términos'],
             Preparacion::areasRegistradas(),
         );
     }

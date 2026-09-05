@@ -167,10 +167,19 @@
           <span class="text-xs text-slate-400">Se aplican en cuanto guardas, sin desplegar nada</span>
         </div>
 
-        <div class="grid gap-4 sm:grid-cols-3">
+        {{-- L-1: se ve el degradado entero antes de guardar. Tres campos de
+             color sueltos no dejan juzgar el resultado, que es lo unico que
+             importa aqui. --}}
+        <div class="rounded-lg border border-slate-200 p-3">
+          <p class="text-xs text-slate-500">El degradado, como queda ahora</p>
+          <div class="mt-2 h-16 rounded-lg degradado-marca"></div>
+        </div>
+
+        <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           @foreach ([
-            ['primary_color', 'Color de marca', $marca['color'], 'Enlaces, resaltados y el primer tono del degradado'],
-            ['secondary_color', 'Color secundario', $marca['color2'], 'El segundo tono del degradado'],
+            ['gradient_from', 'Degradado: primer color', $marca['degradadoDesde'] ?? $marca['color2'], 'La primera parada. Vacío = degradado de dos colores'],
+            ['secondary_color', 'Degradado: color de en medio', $marca['color2'], 'La parada central'],
+            ['primary_color', 'Color de marca', $marca['color'], 'Botones y enlaces, y el final del degradado'],
             ['sidebar_color', 'Color de la barra', $marca['barra'], 'El fondo de la barra lateral y de la pantalla de acceso'],
           ] as [$campo, $etiqueta, $valor, $nota])
             <div>
@@ -189,7 +198,30 @@
         </div>
 
         <div>
-          <label for="font_family" class="block text-xs text-slate-500 mb-1">Tipografía</label>
+          <label for="gradient_angle" class="block text-xs text-slate-500 mb-1">Ángulo del degradado</label>
+          <input id="gradient_angle" name="gradient_angle" type="number" min="0" max="359"
+                 value="{{ old('gradient_angle', $fila?->gradient_angle ?? 45) }}"
+                 class="w-28 rounded-lg border border-slate-300 px-3 py-2 text-sm">
+          <p class="mt-1 text-xs text-slate-400">
+            En grados. 45 es el canónico de la marca: el primer color abajo a la izquierda.
+          </p>
+        </div>
+
+        <div>
+          <label for="display_font_family" class="block text-xs text-slate-500 mb-1">Tipografía de titulares</label>
+          <input id="display_font_family" name="display_font_family" maxlength="80"
+                 placeholder="{{ $marca['tipografiaTitulos'] }}"
+                 value="{{ old('display_font_family', $fila?->display_font_family) }}"
+                 class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+          <p class="mt-1 text-xs text-slate-400">
+            La de los titulares de las portadas. Puede ser la misma que la de la interfaz; se pide
+            aparte porque una letra con carácter en un titular no es la que mejor se lee a 13 px
+            en una tabla.
+          </p>
+        </div>
+
+        <div>
+          <label for="font_family" class="block text-xs text-slate-500 mb-1">Tipografía de la interfaz</label>
           <input id="font_family" name="font_family" maxlength="80" placeholder="{{ $marca['tipografia'] }}"
                  value="{{ old('font_family', $fila?->font_family) }}"
                  class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">

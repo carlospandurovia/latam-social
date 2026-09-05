@@ -46,6 +46,32 @@ ajuste del sistema exige ya entrar a la máquina.**
   y una regla que se convierte en columna obligatoria ya no se puede olvidar de
   comprobar.
 
+## [9.22b · El correo no sale de una instalación que no es la de verdad] — 2026-09-02
+
+La otra mitad de `DEC-029` — y la que de verdad se dispara sola.
+
+### Añadido
+
+- `CuentaDeCorreo::desviado()` — en una instalación que no es producción, el
+  correo **sólo sale** si la cuenta en efecto es una conexión de **pruebas
+  guardada en la base** (`DEC-281`). Una conexión de producción, o el `.env`, van
+  al capturador.
+- `tools/verificar-salidas.py` + `tools/pruebas/SALIDAS-AL-MUNDO` — el trinquete
+  para el consumidor que se añada mañana (`DEC-283`, cierra `T-88`).
+- Chapa propia en la tarjeta de correo: **«Desviado al registro»**, en ámbar.
+
+### Arreglado
+
+- **Probar la cuenta con el correo desviado decía «funciona».** El capturador
+  nunca falla, así que la prueba terminaba bien y estampaba `last_success_at` sin
+  haber mandado nada (`DEC-282`).
+- **El desvío se desactivaba a sí mismo en la segunda vuelta.** `aplicar()`
+  reescribe el transporte a `log`; recalcular el motivo leyendo ese valor hacía
+  que la segunda llamada aplicara la cuenta que acababa de rechazar.
+- **Desviado se pintaba del rojo de «mal configurado».** En un servidor de
+  pruebas es el estado correcto, y un rojo permanente ahí acaba tapando el de
+  producción.
+
 ## [9.22a · Desde aquí no se manda de verdad] — 2026-09-02
 
 Cierra `DEC-029`, que llevaba desde el addendum como *«la protección más

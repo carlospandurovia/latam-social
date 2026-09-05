@@ -76,8 +76,21 @@ final class AccesoController
      *    redirect abierto. Hoy sólo lo escribe el framework con la URL de la
      *    petición, pero eso es una propiedad de hoy y esto es la puerta de
      *    entrada del sistema.
-     * 2. **Todavía resuelve.** Si el enrutador no la reconoce, no se usa: se va
-     *    al panel, que es donde iría alguien que entra sin más.
+     * 2. **Todavía resuelve, Y no por el comodín.** Si el enrutador no la
+     *    reconoce, no se usa: se va al panel, que es donde iría alguien que
+     *    entra sin más.
+     *
+     * ### El comodín, y por qué hay que descontarlo (`L-2b`)
+     *
+     * `L-2b` añadió `/{slug}` en la raíz para las páginas del sitio, y eso
+     * **resucitó todas las direcciones muertas de un solo segmento**: `/panel`
+     * volvió a «resolver» —contra el comodín— y esta puerta lo dio por bueno.
+     * El síntoma habría vuelto a ser el mismo que en `9.21a`: entrar con la
+     * contraseña correcta y aterrizar en un 404.
+     *
+     * Lo encontró `AterrizajeTest`, que existe justamente por aquel fallo. Es la
+     * clase de daño que hace una ruta comodín: no rompe nada de lo suyo, revive
+     * lo ajeno.
      */
     private static function aDondeVa(Request $peticion): string
     {
@@ -100,9 +113,12 @@ final class AccesoController
         $camino = '/'.ltrim((string) parse_url($url, PHP_URL_PATH), '/');
 
         try {
-            Route::getRoutes()->match(Request::create($camino, 'GET'));
+            $ruta = Route::getRoutes()->match(Request::create($camino, 'GET'));
 
-            return true;
+            // El comodin de `L-2b` acepta CUALQUIER segmento, asi que resolver
+            // contra el no prueba que la direccion exista. Y una pagina publica
+            // no es sitio al que mandar a quien acaba de entrar al panel.
+            return $ruta->getName() !== 'pagina';
         } catch (Throwable) {
             // `match()` lanza para «no existe» y para «existe con otro verbo».
             // Las dos son «no la uses»: un GET a una ruta que solo acepta POST

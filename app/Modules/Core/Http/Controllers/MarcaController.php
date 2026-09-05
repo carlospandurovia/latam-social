@@ -64,7 +64,8 @@ final class MarcaController
         // CHECK de correo y de web admiten NULL --«no configurado»-- y rechazan
         // una cadena vacia, que no es lo mismo y no significa nada.
         foreach (['tagline', 'legal_footer', 'website', 'support_email',
-            'primary_color', 'secondary_color', 'sidebar_color', 'font_family'] as $campo) {
+            'primary_color', 'secondary_color', 'gradient_from', 'sidebar_color',
+            'font_family', 'display_font_family'] as $campo) {
             if (trim((string) ($datos[$campo] ?? '')) === '') {
                 $datos[$campo] = null;
             }
