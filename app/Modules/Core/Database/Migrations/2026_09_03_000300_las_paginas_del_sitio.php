@@ -233,17 +233,17 @@ return new class extends Migration
 
             ['content_page_versions', 'ck_cpv_fechas',
                 'effective_to IS NULL OR effective_to >= effective_from',
-                ['effective_to'], 'Una version no puede cerrarse antes de empezar.'],
+                ['effective_to', 'effective_from'], 'Una version no puede cerrarse antes de empezar.'],
 
             // Publicar es un acto con responsable. Misma regla que `9.16`.
             ['content_page_versions', 'ck_cpv_publicada',
                 'published_at IS NULL OR published_by_user_id IS NOT NULL',
-                ['published_at'], 'Publicar una pagina es un acto con responsable: falta quien.'],
+                ['published_at', 'published_by_user_id'], 'Publicar una pagina es un acto con responsable: falta quien.'],
 
             // Un borrador no se cierra: nunca llego a estar vigente.
             ['content_page_versions', 'ck_cpv_borrador_abierto',
                 'published_at IS NOT NULL OR effective_to IS NULL',
-                ['effective_to'], 'Un borrador no se cierra: nunca estuvo vigente.'],
+                ['effective_to', 'published_at'], 'Un borrador no se cierra: nunca estuvo vigente.'],
 
             ['content_page_versions', 'ck_cpv_revision',
                 "review_status IN ('sin_revisar','en_revision','revisado')",

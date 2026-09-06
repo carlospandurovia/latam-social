@@ -62,8 +62,26 @@ $columnas = static function (string $tabla) use (&$columnasDe, $base): array {
 
 $rotos = 0;
 
+$saltados = 0;
+
 foreach ($disparadores as $d) {
     $cuerpo = (string) $d->action_statement;
+
+    // Solo se analizan los cuerpos GENERADOS por `Restriccion`, que son de una
+    // sola forma: `BEGIN IF NOT (expresion) THEN SIGNAL ...; END IF; END`.
+    //
+    // Los escritos a mano y los de `Periodo` llevan subconsultas, y ahi una
+    // columna desnuda es CORRECTA: pertenece a la otra tabla, o a las otras
+    // filas de la propia. La primera version de este verificador no distinguia
+    // y denuncio siete disparadores bien escritos --`tg_payout_medio_valido`,
+    // `tg_cpm_compartida`, `tg_iline_*`, `tg_iconn_activa_*`-- junto a los seis
+    // rotos de verdad. Un verificador que grita por nada ensena a ignorarlo,
+    // que es peor que no tenerlo (`DEC-301`).
+    if (preg_match('/\b(SELECT|FROM|DECLARE|INSERT|UPDATE|DELETE)\b/i', $cuerpo) === 1) {
+        $saltados++;
+
+        continue;
+    }
 
     // Fuera los literales de texto: el mensaje de error suele nombrar columnas.
     $cuerpo = preg_replace("/'(?:[^'\\\\]|\\\\.|'')*'/", "''", $cuerpo) ?? $cuerpo;
@@ -90,6 +108,9 @@ foreach ($disparadores as $d) {
 }
 
 echo "\n";
+echo "Analizados: ".(count($disparadores) - $saltados)." (forma generada por Restriccion)\n";
+echo "Saltados:   {$saltados} (escritos a mano o de Periodo: llevan subconsultas)\n\n";
+
 if ($rotos === 0) {
     echo "Ningun disparador mira una columna sin NEW.\n";
     exit(0);
