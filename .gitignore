@@ -1,6 +1,9 @@
 /.phpunit.cache
 /node_modules
-/public/build
+# `/public/build` NO se ignora (DEC-303): el servidor no tiene Node, asi que
+# el CSS y el JS compilados viajan por el repositorio. `/public/hot` SI se
+# ignora y es importante que siga asi: es el marcador del Vite de desarrollo,
+# y en el servidor haria que todos los estilos se pidan a localhost:5173.
 /public/hot
 /public/storage
 /storage/*.key

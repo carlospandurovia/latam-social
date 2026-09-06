@@ -121,9 +121,17 @@ cuantas validaciones: es que la mitad del esquema no se puede instalar.
 panel prefija todo con tu usuario (`cpuser_latamsocial`, `cpuser_app`).
 
 - Base: `latamsocial`, cotejamiento **`utf8mb4_unicode_ci`**.
-- Usuario **de aplicación** (`app`): marcar sólo `SELECT, INSERT, UPDATE, DELETE, EXECUTE`.
+- Usuario **de aplicación** (`app`): marcar sólo `SELECT, INSERT, UPDATE, DELETE`.
   **No marcar `DROP`.** Es lo único que impide `TRUNCATE TABLE audit_logs`, que
-  no dispara disparadores y deja la bitácora a cero (`DEC-085`).
+  no dispara disparadores y deja la bitácora a cero (`DEC-085`). Tampoco
+  `ALTER`, `CREATE`, `INDEX` ni `REFERENCES`: son los cinco que vigila
+  `seguridad:privilegios`.
+
+  > **`EXECUTE` no hace falta hoy** —aunque `.env.example` lo incluya por
+  > precaución—: el proyecto no crea ninguna función ni procedimiento
+  > almacenado, y un disparador corre como su *definer*, no le pide `EXECUTE` a
+  > quien inserta. Comprobado el 2026-09-06. Si alguna migración futura añade
+  > una rutina, habrá que marcarlo entonces.
 - Usuario **de migraciones** (`mig`): `ALL PRIVILEGES`.
 
 Si el panel deja abrir una consola SQL o hay cliente `mysql`, es exactamente lo
@@ -165,14 +173,43 @@ es que las reglas no se pueden instalar. La salida es un VPS o un MySQL
 gestionado **8.0.16+** (o MariaDB 10.2+), donde `CHECK` es nativo y este
 problema desaparece entero.
 
-**c) Dos cosas más que se leen en el mismo `SELECT`:**
+**c) Dos cosas más que se leen en el mismo `SELECT`, y las dos salieron mal en
+HostGator el 2026-09-06.** Se dejan escritas porque van a volver a pasar.
 
-- `@@sql_mode` **tiene que contener `STRICT_TRANS_TABLES`**. Sin modo estricto,
-  un `INSERT` que omite una columna `NOT NULL` mete `0` o `''` en vez de fallar,
-  y media docena de restricciones dejan de significar lo que parecen.
-- `@@character_set_database` **tiene que ser `utf8mb4`**. Si el panel la creó en
-  `latin1`: `ALTER DATABASE cpuser_latamsocial CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;`
-  **antes** de migrar.
+**El cotejamiento.** El panel dijo `utf8mb4_unicode_ci` y creó la base en
+**`utf8` / `utf8_unicode_ci`** —tres bytes, sin emoji—. `esquema:verificar` lo
+marca como **fallo**, no como limitación. Se arregla en un comando, y hay que
+hacerlo **antes** de migrar, mientras no haya ni una tabla:
+
+```sql
+ALTER DATABASE `cpanduro_latamsocial2` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+```
+
+Después conviene mirar tres variables más, porque `utf8mb4` en 5.7 tiene un
+límite conocido: con `innodb_large_prefix=OFF` o filas en formato `COMPACT`, un
+índice sobre un `VARCHAR(255)` ocupa 1020 bytes y el máximo son 767 — la
+migración se cae con «Specified key was too long». Los valores por defecto de
+5.7 (`ON` / `Barracuda` / `DYNAMIC`) sirven; los del hosting hay que mirarlos:
+
+```sql
+SELECT @@innodb_large_prefix, @@innodb_file_format, @@innodb_default_row_format;
+```
+
+**El modo estricto.** El servidor trae
+`NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION`, **sin `STRICT_TRANS_TABLES`**. Sin
+modo estricto, un `INSERT` que omite una columna `NOT NULL` sin valor por
+defecto mete `0` o `''` en vez de fallar, y media docena de restricciones dejan
+de significar lo que parecen.
+
+Aquí **no hay que tocar el servidor**: `config/database.php` lleva
+`'strict' => true`, así que Laravel fija el modo estricto **en cada sesión** que
+abre, y tanto la aplicación como las migraciones quedan cubiertas. Por eso
+`esquema:verificar` dirá «sí» aunque el servidor diga que no: mide
+`@@SESSION.sql_mode`, que es el que manda.
+
+Lo que **no** queda cubierto es lo que entre por fuera de Laravel: phpMyAdmin,
+un `mysql` a mano, una importación del panel. Ahí el modo es el flojo del
+servidor. Conviene saberlo antes de cargar datos a mano.
 
 Las dos las vuelve a comprobar `php artisan esquema:verificar` en el paso 0.11,
 pero mirarlas ahora ahorra una migración a medias.
