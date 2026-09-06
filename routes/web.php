@@ -1052,15 +1052,31 @@ Route::middleware('auth')->prefix('backoffice')->group(function (): void {
         ->whereNumber('pagina')
         ->name('landing.update');
 
-    Route::post('/landing/{pagina}/bloques', [LandingController::class, 'guardarBloque'])
+    // L-3 -- Las franjas de la portada. El encabezado, el orden y el ancla del
+    // menu dejan de estar escritos en el `.blade.php` y pasan a ser datos.
+    Route::post('/landing/{pagina}/franjas', [LandingController::class, 'guardarSeccion'])
         ->middleware('permiso:brand.manage')
         ->whereNumber('pagina')
+        ->name('landing.seccion');
+
+    // Una franja SI se borra, y con ella sus bloques: es texto de marketing y
+    // no sostiene ninguna cifra ni ninguna firma.
+    Route::delete('/landing/{pagina}/franjas/{seccion}', [LandingController::class, 'borrarSeccion'])
+        ->middleware('permiso:brand.manage')
+        ->whereNumber('pagina')->whereNumber('seccion')
+        ->name('landing.seccion.borrar');
+
+    // Un bloque va DENTRO de una franja, y la ruta lo dice: asi el controlador
+    // puede comprobar que la franja es de esa portada antes de tocar nada.
+    Route::post('/landing/{pagina}/franjas/{seccion}/bloques', [LandingController::class, 'guardarBloque'])
+        ->middleware('permiso:brand.manage')
+        ->whereNumber('pagina')->whereNumber('seccion')
         ->name('landing.bloque');
 
     // Un bloque SI se borra: es texto de marketing, no sostiene ninguna cifra.
-    Route::delete('/landing/{pagina}/bloques/{bloque}', [LandingController::class, 'borrarBloque'])
+    Route::delete('/landing/{pagina}/franjas/{seccion}/bloques/{bloque}', [LandingController::class, 'borrarBloque'])
         ->middleware('permiso:brand.manage')
-        ->whereNumber('pagina')->whereNumber('bloque')
+        ->whereNumber('pagina')->whereNumber('seccion')->whereNumber('bloque')
         ->name('landing.bloque.borrar');
 
     // 9.17g -- La cuenta de correo. `integration.manage` y no `comms.view`:

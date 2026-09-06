@@ -11,7 +11,7 @@
     </h1>
 
     <p class="mt-3 text-sm text-slate-500">
-      Versión {{ $pagina->version }} · vigente desde
+      {{ __('publico.pagina.version', ['numero' => $pagina->version]) }}
       <time datetime="{{ $pagina->effective_from }}">
         {{ \Illuminate\Support\Str::of($pagina->effective_from)->substr(0, 10) }}
       </time>

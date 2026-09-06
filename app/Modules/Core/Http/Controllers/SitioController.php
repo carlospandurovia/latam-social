@@ -37,6 +37,14 @@ final class SitioController
             'sociedades' => DB::table('legal_entities')
                 ->where('status', 'active')->orderBy('legal_name')
                 ->get(['id', 'legal_name', 'tax_id_type', 'tax_id_number']),
+            // L-5: los paises para el desplegable del pais por defecto, y el
+            // que rige HOY --que puede venir de la sociedad operadora y no de
+            // esta pantalla--, para poder decirlo al lado del campo.
+            'paises' => DB::table('countries')->where('is_active', 1)
+                ->orderBy('name')->get(['id', 'name']),
+            'paisEnVigor' => Sitio::paisPorDefecto(),
+            'medicion' => Sitio::medicion(),
+            'medidores' => Sitio::MEDIDORES,
         ]);
     }
 
@@ -53,10 +61,34 @@ final class SitioController
             'contact_email' => ['nullable', 'email:rfc', 'max:255'],
             'contact_phone' => ['nullable', 'string', 'max:30'],
             'public_address' => ['nullable', 'string', 'max:255'],
+            'default_country_id' => ['nullable', 'integer', 'exists:countries,id'],
+            'analytics_provider' => ['nullable', 'in:'.implode(',', array_keys(Sitio::MEDIDORES))],
+            // La MISMA regla que `ck_ss_medidor_id`, y no por gusto: este valor
+            // entra dentro de un `<script>` de todas las paginas publicas. Aqui
+            // se pide para que una errata sea una frase junto al campo; en la
+            // base se impone para que una fila que entre por otro camino
+            // tampoco pueda llevar una comilla.
+            'analytics_id' => ['nullable', 'string', 'max:40', 'regex:/^[A-Za-z0-9._-]+$/'],
         ], [
             'whatsapp_phone.regex' => 'El WhatsApp va en formato internacional, sin espacios ni '
                 .'guiones: +51987654321. Va dentro de un enlace, y un espacio lo rompe sin dar error.',
+            'analytics_id.regex' => 'El identificador de medición sólo admite letras, números, punto '
+                .'y guion. Va dentro de un <script>, así que cualquier otra cosa sería una inyección.',
         ]);
+
+        // La regla de `ck_ss_medidor_par`, dicha como frase. Un proveedor sin
+        // identificador no mide nada y un identificador sin proveedor no lo lee
+        // nadie: los dos casos son configuracion a medias que PARECE completa.
+        $proveedor = trim((string) ($datos['analytics_provider'] ?? ''));
+        $identificador = trim((string) ($datos['analytics_id'] ?? ''));
+
+        if (($proveedor === '') !== ($identificador === '')) {
+            return back()->withInput()->with(
+                'aviso',
+                'La medición necesita las dos cosas: el proveedor y su identificador. Con una sola '
+                .'no se mide nada, y la pantalla diría que está configurada.',
+            );
+        }
 
         // Un campo en blanco se guarda como NULL y no como ''. Los CHECK
         // admiten NULL --«no configurado»-- y rechazan la cadena vacia, que no

@@ -201,7 +201,18 @@ final class InvitacionesTest extends TestCase
         $token = Invitaciones::invitar($this->campana(), $this->fila($id));
 
         Event::assertDispatched(CorreoPedido::class, function (CorreoPedido $e) use ($token): bool {
-            $texto = json_encode($e->variables, JSON_THROW_ON_ERROR);
+            // El enlace se mira APARTE y se saca del resto. Antes las tres
+            // comprobaciones negativas leian el JSON entero --enlace incluido--
+            // y ese enlace lleva un token de 64 caracteres hexadecimales al
+            // azar: una de cada mil veces, mas o menos, el token contenia la
+            // cadena «5000» y la prueba se ponia roja acusando a la invitacion
+            // de filtrar el presupuesto del cliente. Es la version mas cara de
+            // «una asercion que falla por el motivo equivocado»: la que solo
+            // falla de vez en cuando, porque ensena a repetir la pasada en vez
+            // de leer el error.
+            $sinEnlace = $e->variables;
+            unset($sinEnlace['enlace']);
+            $texto = json_encode($sinEnlace, JSON_THROW_ON_ERROR);
 
             return $e->codigo === 'campaign.invitation'
                 && str_contains((string) $e->variables['enlace'], $token)

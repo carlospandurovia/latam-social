@@ -18,6 +18,7 @@ use App\Modules\Core\Services\Landing;
 use App\Modules\Core\Services\Marca;
 use App\Modules\Core\Services\Paginas;
 use App\Modules\Core\Services\Politica;
+use App\Modules\Core\Services\Reemplazos;
 use App\Modules\Core\Services\Sitio;
 use App\Modules\Core\Services\Terminos;
 use App\Modules\Core\Services\TraidaDeCambio;
@@ -60,6 +61,29 @@ final class CoreServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        // L-7: el idioma de RESERVA tiene que ser uno que exista en `lang/`.
+        //
+        // Laravel trae `en` de fabrica y este proyecto no lo tiene. Con
+        // `APP_LOCALE=es_PE` --que es exactamente lo que la `L-6` le pide poner
+        // al operador-- Laravel busca `lang/es_PE/`, no lo encuentra, cae en el
+        // respaldo `en`, tampoco lo encuentra, y **pinta la clave**: en la
+        // cabecera de la portada sale `publico.entrar`, y en el pie
+        // `publico.pie.para_marcas`. En todas las paginas publicas. Y **no da
+        // ningun error**: la pagina responde 200 y se ve rota.
+        //
+        // Lo encontro el barrido de la `L-7` mirando las pantallas, no una
+        // prueba: la prueba de la `L-6` comparaba la pagina con `__()`, que
+        // devuelve la misma clave cuando falta la traduccion, asi que pasaba en
+        // verde con el sitio entero en clave.
+        //
+        // Se arregla aqui y no en el `.env` porque un `.env` se olvida, y lo
+        // que se olvidaria es la unica linea que impide que el sitio salga asi.
+        // Y solo si el respaldo configurado NO existe: quien ponga
+        // `APP_FALLBACK_LOCALE=pt` a proposito, y tenga `lang/pt/`, manda.
+        if (!is_dir(lang_path((string) config('app.fallback_locale')))) {
+            config(['app.fallback_locale' => 'es']);
+        }
+
         // L-1: si la aplicacion se sirve por `https`, TODO lo que genere URLs
         // tiene que decir `https`.
         //
@@ -132,8 +156,64 @@ final class CoreServiceProvider extends ServiceProvider
         View::composer('layouts.publico', static function (\Illuminate\View\View $vista): void {
             $vista->with('sitio', Sitio::datos());
             $vista->with('redesDelPie', Sitio::redes());
+            // L-5 (§21): la medicion. Va en el compositor de la PLANTILLA
+            // porque el fragmento vive en su `<head>` y lo llevan las cuatro
+            // rutas publicas: la que se olvidara seria justo la que dejara de
+            // contarse.
+            $vista->with('medicion', Sitio::medicion());
+            // L-6 (§20): lo que hace falta para el `Organization` de los
+            // buscadores. Se reutiliza el motor de marcadores de la `L-2b`
+            // --que ya sabe leer la sociedad operadora y armar el domicilio en
+            // una linea-- en vez de escribir una segunda consulta que un dia
+            // diria algo distinto que la portada.
+            //
+            // Se traduce a claves llanas porque `valores()` las devuelve con
+            // punto --`empresa.razon_social`, que es como se escriben dentro de
+            // un texto-- y una plantilla no tiene por que saber eso.
+            $valores = Reemplazos::valores();
+
+            // Y lo que TODAVIA es el valor de fabrica no viaja: en un documento
+            // legal un «Por completar» al menos le grita al operador que lo
+            // complete, pero en el `Organization` se lo estariamos DECLARANDO A
+            // UN BUSCADOR, que lo guarda y lo ensena. Mejor no decir la
+            // direccion que decir una que no es.
+            $vista->with('empresa', array_map(
+                static fn (?string $v): ?string => Reemplazos::esDeFabrica($v) ? null : $v,
+                [
+                    'razon_social' => $valores['empresa.razon_social'] ?? null,
+                    'numero_documento' => $valores['empresa.numero_documento'] ?? null,
+                    'domicilio' => $valores['empresa.domicilio'] ?? null,
+                    'ciudad' => $valores['empresa.ciudad'] ?? null,
+                    'pais' => $valores['empresa.pais'] ?? null,
+                ],
+            ));
             // L-2b: las paginas legales del pie.
             $vista->with('paginasDelPie', Paginas::delPie());
+            // L-3: el menu y el boton comercial de la cabecera.
+            //
+            // Esto es un valor de RESERVA, y el `array_key_exists` es lo que lo
+            // hace valor de reserva: un compositor corre DESPUES del controlador
+            // y `with()` pisaria lo que el controlador hubiera mandado. Quien
+            // pinta una portada conoce la suya --y sus anclas, que son las
+            // unicas que existen en esa pagina-- asi que manda las suyas y
+            // ganan. Sin esta comprobacion, `/creadores` saldria con el menu de
+            // `/` y cada ancla llevaria a una seccion que en esa pagina no
+            // existe: pulsarla no da error, simplemente no pasa nada.
+            //
+            // La reserva es la portada de MARCAS a proposito. Quien acaba de
+            // leer la politica de privacidad tiene que poder volver a la accion
+            // sin buscarla, y las anclas apuntan a `/` con su ancla dentro.
+            if (!array_key_exists('portadaCabecera', $vista->getData())) {
+                $portada = Landing::portada(Landing::MARCAS);
+
+                $vista->with('portadaCabecera', $portada);
+                $vista->with('navCabecera', $portada === null
+                    ? collect()
+                    : Landing::navegacion((int) $portada->id)
+                        ->each(static function (object $s): void {
+                            $s->base = route('portada.marcas');
+                        }));
+            }
         });
 
         // 9.17: el logotipo y el favicon de la plataforma.

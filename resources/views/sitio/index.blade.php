@@ -144,6 +144,91 @@
         </label>
       </section>
 
+      {{-- ------------------------------------------------ L-5: los formularios --}}
+      <section class="rounded-xl border border-slate-200 bg-white p-5">
+        <h2 class="text-sm font-semibold text-slate-800">Los formularios de la calle</h2>
+
+        <label class="mt-4 block text-sm text-slate-600">País que sale marcado
+          <select name="default_country_id" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2">
+            <option value="">— el de la sociedad operadora —</option>
+            @foreach ($paises as $p)
+              <option value="{{ $p->id }}"
+                      @selected((string) old('default_country_id', (string) ($fila->default_country_id ?? '')) === (string) $p->id)>{{ $p->name }}</option>
+            @endforeach
+          </select>
+          <span class="mt-1 block text-xs text-slate-400">
+            @php($nombreEnVigor = $paises->firstWhere('id', $paisEnVigor)?->name)
+            Hoy rige: <strong>{{ $nombreEnVigor ?: 'ninguno' }}</strong>.
+            Sin esto el desplegable abre en el primero por orden alfabético, y quien no se fije
+            etiquetará su lead en el país equivocado.
+          </span>
+        </label>
+      </section>
+
+      {{-- --------------------------------------------------- L-5: la medición --}}
+      <section class="rounded-xl border border-slate-200 bg-white p-5">
+        <h2 class="text-sm font-semibold text-slate-800">Medición de visitas</h2>
+        <p class="mt-1 text-xs text-slate-500">
+          Los eventos ya están puestos en la portada —el botón de la cabecera, el del héroe, el
+          WhatsApp, el de cada franja—. Aquí sólo se dice por dónde salen.
+        </p>
+
+        <div class="mt-4 grid gap-4 sm:grid-cols-2">
+          <label class="block text-sm text-slate-600">Proveedor
+            <select name="analytics_provider" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2">
+              <option value="">— sin medición —</option>
+              @foreach ($medidores as $clave => $texto)
+                <option value="{{ $clave }}"
+                        @selected(old('analytics_provider', $fila->analytics_provider ?? '') === $clave)>{{ $texto }}</option>
+              @endforeach
+            </select>
+          </label>
+
+          <label class="block text-sm text-slate-600">Identificador
+            <input name="analytics_id" maxlength="40" placeholder="G-XXXXXXXXXX"
+                   value="{{ old('analytics_id', $fila->analytics_id ?? '') }}"
+                   class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2">
+            <span class="mt-1 block text-xs text-slate-400">
+              Sólo letras, números, punto y guion: este valor entra dentro de un
+              <code>&lt;script&gt;</code> de todas las páginas públicas.
+            </span>
+          </label>
+        </div>
+
+        {{-- Lo que de verdad hay que saber mirando esta pantalla: si desde ESTA
+             maquina sale la medicion. Un servidor de pruebas con un volcado de
+             produccion trae dentro el identificador bueno, y sin esta barrera
+             cada clic de una prueba se contaria como una visita real --no rompe
+             nada, y por eso nadie lo notaria--. Misma llave que `9.22b`. --}}
+        {{-- §56: un supuesto legal se identifica EXPLICITAMENTE, no se da por
+             supuesto. Un medidor de visitas deja identificadores en el navegador
+             de un tercero, y eso lo tiene que declarar la politica de
+             privacidad --que existe desde `L-2b` y que nadie ha revisado
+             juridicamente (`T-09`)--. Va aqui y NO como aviso en Configuracion,
+             porque un ambar que no se apaga nunca acaba tapando los que si hay
+             que leer (`DEC-282`). --}}
+        <p class="mt-3 text-xs text-slate-500">
+            Medir es tratar datos de un tercero. Si activas esto, la política de privacidad tiene
+            que decir qué se mide y con qué proveedor, y puede que haga falta pedir consentimiento
+            antes de cargarlo. No lo cubre ningún texto por defecto.
+        </p>
+
+        @if ($medicion['proveedor'] !== null)
+          <p class="mt-4 rounded-lg px-4 py-3 text-sm
+                    {{ $medicion['emite']
+                        ? 'bg-emerald-50 border border-emerald-200 text-emerald-800'
+                        : 'bg-amber-50 border border-amber-200 text-amber-800' }}">
+            @if ($medicion['emite'])
+              Desde esta máquina <strong>sí se mide</strong>: es la instalación de producción.
+            @else
+              Configurada, pero <strong>desde esta máquina no se emite</strong>: no es la instalación
+              de producción, y mandar visitas de prueba a la propiedad de verdad no da ningún error
+              — sólo hace que los números dejen de significar algo.
+            @endif
+          </p>
+        @endif
+      </section>
+
       <button class="rounded-lg bg-marca-500 px-5 py-2.5 text-sm font-semibold text-white hover:opacity-90">
         Guardar
       </button>

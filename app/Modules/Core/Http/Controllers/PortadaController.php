@@ -6,8 +6,8 @@ namespace App\Modules\Core\Http\Controllers;
 
 use App\Modules\Core\Services\Landing;
 use App\Modules\Core\Services\Marca;
+use App\Modules\Core\Services\Sitio;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 /**
@@ -63,16 +63,40 @@ final class PortadaController
 
         return view('publico.landing', [
             'pagina' => $pagina,
+            // L-3: la cabecera de ESTA portada, y no la de reserva que pone el
+            // compositor de `layouts.publico`. Las anclas de un menu son las
+            // secciones de la pagina que se esta mirando; las de la otra
+            // portada no existen aqui, y un ancla que no existe no da error:
+            // simplemente no pasa nada al pulsarla.
+            'portadaCabecera' => $pagina,
+            'navCabecera' => Landing::navegacion((int) $pagina->id)
+                ->each(static function (object $seccion): void {
+                    // Vacio = la misma pagina. El menu sale como `#ancla`.
+                    $seccion->base = '';
+                }),
             // La marca se pasa AQUI y no se hereda de un compositor sobre la
             // plantilla: `verificar-pantallas.py` lo caza --y con razon--,
             // porque un compositor comodin esconde de quien lee el controlador
             // que la vista necesita este dato.
             'marca' => Marca::datos(),
+            // L-3: el WhatsApp del heroe. Va AQUI y no se hereda del compositor
+            // de `layouts.publico`: un compositor sobre la plantilla no alcanza
+            // a la vista que la extiende --la portada salio con «Undefined
+            // variable $sitio»-- y ademas `verificar-pantallas.py` tiene razon
+            // en pedirlo asi: quien lee el controlador ve que la vista lo
+            // necesita.
+            'sitio' => Sitio::datos(),
             'esDeCreadores' => $code === Landing::CREADORES,
             // 9.21c: las DOS portadas tienen formulario --postular y contactar--
             // asi que los paises hacen falta siempre.
-            'paises' => DB::table('countries')->where('is_active', 1)
-                ->orderBy('name')->get(['id', 'name']),
+            //
+            // L-5 (`C-2`): la lista sale con el pais por defecto DELANTE, y ese
+            // pais no es una constante --lo dice `Sitio`--. Antes era
+            // `orderBy('name')` a secas, y el primero por orden alfabetico
+            // resultaba ser Chile: un negocio que arranca en Peru etiquetaba mal
+            // sus propios leads, en silencio, desde el primer dia.
+            'paises' => Sitio::paisesParaFormulario(),
+            'paisPorDefecto' => Sitio::paisPorDefecto(),
         ]);
     }
 }

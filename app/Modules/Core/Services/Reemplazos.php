@@ -83,6 +83,19 @@ final class Reemplazos
     /** Lo que se pinta cuando un marcador no se puede resolver. */
     public const SIN_VALOR = '—';
 
+    /**
+     * Lo que siembra `CimientosSeeder` donde nadie puede inventar el dato.
+     *
+     * Un marcador que se resuelve no es lo mismo que un marcador que se
+     * resuelve **bien**: el domicilio de fábrica dice «Por completar, Perú» y
+     * eso sale en la política de privacidad publicada y —desde la `L-6`— en lo
+     * que leen los buscadores.
+     *
+     * Vive aquí y no en cada consumidor porque ya iba por tres sitios, y una
+     * regla escrita en tres sitios es una regla que el cuarto no tiene.
+     */
+    public const DE_FABRICA = 'por completar';
+
     /** Reconoce `{{ marca.nombre }}` con o sin espacios. */
     private const PATRON = '/\{\{\s*([a-z_]+\.[a-z_]+)\s*\}\}/';
 
@@ -95,8 +108,26 @@ final class Reemplazos
      */
     public static function aplicar(string $texto, array $extra = []): string
     {
-        $valores = self::valores() + $extra;
+        return self::conValores($texto, self::valores() + $extra);
+    }
 
+    /**
+     * Lo mismo, pero con la tabla de valores ya resuelta.
+     *
+     * Existe para quien sustituye MUCHOS textos de una vez —la portada tiene
+     * sesenta entre encabezados, bajadas y bloques— y no puede permitirse que
+     * cada uno vuelva a preguntar por la sociedad operadora: serían sesenta
+     * consultas para pintar una página que mira quien todavía no es cliente.
+     *
+     * La alternativa habría sido que `valores()` recordara lo leído en una
+     * propiedad estática, y eso es justo lo que `T-90` dice que no hay que
+     * volver a hacer: una memoria que sobrevive a la petición sólo en las
+     * pruebas. Un parámetro no sobrevive a nada.
+     *
+     * @param array<string, string> $valores
+     */
+    public static function conValores(string $texto, array $valores): string
+    {
         return (string) preg_replace_callback(
             self::PATRON,
             static fn (array $c): string => $valores[$c[1]] ?? self::SIN_VALOR,
@@ -203,5 +234,11 @@ final class Reemplazos
         // Sin repetir: en Lima, `city` y `region` valen las dos «LIMA», y
         // «LIMA, LIMA» en una politica de privacidad se lee como un error.
         return implode(', ', array_values(array_unique($partes)));
+    }
+
+    /** ¿Este valor sigue siendo el de partida y no el de verdad? */
+    public static function esDeFabrica(?string $valor): bool
+    {
+        return $valor !== null && mb_stripos($valor, self::DE_FABRICA) !== false;
     }
 }

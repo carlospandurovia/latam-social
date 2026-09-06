@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Core\Http\Controllers;
 
 use App\Modules\Core\Services\Landing;
+use App\Modules\Core\Services\Paginas;
 use App\Shared\Config\Instalacion;
 use Illuminate\Http\Response;
 
@@ -15,8 +16,9 @@ use Illuminate\Http\Response;
  *
  * Porque **los dos dependen de la configuración**, y un archivo estático no.
  *
- * - El mapa lista las portadas **publicadas**. Apagar la de creadores desde el
- *   admin tiene que quitarla del mapa; con un archivo a mano, no.
+ * - El mapa lista las portadas **publicadas** y las páginas del sitio que tienen
+ *   versión vigente. Apagar la de creadores desde el admin tiene que quitarla
+ *   del mapa; con un archivo a mano, no.
  * - `robots.txt` tiene que decir *«no me rastrees»* en una instalación que **no
  *   es producción** (`9.22a`). Un servidor de pruebas indexado compite en
  *   Google con el de verdad y le roba las visitas, y eso se descubre meses
@@ -66,6 +68,17 @@ final class RastreoController
             if (Landing::portada($code) !== null) {
                 $urls[] = $url;
             }
+        }
+
+        // L-7: y las paginas del sitio que esten PUBLICADAS.
+        //
+        // Faltaban, y lo vio el barrido: la politica de privacidad y los
+        // terminos son paginas publicas, con su URL propia y su contenido, y no
+        // estaban en el mapa. `Paginas::delPie()` devuelve exactamente las que
+        // tienen version vigente, que es la misma regla que usa el pie: si sale
+        // en el pie, un buscador tiene que poder encontrarla.
+        foreach (Paginas::delPie() as $pagina) {
+            $urls[] = route('pagina', ['slug' => $pagina->slug]);
         }
 
         $cuerpo = '<?xml version="1.0" encoding="UTF-8"?>'."\n"

@@ -6,6 +6,7 @@ namespace App\Modules\Core\Services;
 
 use App\Shared\Audit\Bitacora;
 use App\Shared\Config\Aviso;
+use App\Shared\Config\Instalacion;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -34,13 +35,29 @@ use Illuminate\Support\Facades\Schema;
  */
 final class Sitio
 {
+    /**
+     * Los medidores de visitas que sabe emitir `parciales/analitica` (L-5).
+     *
+     * Es un enum de **código** y no un catálogo: cada uno tiene su fragmento, y
+     * uno inventado desde el panel sería una fila perfectamente válida que
+     * ninguna plantilla sabe dibujar —el criterio de `DEC-026`—.
+     *
+     * @var array<string, string>
+     */
+    public const MEDIDORES = [
+        'ga4' => 'Google Analytics 4 — identificador G-XXXXXXX',
+        'gtm' => 'Google Tag Manager — contenedor GTM-XXXXXXX',
+        'meta' => 'Meta Pixel — identificador numérico',
+        'plausible' => 'Plausible — el dominio, sin https://',
+    ];
+
     /** @var array<string, mixed>|null */
     private static ?array $memoria = null;
 
     /**
      * Lo que se pinta en la calle.
      *
-     * @return array{whatsapp: ?string, whatsappUrl: ?string, mensajeWhatsapp: ?string, correo: ?string, telefono: ?string, direccion: ?string, sociedadId: ?int, configurado: bool}
+     * @return array{whatsapp: ?string, whatsappUrl: ?string, mensajeWhatsapp: ?string, correo: ?string, telefono: ?string, direccion: ?string, sociedadId: ?int, paisPorDefecto: ?int, medidor: ?string, medidorId: ?string, configurado: bool}
      */
     public static function datos(): array
     {
@@ -65,8 +82,98 @@ final class Sitio
             'direccion' => self::texto($fila->public_address ?? null),
             'sociedadId' => isset($fila->operator_legal_entity_id)
                 ? (int) $fila->operator_legal_entity_id : null,
+            // L-5 (`C-2`): el pais que sale marcado en los formularios de la
+            // calle. `null` significa «el de la sociedad operadora», que se
+            // resuelve en `paisPorDefecto()`: no es una constante, es un dato
+            // que ya existe y que ya esta bien.
+            'paisPorDefecto' => isset($fila->default_country_id)
+                ? (int) $fila->default_country_id : null,
+            'medidor' => self::texto($fila->analytics_provider ?? null),
+            'medidorId' => self::texto($fila->analytics_id ?? null),
             'configurado' => $fila !== null,
         ];
+    }
+
+    /**
+     * El país que sale marcado en los formularios públicos (L-5, `C-2`).
+     *
+     * ### Por qué esto no es «Perú»
+     *
+     * Porque el sistema es white label y el segundo operador puede estar en
+     * Colombia. Pero tampoco puede ser «el primero de la lista», que es lo que
+     * era: la lista va por nombre y el primero resultaba ser **Chile**, así que
+     * un negocio que arranca en Perú etiquetaba mal sus propios leads en
+     * silencio desde el primer día. Y el país de un lead no es un adorno: decide
+     * el mercado, la moneda y qué comprobante se emite.
+     *
+     * La regla, en una frase: **el que se haya configurado; si no, el de la
+     * sociedad operadora**. La reserva no es una constante escrita en el código:
+     * es un dato que ya existe, que ya está bien y que ya se administra.
+     *
+     * Devuelve `null` sólo si tampoco hay sociedad operadora —una instalación
+     * recién migrada—, y entonces el formulario cae en el primero de la lista,
+     * que es lo que había antes. Nada bloquea (`DEC-190`).
+     */
+    public static function paisPorDefecto(): ?int
+    {
+        $datos = self::datos();
+
+        if ($datos['paisPorDefecto'] !== null) {
+            return $datos['paisPorDefecto'];
+        }
+
+        if ($datos['sociedadId'] === null || !Schema::hasTable('legal_entities')) {
+            return null;
+        }
+
+        $pais = DB::table('legal_entities')
+            ->where('id', $datos['sociedadId'])->value('country_id');
+
+        return $pais === null ? null : (int) $pais;
+    }
+
+    /**
+     * La medición: qué proveedor, con qué identificador y **si se emite aquí**.
+     *
+     * La tercera es la que importa y por eso la decide el servicio y no la
+     * plantilla. Se restaura un volcado de producción en el servidor de pruebas
+     * —cosa que se hace todas las semanas— y ese volcado trae dentro el
+     * identificador bueno de la propiedad, así que cada clic de una prueba se
+     * cuenta como una visita real. **No rompe nada, y por eso nadie lo nota:**
+     * los números simplemente dejan de significar algo. Es el mismo agujero que
+     * `9.22b` cerró para el correo, y se cierra con la misma llave.
+     *
+     * @return array{proveedor: ?string, id: ?string, emite: bool}
+     */
+    public static function medicion(): array
+    {
+        $datos = self::datos();
+        $configurada = $datos['medidor'] !== null && $datos['medidorId'] !== null;
+
+        return [
+            'proveedor' => $datos['medidor'],
+            'id' => $datos['medidorId'],
+            'emite' => $configurada && Instalacion::esProduccion(),
+        ];
+    }
+
+    /**
+     * Los países para un desplegable público, **con el de por defecto primero**.
+     *
+     * El orden importa tanto como la marca: un desplegable que abre en el país
+     * correcto pero lo tiene en la posición catorce sigue invitando a que
+     * alguien elija otro sin querer.
+     *
+     * @return Collection<int, \stdClass>
+     */
+    public static function paisesParaFormulario(): Collection
+    {
+        $porDefecto = self::paisPorDefecto();
+
+        return DB::table('countries')->where('is_active', 1)
+            ->orderByRaw('CASE WHEN id = ? THEN 0 ELSE 1 END', [$porDefecto ?? 0])
+            ->orderBy('name')
+            ->get(['id', 'name']);
     }
 
     /**
@@ -235,6 +342,29 @@ final class Sitio
                 .'su ausencia se nota más que en cualquier otro sector.',
             );
         }
+
+        // L-5 (`C-2`): sin pais por defecto, el desplegable abre en el primero
+        // por orden alfabetico. Es ambar y no rojo porque hay una reserva --el
+        // pais de la sociedad operadora-- y solo se queda sin ninguna si
+        // tampoco hay sociedad, que ya sale en rojo mas arriba.
+        if ($datos['paisPorDefecto'] === null && self::paisPorDefecto() === null) {
+            $avisos[] = Aviso::ambar(
+                'No hay país por defecto para los formularios de la calle. Mientras falte, el '
+                .'desplegable abre en el primero por orden alfabético, y quien no se fije etiquetará '
+                .'su lead en el país equivocado.',
+            );
+        }
+
+        // L-5: NO hay aviso por la medicion, ni cuando falta ni cuando esta.
+        //
+        // Se escribieron los dos y los dos estaban mal, y lo dijo una prueba de
+        // `L-2a` --«con todo puesto no queda ningun aviso»-- que se puso roja.
+        // No medir es una decision legitima, no una configuracion a medias; y
+        // la nota de privacidad de cuando SI se mide tampoco puede vivir aqui,
+        // porque seria un ambar que no se apaga nunca. Es exactamente lo que
+        // `DEC-282` corrigio en el correo: un aviso permanente acaba tapando los
+        // que si hay que leer. Las dos cosas se dicen EN SU SITIO --dentro de la
+        // seccion de medicion de la pantalla-- donde se leen cuando importan.
 
         return $avisos;
     }

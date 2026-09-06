@@ -57,14 +57,14 @@ final class LandingTest extends TestCase
     /** Y los bloques también, con su orden y su visibilidad. */
     public function test_los_bloques_se_pintan_y_los_ocultos_no(): void
     {
-        $pagina = $this->pagina(Landing::CREADORES);
+        $seccion = $this->seccion(Landing::CREADORES, 'por-que');
 
-        Landing::guardarBloque((int) $pagina->id, null, [
-            'kind' => 'feature', 'heading' => 'Bloque que se ve',
+        Landing::guardarBloque($seccion, null, [
+            'heading' => 'Bloque que se ve',
             'body' => 'Texto visible.', 'sort_order' => 1, 'is_visible' => true,
         ]);
-        Landing::guardarBloque((int) $pagina->id, null, [
-            'kind' => 'feature', 'heading' => 'Bloque escondido',
+        Landing::guardarBloque($seccion, null, [
+            'heading' => 'Bloque escondido',
             'body' => 'Todavía no.', 'sort_order' => 2, 'is_visible' => false,
         ]);
 
@@ -116,6 +116,7 @@ final class LandingTest extends TestCase
     public function test_sin_portadas_la_raiz_sigue_llevando_a_alguna_parte(): void
     {
         DB::table('landing_blocks')->delete();
+        DB::table('landing_sections')->delete();
         DB::table('landing_pages')->delete();
 
         $this->get(route('portada.marcas'))->assertRedirect(route('acceso'));
@@ -262,6 +263,19 @@ final class LandingTest extends TestCase
         ));
 
         $this->assertStringContainsString('buscadores', $textos);
+    }
+
+    /** El id de una franja sembrada, por su ancla. */
+    private function seccion(string $code, string $ancla): int
+    {
+        $id = DB::table('landing_sections')
+            ->where('landing_page_id', $this->pagina($code)->id)
+            ->where('code', $ancla)
+            ->value('id');
+
+        $this->assertNotNull($id, "La semilla tiene que dejar la franja «{$ancla}» en «{$code}».");
+
+        return (int) $id;
     }
 
     private function pagina(string $code): object

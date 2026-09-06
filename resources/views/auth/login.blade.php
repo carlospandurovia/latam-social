@@ -32,7 +32,11 @@
              class="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm
                     focus:border-marca-400 focus:ring-2 focus:ring-marca-200 focus:outline-none">
     </div>
-    <label class="flex items-center gap-2 text-sm text-slate-600">
+    {{-- L-7: el area tactil de la fila entera, no la del cuadradito.
+           A 13 px de alto, marcar «mantener la sesion» en un telefono es
+           punteria. El `<label>` ya envuelve al control, asi que basta con que
+           la fila mida lo que tiene que medir. --}}
+    <label class="flex min-h-[2.25rem] items-center gap-2 py-1 text-sm text-slate-600">
       <input type="checkbox" name="remember" class="rounded border border-slate-300 text-marca-500 focus:ring-marca-200">
       Mantener la sesión
     </label>
@@ -46,7 +50,7 @@
   {{-- `4.1`. Antes de esto, olvidar la contraseña era una llamada de teléfono y
        un comando de consola. --}}
   <p class="mt-5 text-center text-sm">
-    <a href="{{ route('recuperar') }}" class="text-marca-600 hover:text-marca-700 hover:underline">
+    <a href="{{ route('recuperar') }}" class="inline-block py-1.5 text-marca-600 hover:text-marca-700 hover:underline">
       He olvidado mi contraseña
     </a>
   </p>

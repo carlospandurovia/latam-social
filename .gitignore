@@ -40,3 +40,7 @@ yarn-error.log
 # Cuarentena. Las herramientas remotas no pueden borrar archivos en tu disco,
 # asi que lo que hay que eliminar se mueve aqui y lo borras tu.
 /_to_delete
+
+# Rutas del contenedor de trabajo, nunca del proyecto
+/stage
+/.entrega

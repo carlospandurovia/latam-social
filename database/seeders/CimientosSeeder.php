@@ -852,24 +852,170 @@ final class CimientosSeeder extends Seeder
         // sistema, sin promesas que nadie ha decidido todavia. Se cambia entero
         // desde `/backoffice/landing` sin desplegar (`DEC-190`).
         if ($marcaId !== null) {
+            // L-3: la portada se siembra en TRES niveles --pagina, franja,
+            // bloque-- porque desde `L-3` la franja tambien es dato: su
+            // encabezado, su orden y si sale en el menu de la cabecera. Hasta
+            // hoy «Como funciona» y «Preguntas» estaban escritos en el Blade, y
+            // eso es `DEC-190` roto en el sitio mas visible del producto.
+            //
+            // El numero de los pasos NO va dentro del titulo. Estaba
+            // --«1. Postulas»-- y hacia que meter un paso nuevo en medio
+            // obligara a renumerar cuatro titulos a mano. Lo pone la plantilla.
             $portadas = [
                 [
                     'code' => 'marcas',
-                    'headline' => 'Campañas con creadores, de principio a fin y con todo a la vista',
-                    'subheadline' => 'Elegimos a los creadores, gestionamos el contenido y las publicaciones, '
-                        .'y te entregamos cada campaña con su comprobante y sus métricas.',
+                    // L-4: el titular es el modelo en cuatro palabras. El
+                    // anterior --«de principio a fin y con todo a la vista»--
+                    // era honesto y se entendia, pero hablaba de PROCESO, «de
+                    // principio a fin» lo dice cualquier agencia, y sobre todo
+                    // NO DECIA «MUCHAS»: el modelo entero quedaba fuera.
+                    'headline' => 'Muchas voces. Una sola campaña.',
+                    'subheadline' => 'Activamos decenas de creadores reales en una campaña coordinada: '
+                        .'elegimos, producimos, publicamos y te entregamos cada publicación con su '
+                        .'evidencia. Tú hablas con una sola persona.',
                     'cta_label' => 'Quiero lanzar una campaña',
+                    'form_heading' => 'Hablemos de tu próxima campaña.',
+                    'form_intro' => 'Cuéntanos qué tienes en mente y te respondemos con cómo sería: '
+                        .'cuántos creadores, en qué fechas y qué costaría.',
                     'meta_title' => 'Marketing con creadores en LATAM',
-                    'meta_description' => 'Campañas con creadores en Perú y LATAM: selección, contenido, '
-                        .'publicación y facturación en un solo sitio.',
-                    'bloques' => [
-                        ['feature', 'Creadores verificados', 'Identidad, cuentas y métricas comprobadas antes de proponerte a nadie.', 10],
-                        ['feature', 'Un precio cerrado', 'Sabes lo que cuesta la campaña antes de empezarla, y qué recibe cada creador.', 20],
-                        ['feature', 'Todo queda registrado', 'Cada entrega, cada publicación y cada pago, con su evidencia y su fecha.', 30],
-                        ['step', '1. Nos cuentas la campaña', 'Marca, objetivo, países y presupuesto.', 40],
-                        ['step', '2. Te proponemos creadores', 'Con sus métricas y su tarifa, para que elijas.', 50],
-                        ['step', '3. Producimos y publicamos', 'Revisamos el contenido contigo antes de que salga.', 60],
-                        ['step', '4. Te entregamos resultados', 'Publicaciones verificadas, métricas y comprobante.', 70],
+                    'meta_description' => 'Campañas con decenas de creadores en Perú y LATAM: '
+                        .'selección, contenido, publicación con evidencia y facturación en un solo sitio.',
+                    'franjas' => [
+                        // 1. El problema. Aqui no se pide nada: se gana la
+                        // lectura nombrando el caos que el lector ya vive.
+                        [
+                            'code' => 'el-problema', 'layout' => 'plain', 'sort_order' => 10,
+                            'eyebrow' => 'El punto de partida', 'show_in_nav' => false,
+                            'title' => 'Diez creadores no deberían ser diez conversaciones.',
+                            'subtitle' => 'Diez chats abiertos, diez precios negociados por separado, diez '
+                                .'fechas que nadie cruzó y ninguna evidencia junta cuando toca rendir la '
+                                .'campaña. Coordinar termina costando más que el contenido.',
+                            'bloques' => [
+                                ['Cada acuerdo vive en un chat', 'Lo que se pactó con cada creador está en una conversación distinta, y nadie más lo puede leer.', null, 10],
+                                ['El precio se negocia diez veces', 'Sin una referencia común, cada tarifa se discute desde cero y el presupuesto se descuadra por el camino.', null, 20],
+                                ['La evidencia aparece cuando ya no sirve', 'Las capturas se piden al final, una por una, y las publicaciones que se cayeron se descubren tarde.', null, 30],
+                            ],
+                        ],
+                        // 2. El giro. Es el unico sitio de la portada, aparte
+                        // del heroe, donde manda el degradado (`docs/14 §6`):
+                        // usado en tres franjas dejaria de significar nada.
+                        [
+                            'code' => 'una-marca-muchas-voces', 'layout' => 'claim', 'sort_order' => 20,
+                            'eyebrow' => 'El modelo', 'show_in_nav' => false,
+                            'title' => 'Una marca. Muchas voces.',
+                            'subtitle' => 'Una comunidad pequeña escucha a quien la habla. Veinte '
+                                .'comunidades pequeñas, coordinadas y contándolo la misma semana, hacen '
+                                .'algo que una cuenta grande no hace: sonar a recomendación en veinte '
+                                .'sitios a la vez, en lugar de a anuncio en uno.',
+                            'bloques' => [
+                                ['Cerca', 'Un microcreador responde los comentarios de su comunidad. Esa cercanía es la que hace que su recomendación pese.', null, 10],
+                                ['A la vez', 'No es una publicación suelta: es una campaña con fechas, y ese solapamiento es el efecto que se nota.', null, 20],
+                                ['Coordinado', 'Muchas voces distintas, un solo mensaje, y una sola persona con la que hablas.', null, 30],
+                            ],
+                        ],
+                        [
+                            'code' => 'como-funciona', 'layout' => 'steps', 'sort_order' => 30,
+                            'eyebrow' => null, 'title' => 'Cómo funciona', 'show_in_nav' => true,
+                            'subtitle' => 'Cuatro pasos, y en todos hablas con la misma persona.',
+                            'cta_label' => 'Quiero lanzar una campaña', 'cta_url' => '#empezar',
+                            'bloques' => [
+                                ['Nos cuentas la campaña', 'Marca, objetivo, países y presupuesto. Con eso ya te decimos qué alcance da.', null, 10],
+                                ['Te proponemos creadores', 'Con sus métricas y su tarifa, para que elijas tú cuáles entran.', null, 20],
+                                ['Producimos y publicamos', 'Cada creador hace su pieza y la revisamos contigo antes de que salga.', null, 30],
+                                ['Te entregamos resultados', 'Publicaciones verificadas, evidencia con fecha, métricas y comprobante.', null, 40],
+                            ],
+                        ],
+                        // 4. Que recibes: entregables concretos, sin una sola
+                        // cifra. Lo que queda en poder del cliente.
+                        [
+                            'code' => 'que-recibes', 'layout' => 'cards', 'sort_order' => 40,
+                            'eyebrow' => null, 'title' => 'Qué recibes', 'show_in_nav' => true,
+                            'subtitle' => 'Lo que queda en tu poder cuando la campaña termina.',
+                            'bloques' => [
+                                ['Contenido original', 'Piezas hechas por cada creador para su audiencia, no un anuncio reciclado diez veces.', 'camara', 10],
+                                ['Publicaciones verificadas', 'Comprobamos que cada publicación salió, cuándo salió y que sigue publicada el tiempo acordado.', 'verificado', 20],
+                                ['Evidencia de cada publicación', 'Captura con fecha de cada pieza, guardada y descargable. No se pide al final: se recoge sobre la marcha.', 'documento', 30],
+                                ['Métricas de lo publicado', 'Lo que reportan las propias plataformas, tal cual, sin maquillar.', 'grafico', 40],
+                                ['Un solo comprobante', 'Facturamos la campaña completa con comprobante electrónico válido. Cada creador cobra con el suyo.', 'moneda', 50],
+                                ['Un interlocutor', 'Una persona que conoce tu campaña y responde por ella, de principio a fin.', 'chat', 60],
+                            ],
+                        ],
+                        [
+                            'code' => 'tipos-de-campana', 'layout' => 'cards', 'sort_order' => 50,
+                            'eyebrow' => null, 'title' => 'Tipos de campaña', 'show_in_nav' => true,
+                            'subtitle' => 'Cinco formas de usar lo mismo. Si la tuya no está aquí, cuéntanosla.',
+                            'cta_label' => 'Esto es lo mío', 'cta_url' => '#empezar',
+                            'bloques' => [
+                                ['Lanzamiento', 'Un producto nuevo contado por muchas voces la misma semana.', 'rayo', 10],
+                                ['Prueba de producto', 'Se envía, se prueba y se cuenta la experiencia real, con lo bueno y con lo que no.', 'estrella', 20],
+                                ['Cobertura de local', 'Creadores de la ciudad visitando tu tienda o tu restaurante, con fecha.', 'personas', 30],
+                                ['Contenido para pauta (UGC)', 'Piezas hechas para que las uses en tus anuncios, con los derechos acordados por escrito.', 'camara', 40],
+                                ['Temporada', 'Una campaña repartida en semanas, para no concentrarlo todo en un solo día.', 'reloj', 50],
+                            ],
+                        ],
+                        // 6. Responde la primera objecion real de un gerente de
+                        // marketing: «.y si me ponen a cualquiera?».
+                        [
+                            'code' => 'como-elegimos', 'layout' => 'steps', 'sort_order' => 60,
+                            'eyebrow' => null, 'title' => 'Cómo elegimos a los creadores',
+                            'show_in_nav' => false,
+                            'subtitle' => 'La primera pregunta que hace un gerente de marketing es «¿y si '
+                                .'me ponen a cualquiera?». Esta es la respuesta.',
+                            'bloques' => [
+                                ['Verificamos quién es', 'Identidad comprobada antes de proponerte a nadie. Un perfil sin verificar no entra en una campaña.', null, 10],
+                                ['Verificamos sus cuentas', 'Que la cuenta es suya de verdad, con el método anotado y quién lo comprobó.', null, 20],
+                                ['Miramos sus números', 'Seguidores, interacción y coherencia entre capturas. Un salto raro se marca y lo revisa una persona.', null, 30],
+                                ['Aceptan las condiciones', 'Cada creador acepta unos términos con fecha y versión antes de recibir la primera propuesta.', null, 40],
+                            ],
+                        ],
+                        // 7. Confianza SIN UNA SOLA METRICA (§12). Todo lo que
+                        // dice esta franja se puede comprobar hoy, y la razon
+                        // social sale de la configuracion, no escrita a mano.
+                        [
+                            'code' => 'por-que-confiar', 'layout' => 'cards', 'sort_order' => 70,
+                            'eyebrow' => 'Sin contadores ni logos prestados', 'show_in_nav' => false,
+                            'title' => 'Por qué puedes confiarnos una campaña',
+                            'subtitle' => 'Aquí no vas a encontrar cifras de vanidad ni logos de clientes: '
+                                .'no vamos a inventar los que todavía no tenemos. Lo que sigue se puede '
+                                .'comprobar hoy.',
+                            'bloques' => [
+                                ['Una empresa real', '{{ empresa.razon_social }}, con {{ empresa.documento }} público. No somos una cuenta de redes que gestiona campañas.', 'escudo', 10],
+                                ['Comprobante electrónico válido', 'Facturamos con el comprobante que tu contabilidad necesita. No es un detalle técnico: es si puedes sustentar la campaña o no.', 'documento', 20],
+                                ['Términos publicados y con versión', 'Los nuestros y los de los creadores, fechados y versionados. Cada creador acepta la versión que le tocó.', 'verificado', 30],
+                                ['Evidencia con fecha', 'Cada publicación queda guardada con su captura y su fecha. No la palabra de nadie: el archivo.', 'camara', 40],
+                                ['Cada creador cobra con su comprobante', 'El pago de cada creador sale con su documento. Lo que pagas está sustentado hasta el último eslabón.', 'moneda', 50],
+                                ['Una sola persona', 'Sabes con quién hablas y esa persona sabe en qué va tu campaña sin tener que preguntar.', 'chat', 60],
+                            ],
+                        ],
+                        // 8. Las preguntas van ANTES del formulario: la seccion
+                        // que quita objeciones no puede estar detras del punto
+                        // de conversion. Y la portada de marcas no tenia
+                        // ninguna (`C-4`).
+                        [
+                            'code' => 'preguntas', 'layout' => 'faq', 'sort_order' => 80,
+                            'eyebrow' => null, 'title' => 'Preguntas', 'show_in_nav' => true,
+                            'subtitle' => 'Las que se hacen de verdad antes de decidirse.',
+                            'bloques' => [
+                                ['¿Cuál es el presupuesto mínimo?', 'Depende del número de creadores y del tipo de campaña, no de una tarifa fija. Cuéntanos lo que tienes en mente y te decimos qué alcance da.', null, 10],
+                                ['¿Cuánto tarda una campaña?', 'Desde que cerramos el brief hasta las primeras publicaciones suelen pasar un par de semanas: hay que proponer, acordar, producir y revisar. La fecha exacta la cerramos contigo antes de empezar.', null, 20],
+                                ['¿Puedo elegir a los creadores?', 'Sí. Te proponemos perfiles con sus métricas y su tarifa, y tú decides cuáles entran.', null, 30],
+                                ['¿Y si una publicación no sale?', 'Se detecta, porque las revisamos en vez de darlas por hechas, y se sustituye o se descuenta. Lo que no se publicó no se cobra.', null, 40],
+                                ['¿De quién es el contenido?', 'Los derechos de uso se acuerdan por escrito antes de producir: para qué, dónde y por cuánto tiempo. Sin ese acuerdo el contenido no se usa en pauta.', null, 50],
+                                ['¿Se pide exclusividad a los creadores?', 'Sólo si tu campaña la necesita, y entonces se pacta y se paga como parte del acuerdo. No es la norma.', null, 60],
+                                ['¿Cómo se factura?', 'Una factura por la campaña, con comprobante electrónico válido. Cada creador emite el suyo por su trabajo.', null, 70],
+                                ['¿Solo trabajan en Perú?', 'Hoy operamos desde Perú. El sistema está preparado para otros países de la región, pero si tu campaña es fuera, pregúntanos antes de contar con ello.', null, 80],
+                            ],
+                        ],
+                        // 9. La puerta de los creadores, al final y discreta:
+                        // deriva sin competir con la conversion principal.
+                        [
+                            'code' => 'eres-creador', 'layout' => 'plain', 'sort_order' => 90,
+                            'eyebrow' => null, 'title' => '¿Eres creador?', 'show_in_nav' => false,
+                            'subtitle' => 'Esta puerta es la tuya: postulas una vez y te escribimos cuando '
+                                .'haya una campaña que encaje contigo.',
+                            'cta_label' => 'Ver la puerta de creadores', 'cta_url' => '/creadores',
+                            'bloques' => [],
+                        ],
                     ],
                 ],
                 [
@@ -878,25 +1024,53 @@ final class CimientosSeeder extends Seeder
                     'subheadline' => 'Postula una vez. Cuando haya una campaña que encaje contigo te '
                         .'escribimos con el trabajo y el monto en claro, antes de aceptar nada.',
                     'cta_label' => 'Quiero postular',
+                    'form_heading' => 'Postula una vez y nosotros te escribimos.',
+                    'form_intro' => 'Con esto basta para empezar. Revisamos tu perfil y te contestamos, '
+                        .'encaje o no encaje todavía.',
                     'meta_title' => 'Creadores: trabaja con marcas',
                     'meta_description' => 'Postula para trabajar con marcas en campañas pagadas: sabes qué '
                         .'tienes que hacer y cuánto recibes antes de aceptar.',
-                    'bloques' => [
-                        ['feature', 'Sabes cuánto recibes', 'El monto que ves es el que te queda a ti, con la retención ya descontada.', 10],
-                        ['feature', 'Sin perseguir el pago', 'Cada campaña tiene su plazo, y el pago sale por lote con su comprobante.', 20],
-                        ['feature', 'Tú decides', 'Recibes la propuesta con el trabajo y el monto; aceptas o la rechazas.', 30],
-                        ['step', '1. Postulas', 'Nombre, correo y país. Nada más para empezar.', 40],
-                        ['step', '2. Revisamos tu perfil', 'Tus cuentas y tus métricas.', 50],
-                        ['step', '3. Te llega una propuesta', 'Con el trabajo, las fechas y el monto.', 60],
-                        ['faq', '¿Cuánto tarda?', 'Revisar una postulación toma unos días. Te escribimos igual si no encaja todavía.', 70],
-                        ['faq', '¿Tengo que emitir comprobante?', 'Depende de tu país y de tu situación tributaria. Te lo decimos antes del primer pago.', 80],
+                    'franjas' => [
+                        [
+                            'code' => 'por-que', 'layout' => 'cards', 'sort_order' => 10,
+                            'eyebrow' => 'Qué ganas', 'show_in_nav' => false,
+                            'title' => null, 'subtitle' => null,
+                            'bloques' => [
+                                ['Sabes cuánto recibes', 'El monto que ves es el que te queda a ti, con la retención ya descontada.', 'moneda', 10],
+                                ['Sin perseguir el pago', 'Cada campaña tiene su plazo, y el pago sale por lote con su comprobante.', 'reloj', 20],
+                                ['Tú decides', 'Recibes la propuesta con el trabajo y el monto; aceptas o la rechazas.', 'chat', 30],
+                            ],
+                        ],
+                        [
+                            'code' => 'como-funciona', 'layout' => 'steps', 'sort_order' => 20,
+                            'eyebrow' => null, 'title' => 'Cómo funciona', 'show_in_nav' => true,
+                            'subtitle' => null,
+                            'bloques' => [
+                                ['Postulas', 'Nombre, correo y país. Nada más para empezar.', null, 10],
+                                ['Revisamos tu perfil', 'Tus cuentas y tus métricas.', null, 20],
+                                ['Te llega una propuesta', 'Con el trabajo, las fechas y el monto.', null, 30],
+                            ],
+                        ],
+                        // Las preguntas ANTES del formulario, y esto es una
+                        // correccion: salian detras, o sea la seccion que quita
+                        // objeciones puesta despues del punto de conversion.
+                        // Ahora el orden es un dato y se cambia desde el panel.
+                        [
+                            'code' => 'preguntas', 'layout' => 'faq', 'sort_order' => 30,
+                            'eyebrow' => null, 'title' => 'Preguntas', 'show_in_nav' => true,
+                            'subtitle' => null,
+                            'bloques' => [
+                                ['¿Cuánto tarda?', 'Revisar una postulación toma unos días. Te escribimos igual si no encaja todavía.', null, 10],
+                                ['¿Tengo que emitir comprobante?', 'Depende de tu país y de tu situación tributaria. Te lo decimos antes del primer pago.', null, 20],
+                            ],
+                        ],
                     ],
                 ],
             ];
 
             foreach ($portadas as $portada) {
-                $bloques = $portada['bloques'];
-                unset($portada['bloques']);
+                $franjas = $portada['franjas'];
+                unset($portada['franjas']);
 
                 self::sembrarSiFalta(
                     'landing_pages',
@@ -907,13 +1081,27 @@ final class CimientosSeeder extends Seeder
                 $paginaId = DB::table('landing_pages')
                     ->where('platform_brand_id', $marcaId)->where('code', $portada['code'])->value('id');
 
-                foreach ($bloques as [$tipo, $titulo, $texto, $orden]) {
+                foreach ($franjas as $franja) {
+                    $bloques = $franja['bloques'];
+                    unset($franja['bloques']);
+
                     self::sembrarSiFalta(
-                        'landing_blocks',
-                        ['landing_page_id' => $paginaId, 'heading' => $titulo],
-                        ['kind' => $tipo, 'body' => $texto, 'sort_order' => $orden,
-                            'is_visible' => true, 'updated_at' => $ahora, 'created_at' => $ahora],
+                        'landing_sections',
+                        ['landing_page_id' => $paginaId, 'code' => $franja['code']],
+                        $franja + ['is_visible' => true, 'updated_at' => $ahora, 'created_at' => $ahora],
                     );
+
+                    $seccionId = DB::table('landing_sections')
+                        ->where('landing_page_id', $paginaId)->where('code', $franja['code'])->value('id');
+
+                    foreach ($bloques as [$titulo, $texto, $icono, $orden]) {
+                        self::sembrarSiFalta(
+                            'landing_blocks',
+                            ['landing_section_id' => $seccionId, 'heading' => $titulo],
+                            ['body' => $texto, 'icon' => $icono, 'sort_order' => $orden,
+                                'is_visible' => true, 'updated_at' => $ahora, 'created_at' => $ahora],
+                        );
+                    }
                 }
             }
         }

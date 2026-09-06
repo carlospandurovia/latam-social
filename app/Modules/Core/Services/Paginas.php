@@ -399,7 +399,7 @@ final class Paginas
         // que la sociedad exista. Un marcador que se resuelve no es lo mismo que
         // un marcador que se resuelve BIEN, y esto lo lee un tercero.
         foreach (Reemplazos::valores() as $clave => $valor) {
-            if (mb_stripos($valor, 'por completar') !== false) {
+            if (Reemplazos::esDeFabrica($valor)) {
                 $avisos[] = Aviso::ambar(sprintf(
                     'El dato «%s» todavía dice «%s», que es el valor de partida, y sale así en las '
                     .'páginas publicadas. Se completa en la sociedad operadora.',

@@ -25,7 +25,7 @@
       <div>
         <p class="text-white font-bold text-lg leading-tight">{{ $marca['nombre'] }}</p>
         @if ($marca['lema'])
-          <p class="text-slate-400 text-xs">{{ $marca['lema'] }}</p>
+          <p class="text-slate-300 text-xs">{{ $marca['lema'] }}</p>
         @endif
       </div>
     </div>
@@ -34,11 +34,20 @@
       @yield('contenido')
     </div>
 
-    {{-- 9.17: el pie legal venia escrito aqui con la razon social y el RUC.
+    {{-- L-7: `slate-300` y no `slate-400`. Medido sobre la barra: daba
+         4.05 : 1 y el minimo es 4.5, y esta es la linea que lleva la razon
+         social y el RUC.
+
+         Y queda dicho lo que da por supuesto esta pantalla: **que la barra es
+         oscura**. Lo da por supuesto desde `9.17` --el nombre de la marca sale
+         en blanco-- y el color de la barra es configurable, asi que quien
+         ponga una barra clara se queda sin poder leer nada aqui. `T-96`.
+
+         9.17: el pie legal venia escrito aqui con la razon social y el RUC.
          Ahora sale de la marca, y si no hay ninguno no sale nada: inventar un
          pie legal es peor que no ponerlo. La pantalla de la marca lo avisa. --}}
     @if ($marca['pieLegal'])
-      <p class="mt-6 text-center text-xs text-slate-500">{{ $marca['pieLegal'] }}</p>
+      <p class="mt-6 text-center text-xs text-slate-300">{{ $marca['pieLegal'] }}</p>
     @endif
   </div>
 </div>

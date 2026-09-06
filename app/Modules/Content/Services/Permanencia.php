@@ -195,19 +195,34 @@ final class Permanencia
      * calendario. Y es lo que habilita el pago, así que se hace **hoy** y no
      * cuando alguien se acuerde.
      *
-     * `permanence_until < CURDATE()` y no `<=`: la ventana incluye su último
-     * día entero. Cerrarla el mismo día la recortaría en veinticuatro horas, y
-     * eso es una obligación contractual medida en días.
+     * `permanence_until < hoy` y no `<=`: la ventana incluye su último día
+     * entero. Cerrarla el mismo día la recortaría en veinticuatro horas, y eso
+     * es una obligación contractual medida en días.
+     *
+     * ### `DEC-302`: «hoy» es el de la aplicación, no el del motor
+     *
+     * Esto decía `CURDATE()`, que es la fecha del SERVIDOR DE BASE DE DATOS.
+     * Todo lo demás del proyecto guarda y calcula en UTC (`docs/03 §5`), así
+     * que en cualquier motor cuya sesión no esté en UTC las dos fechas
+     * discrepan durante unas horas de cada día: la ventana se cierra un día
+     * tarde, o se cuenta como abierta un día de más. **No falla nada**; sale
+     * otro número. Y de ese número cuelga habilitar el pago.
+     *
+     * Apareció el 2026-09-06 a las 02:13 UTC corriendo la batería en Lima
+     * (UTC-5): PHP decía 6 de septiembre, el motor decía 5, y la ventana
+     * vencida no cerró. En un contenedor todo-UTC la prueba llevaba semanas en
+     * verde. El reloj del motor no se consulta más.
      */
     public static function cerrarVentanas(): int
     {
         $ahora = now();
+        $hoy = $ahora->toDateString();
 
         /** @var list<int> $ids */
         $ids = DB::table('publications')
             ->where('status', self::VIGILANDO)
             ->whereNotNull('permanence_until')
-            ->whereRaw('permanence_until < CURDATE()')
+            ->where('permanence_until', '<', $hoy)
             ->pluck('id')
             ->map(static fn ($id): int => (int) $id)
             ->all();
@@ -249,10 +264,15 @@ final class Permanencia
     {
         $limite = now()->subDays($dias);
 
+        // El mismo reloj que `cerrarVentanas()`, y por el mismo motivo
+        // (`DEC-302`): con `CURDATE()` esta lista y aquel cierre podían
+        // discrepar sobre qué día es hoy.
+        $hoy = now()->toDateString();
+
         return self::base()
             ->where('pb.status', self::VIGILANDO)
             ->whereNotNull('pb.permanence_until')
-            ->whereRaw('pb.permanence_until >= CURDATE()')
+            ->where('pb.permanence_until', '>=', $hoy)
             ->whereNotExists(function ($sub) use ($limite): void {
                 $sub->select(DB::raw(1))
                     ->from('permanence_checks as c')

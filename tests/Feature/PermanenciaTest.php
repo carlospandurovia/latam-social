@@ -412,6 +412,79 @@ final class PermanenciaTest extends TestCase
     }
 
     /**
+     * El reloj que manda es el de la aplicación (`DEC-302`).
+     *
+     * ### Qué pasó
+     *
+     * `cerrarVentanas()` comparaba `permanence_until` contra `CURDATE()`, o sea
+     * contra la fecha del **servidor de base de datos**. Todo lo demás del
+     * proyecto guarda y calcula en UTC (`docs/03 §5`). En un motor cuya sesión
+     * no está en UTC las dos fechas discrepan unas horas de cada día, y
+     * entonces la ventana se cierra un día tarde o se cuenta abierta un día de
+     * más. Nada falla: sale otro número. Y de ese número cuelga habilitar el
+     * pago.
+     *
+     * Salió el 2026-09-06 a las 02:13 UTC ejecutando la batería en Lima
+     * (UTC-5): PHP decía 6 de septiembre y el motor decía 5.
+     *
+     * ### Por qué son dos pruebas y no una
+     *
+     * Con el defecto dentro, el error sólo se ve si el motor y PHP están en
+     * días distintos, y la zona de la sesión sólo puede mover el reloj entre
+     * -12 y +14 horas. Ninguna de las dos direcciones sirve a todas horas:
+     *
+     * - Con el motor **atrasado** (`-12:00`) su fecha es la víspera de la de
+     *   PHP mientras la hora UTC sea menor que 12, y entonces una ventana
+     *   vencida ayer **no** cierra.
+     * - Con el motor **adelantado** (`+13:00`) su fecha es la de mañana desde
+     *   las 11 UTC, y entonces una ventana que vence hoy cierra **antes de
+     *   tiempo**.
+     *
+     * Las dos franjas se solapan y cubren las 24 horas, así que a cualquier
+     * hora al menos una de las dos pruebas se pone en rojo si alguien vuelve a
+     * preguntarle la fecha al motor. Con el arreglo, las dos pasan siempre.
+     *
+     * `+13:00` y no `+14:00`: el rango de `time_zone` llega a `+14:00` sólo
+     * desde MySQL 8.0.19; antes —y en este motor— es `+13:00`, y pedir más da
+     * un `1298`. Medido el 2026-09-06 contra la base de pruebas.
+     *
+     * Se comprueba que la zona **se aplicó** antes de afirmar nada. Un `SET`
+     * que el motor ignorase dejaría la prueba en verde sin haber probado nada,
+     * que es el modo de fallo de `DEC-300`.
+     */
+    public function test_una_ventana_vencida_cierra_aunque_el_motor_vaya_atrasado(): void
+    {
+        [$publicacion] = $this->vigilada(['permanence_days' => 30], now()->subDays(31)->toDateTimeString());
+
+        DB::statement("SET time_zone = '-12:00'");
+
+        try {
+            $this->assertSame('-12:00', (string) DB::selectOne('SELECT @@session.time_zone AS z')->z);
+            $this->assertSame(1, Permanencia::cerrarVentanas());
+            $this->assertSame('fulfilled', (string) DB::table('publications')
+                ->where('id', $publicacion->id)->value('status'));
+        } finally {
+            DB::statement("SET time_zone = 'SYSTEM'");
+        }
+    }
+
+    public function test_su_ultimo_dia_no_cierra_aunque_el_motor_vaya_adelantado(): void
+    {
+        [$publicacion] = $this->vigilada(['permanence_days' => 30], now()->subDays(30)->toDateTimeString());
+
+        DB::statement("SET time_zone = '+13:00'");
+
+        try {
+            $this->assertSame('+13:00', (string) DB::selectOne('SELECT @@session.time_zone AS z')->z);
+            $this->assertSame(0, Permanencia::cerrarVentanas());
+            $this->assertSame('verified', (string) DB::table('publications')
+                ->where('id', $publicacion->id)->value('status'));
+        } finally {
+            DB::statement("SET time_zone = 'SYSTEM'");
+        }
+    }
+
+    /**
      * Se dice también cuando son cero.
      *
      * «0 ventanas cerradas» en `planificador.log` demuestra que el comando
