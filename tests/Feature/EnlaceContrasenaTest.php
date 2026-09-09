@@ -684,7 +684,12 @@ final class EnlaceContrasenaTest extends TestCase
         $respuesta = $this->actingAs($creador)->get(route('panel'))->assertOk();
 
         $respuesta->assertDontSee('Creadores');
-        $respuesta->assertDontSee('en el esquema');
+        // `D-1` se llevo «en el esquema» a Configuracion, asi que buscarlo aqui
+        // pasaria en verde por el motivo equivocado. Se afirma sobre lo que HOY
+        // ensena la portada interna y no debe ver un creador: los contadores del
+        // negocio, con su nota.
+        $respuesta->assertDontSee('grupos');
+        $respuesta->assertDontSee('centro de control');
         $respuesta->assertSee('no está abierta', false);
     }
 

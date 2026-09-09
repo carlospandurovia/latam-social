@@ -425,6 +425,31 @@ DB_USERNAME=cpuser_mig DB_PASSWORD='...' $PHP artisan migrate --force
 Esto es lo que instala los ~140 disparadores del paso 0.3. Si aquí sale un
 `ERROR 1419`, para: vuelve al 0.3, no sigas con el esquema a medias.
 
+**Y si sale cualquier otro fallo a mitad, tampoco sigas.** Una migración que
+revienta **no se apunta** en la tabla `migrations`, así que para Laravel no ha
+ocurrido aunque medio esquema diga lo contrario, y volver a lanzar `migrate` la
+reintenta desde la primera línea. Las dos herramientas para eso —**ninguna de
+las dos escribe nada sin que se lo pidas**—:
+
+```bash
+# ¿En qué estado quedó? ¿Se puede reparar con rollback, o hay que rehacer reglas?
+$PHP tools/servidor/estado-migracion.php <nombre_de_la_migracion>
+
+# ¿Qué reglas de esa migración quedaron a medias? Con --rehacer, sólo esas.
+$PHP tools/servidor/rehacer-reglas.php <ruta/de/la/migracion.php>
+```
+
+**Terminada la migración, comprueba que el registro y el motor dicen lo mismo:**
+
+```bash
+$PHP tools/servidor/verificar-registro.php
+```
+
+Una conexión que se cae entre el `CREATE TRIGGER` y su anotación deja una regla
+que **se aplica y no está registrada** —o, peor, al revés—, y eso no da ningún
+error: sólo un `schema_constraints` que miente. Con 824 disparadores en
+producción, esto no se ve mirando. Es `T-110`.
+
 Después, las semillas —cimientos del sitio, usuario administrador, plantillas de
 correo y términos base—:
 
@@ -684,6 +709,9 @@ npm ci && npm run build
 php artisan config:clear
 DB_USERNAME=latam_mig DB_PASSWORD=... php artisan migrate --force
 
+# 4b. Lo que la migración dejó: ¿registro y motor dicen lo mismo?
+php tools/servidor/verificar-registro.php
+
 # 5. Cachés
 php artisan config:cache
 php artisan route:cache
@@ -692,6 +720,13 @@ php artisan view:cache
 # 6. Reiniciar los workers para que cojan el código nuevo
 php artisan queue:restart
 ```
+
+**El paso 4b tampoco es opcional, y hasta hoy no estaba aquí.** `§0.8` lo manda
+después de cada `migrate` desde `T-110` —una conexión que se cae entre el
+`CREATE TRIGGER` y su anotación deja una regla que se aplica y no está
+registrada, sin dar ningún error— pero esta lista, que es la que se sigue de
+verdad en cada despliegue, no lo llevaba. Un runbook que se contradice a sí
+mismo enseña la mitad que menos cuesta.
 
 **El paso 6 no es opcional.** Un worker que ya estaba corriendo tiene el código
 viejo en memoria y lo seguirá usando hasta que muera. Con el cron de

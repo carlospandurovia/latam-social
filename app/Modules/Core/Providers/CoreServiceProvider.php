@@ -10,6 +10,7 @@ use App\Modules\Core\Http\Controllers\IntegracionesController;
 use App\Modules\Core\Http\Controllers\TiposDeCambioController;
 use App\Modules\Core\Services\Certificados;
 use App\Modules\Core\Services\Cobertura;
+use App\Modules\Core\Services\Consolidacion;
 use App\Modules\Core\Services\Correlativos;
 use App\Modules\Core\Services\Decolecta;
 use App\Modules\Core\Services\Impuestos;
@@ -19,6 +20,8 @@ use App\Modules\Core\Services\Marca;
 use App\Modules\Core\Services\Paginas;
 use App\Modules\Core\Services\Politica;
 use App\Modules\Core\Services\Reemplazos;
+use App\Modules\Core\Services\Semaforo;
+use App\Modules\Core\Services\Sistema as SistemaServicio;
 use App\Modules\Core\Services\Sitio;
 use App\Modules\Core\Services\Terminos;
 use App\Modules\Core\Services\TraidaDeCambio;
@@ -147,6 +150,11 @@ final class CoreServiceProvider extends ServiceProvider
             // esto lo que creo que es?»-- y separarlos solo garantizaria que
             // uno de los dos se olvide en la siguiente plantilla.
             $vista->with('avisoInstalacion', Instalacion::aviso());
+            // D-1: el nombre del entorno para la etiqueta del encabezado. Se
+            // calcula aqui y no en la plantilla porque una plantilla que llama a
+            // una clase de configuracion es logica de negocio en la vista, y la
+            // etiqueta la lleva TODA pantalla del backoffice.
+            $vista->with('entornoEtiqueta', Instalacion::esProduccion() ? null : Instalacion::nombre());
         });
 
         // L-2a: los datos de la calle, en la plantilla publica. Un compositor y
@@ -302,6 +310,26 @@ final class CoreServiceProvider extends ServiceProvider
 
     private function registrarPreparacion(): void
     {
+        // D-1: informacion del sistema. En «Mantenimiento» y al final a
+        // proposito: no es algo que haya que configurar, es donde se mira contra
+        // que se esta corriendo. Sus avisos son solo los que estan MAL
+        // --utf8mb4, modo estricto, cobertura vacia--; que el motor no aplique
+        // `CHECK` NO es un aviso, es una limitacion asumida y verificada, y
+        // ponerla en ambar para siempre esconderia los ambares que si hay que
+        // mirar (`DEC-282`).
+        Preparacion::area('Sistema', 'config.view', 'sistema.index',
+            static fn (): array => SistemaServicio::avisos(), orden: 90,
+            grupo: Preparacion::MANTENIMIENTO);
+
+        // D-6: los umbrales del semaforo del panel. En «Operacion»: no es
+        // identidad, ni fiscal, ni una conexion, ni un catalogo, es el criterio
+        // con el que el equipo mira su propio trabajo (`DEC-348`). Su aviso es
+        // ambar y nunca rojo --el panel funciona con los valores de partida--
+        // porque `DEC-190` dice que nada de esto puede leerse como un bloqueo.
+        Preparacion::area('Semáforo de campañas', 'campaign.manage', 'umbrales.index',
+            static fn (): array => Semaforo::avisos(), orden: 20,
+            grupo: Preparacion::OPERACION);
+
         Preparacion::area('Marca', 'brand.manage', 'marca.index',
             static fn (): array => Aviso::desdeArrays(Marca::avisos()), orden: 10,
             grupo: Preparacion::IDENTIDAD);
@@ -490,5 +518,14 @@ final class CoreServiceProvider extends ServiceProvider
 
                 return $mirar === null ? [] : [Aviso::ambar($mirar)];
             }, orden: 40, grupo: Preparacion::FISCAL);
+
+        // D-12 -- La moneda en la que el panel suma. Pegada a Tipos de cambio
+        // --orden 45-- porque es la misma conversacion: de donde sale la tasa y
+        // en que moneda se presenta el resultado. Su aviso es ambar mientras
+        // nadie la haya confirmado, y nunca rojo: el panel consolida desde el
+        // primer minuto con el valor de partida (`DEC-190`).
+        Preparacion::area('Moneda de consolidación', 'fx.manage', 'moneda.index',
+            static fn (): array => Consolidacion::avisos(), orden: 45,
+            grupo: Preparacion::FISCAL);
     }
 }

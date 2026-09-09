@@ -8,8 +8,10 @@ use App\Models\User;
 use App\Shared\Auth\Permisos;
 use App\Shared\Crypto\CuentaBancaria;
 use App\Shared\Database\Vigencia;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 /**
@@ -553,6 +555,462 @@ trait ConFixturas
             'created_at' => now(),
             'updated_at' => now(),
         ], $cambios));
+    }
+
+    /**
+     * Una participación de un creador en una campaña (`T-104`).
+     *
+     * ### Por qué hacía falta
+     *
+     * `D-4` dejó dos indicadores —creadores participando y entregables
+     * entregados— **verificados a medias**, porque fabricar esto a mano exige
+     * creador activo, mercado, moneda, base de pacto y las cuatro reglas de
+     * `ck_cc_*` a la vez. Cinco pasos de preparación en cada prueba acaban
+     * comprobando la preparación.
+     *
+     * Lo que este ayudante sabe y no hay que recordar en cada sitio:
+     *
+     * - `ck_cc_accepted`: fuera de los estados previos, **exige** `accepted_at`.
+     *   Es el instante que congela el acuerdo, no un adorno.
+     * - `ck_cc_payee`: `creator` sin tutor, `guardian` con tutor. Media pareja
+     *   no vale.
+     * - `fk_ccr_market_campaign` es COMPUESTA: el mercado tiene que ser de esta
+     *   campaña, no de otra. Por eso se busca el suyo en vez de tomar el primero.
+     *
+     * @param array<string, mixed> $cambios
+     */
+    protected function participacionDe(int $campanaId, ?int $creadorId = null, array $cambios = []): int
+    {
+        $creadorId ??= $this->creadorActivo();
+
+        $mercadoId = DB::table('campaign_markets')->where('campaign_id', $campanaId)->value('id')
+            ?? $this->mercadoDe($campanaId);
+
+        $estado = (string) ($cambios['status'] ?? 'accepted');
+        $previos = ['shortlisted', 'invited', 'declined', 'expired', 'cancelled'];
+
+        return (int) DB::table('campaign_creators')->insertGetId(array_merge([
+            'uuid' => (string) Str::uuid(),
+            'campaign_id' => $campanaId,
+            'creator_id' => $creadorId,
+            'campaign_market_id' => $mercadoId,
+            'status' => $estado,
+            'agreed_amount' => 500,
+            'agreed_basis' => 'gross',
+            'currency_code' => (string) DB::table('campaigns')->where('id', $campanaId)->value('currency_code'),
+            'payee_type' => 'creator',
+            'payment_term_days_snapshot' => 30,
+            'invited_at' => now(),
+            'accepted_at' => in_array($estado, $previos, true) ? null : now(),
+            'declined_at' => $estado === 'declined' ? now() : null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ], $cambios));
+    }
+
+    /**
+     * Un entregable de una participación (`T-104`).
+     *
+     * Dos reglas del esquema que se olvidan siempre y aquí están resueltas:
+     *
+     * - `ck_del_due_futuro`: `due_on` no puede ser anterior a la fecha de
+     *   creación. Para fabricar un entregable **vencido** hay que retrasar
+     *   también `created_at`, no sólo la fecha límite. Sin esto, la prueba de
+     *   «entregables vencidos» falla con un `4025` que no dice eso.
+     * - `uq_del_sequence`: el trío participación + requisito + número es único,
+     *   así que el segundo entregable de la misma pareja necesita otro número.
+     *   Se calcula solo; a mano se olvida a la segunda llamada.
+     *
+     * @param array<string, mixed> $cambios
+     */
+    protected function entregableDe(int $participacionId, array $cambios = []): int
+    {
+        $campanaId = (int) DB::table('campaign_creators')
+            ->where('id', $participacionId)->value('campaign_id');
+
+        $requisitoId = $cambios['campaign_requirement_id']
+            ?? DB::table('campaign_requirements')->where('campaign_id', $campanaId)->value('id')
+            ?? $this->requisitoDe($campanaId);
+
+        $estado = (string) ($cambios['status'] ?? 'pending');
+        $entregados = ['submitted', 'in_review', 'changes_requested', 'approved', 'published', 'verified', 'removed'];
+
+        $creado = $cambios['created_at'] ?? now()->toDateTimeString();
+        $siguiente = 1 + (int) DB::table('deliverables')
+            ->where('campaign_creator_id', $participacionId)
+            ->where('campaign_requirement_id', $requisitoId)
+            ->max('sequence_number');
+
+        return (int) DB::table('deliverables')->insertGetId(array_merge([
+            'uuid' => (string) Str::uuid(),
+            'campaign_creator_id' => $participacionId,
+            'campaign_requirement_id' => $requisitoId,
+            'sequence_number' => $siguiente,
+            'status' => $estado,
+            'revision_rounds_used' => 0,
+            'due_on' => CarbonImmutable::parse((string) $creado)->addDays(7)->toDateString(),
+            'submitted_at' => in_array($estado, $entregados, true) ? $creado : null,
+            'created_at' => $creado,
+            'updated_at' => $creado,
+        ], $cambios));
+    }
+
+    /**
+     * Una factura EMITIDA, con su número salido del libro (`T-115`).
+     *
+     * ### Por qué hacía falta
+     *
+     * `D-8` puso los números del dinero en el panel y los dejó **sin probar**,
+     * porque fabricar una factura emitida es la cadena entera del correlativo:
+     * sociedad emisora, perfil fiscal del cliente, tipo de comprobante del país,
+     * serie, número reservado en el libro (`ck_invoice_numerada`) y los seis
+     * campos congelados. Seis pasos antes de poder afirmar una suma.
+     *
+     * ### Las tres reglas que se olvidan siempre, resueltas aquí
+     *
+     * - **`ck_invoice_numerada`**: emitida exige serie, número **y**
+     *   `document_number_id`. No basta con poner un número a mano: tiene que
+     *   salir del libro, que es lo que permite cruzar el comprobante con él.
+     * - **`tg_invoice_tipo_ins`**: si hay país congelado, el `document_type`
+     *   tiene que existir en el catálogo **de ese país**. Se toma uno real de
+     *   `document_types` en vez de escribir `'invoice'` a mano, que es
+     *   exactamente el enum que `9.12` vino a quitar (`DEC-228`).
+     * - **`ck_invoice_math`** y el veto de `gravado` con impuesto cero: el total
+     *   es subtotal + impuesto, y el impuesto no puede ser 0 en régimen gravado.
+     *
+     * Los campos congelados posteriores a `9.9b` se rellenan **sólo si la
+     * columna existe**: así una migración que añada otro snapshot no rompe cada
+     * prueba de finanzas el día que entre.
+     *
+     * @param array<string, mixed> $cambios
+     */
+    protected function facturaEmitida(int $clienteId, array $cambios = []): int
+    {
+        $sociedadId = $this->entidadLegal();
+        $paisId = (int) DB::table('client_organizations')->where('id', $clienteId)->value('country_id');
+
+        $perfilId = DB::table('client_tax_profiles')
+            ->where('client_organization_id', $clienteId)->value('id')
+            ?? DB::table('client_tax_profiles')->insertGetId([
+                'client_organization_id' => $clienteId,
+                'country_id' => $paisId,
+                'legal_name' => 'Cliente de prueba S.A.C.',
+                'tax_id_type' => 'RUC',
+                'tax_id_number' => '20'.mb_substr((string) time(), -9),
+                // `address_line1` es NOT NULL y sin valor por defecto: la
+                // direccion fiscal sale IMPRESA en el comprobante, asi que el
+                // esquema no admite una factura sin ella.
+                'address_line1' => 'Av. del cliente 456',
+                'city' => 'Lima',
+                'payment_term_days' => 30,
+                'valid_from' => '2020-01-01',
+                'created_at' => now(), 'updated_at' => now(),
+            ]);
+
+        // El tipo sale del catalogo del pais, nunca escrito a mano. Se prefiere
+        // uno cuya serie empiece por `F` --factura-- porque es la unica forma
+        // que este ayudante sabe fabricar; si no lo hubiera, el disparador
+        // `tg_ds_forma_ins` protestaria con su propio mensaje, que se lee mejor
+        // que un fallo de este archivo.
+        $tipo = DB::table('document_types')->where('country_id', $paisId)
+            ->where('is_active', 1)->where('series_pattern', 'like', '^F%')
+            ->orderBy('sort_order')->first()
+            ?? DB::table('document_types')->where('country_id', $paisId)
+                ->where('is_active', 1)->orderBy('sort_order')->first();
+
+        if ($tipo === null) {
+            $this->fail('No hay tipos de comprobante sembrados para ese país. ¿Falta `CimientosSeeder`?');
+        }
+
+        // `^F[A-Z0-9]{3}$`: MAYUSCULAS. Un uuid da hexadecimal en minusculas y
+        // el disparador lo rechaza --costo una vuelta averiguarlo--.
+        $serie = 'F'.mb_strtoupper(mb_substr(md5((string) Str::uuid()), 0, 3));
+
+        $serieId = DB::table('document_series')->insertGetId([
+            'legal_entity_id' => $sociedadId,
+            'document_type_id' => $tipo->id,
+            'series' => $serie,
+            'next_number' => 2,
+            // `ck_ds_env` solo admite `sandbox` y `production`. No hay «test»:
+            // una serie de pruebas ES una serie de sandbox ante la
+            // administracion, y el esquema no deja inventarse un tercer mundo.
+            'environment' => 'sandbox',
+            'is_active' => 1,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        $numero = 1 + (int) DB::table('document_numbers')->where('document_series_id', $serieId)->max('number');
+
+        // Un BORRADOR no gasta numero (`ck_invoice_borrador_sin_numero`), asi
+        // que tampoco se reserva: reservarlo dejaria un correlativo colgado que
+        // la pantalla de series marcaria en rojo, con toda la razon.
+        $esBorrador = ($cambios['status'] ?? 'issued') === 'draft';
+
+        $numeroId = $esBorrador ? null : DB::table('document_numbers')->insertGetId([
+            'document_series_id' => $serieId,
+            'number' => $numero,
+            // Los digitos del correlativo los declara el TIPO, no este archivo.
+            'full_number' => $serie.'-'.str_pad(
+                (string) $numero, (int) ($tipo->number_length ?? 8), '0', STR_PAD_LEFT,
+            ),
+            // Nace RESERVADO, no usado: `ck_dn_usado` exige `entity_id` y la
+            // factura todavia no existe. Es el orden real --reservar, emitir,
+            // marcar usado-- y el fixture lo respeta en vez de saltarselo:
+            // saltarselo seria fabricar un estado que la aplicacion no produce.
+            'status' => 'reserved',
+            'reserved_at' => now(),
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        $emision = $cambios['issue_date'] ?? now()->toDateString();
+
+        $datos = array_merge([
+            'uuid' => (string) Str::uuid(),
+            'legal_entity_id' => $sociedadId,
+            'client_organization_id' => $clienteId,
+            'client_tax_profile_id' => $perfilId,
+            'document_type' => (string) $tipo->code,
+            'series' => $esBorrador ? null : $serie,
+            'number' => $esBorrador ? null : $numero,
+            'document_number_id' => $numeroId,
+            'issue_date' => $emision,
+            'due_date' => CarbonImmutable::parse((string) $emision)->addDays(30)->toDateString(),
+            'currency_code' => 'PEN',
+            'tax_regime' => 'gravado',
+            // 100 + 18 = 118. `ck_invoice_math`, y el impuesto NO puede ser cero
+            // en regimen gravado: es lo que `9.9a` existe para impedir.
+            'subtotal_amount' => 100,
+            'tax_amount' => 18,
+            'total_amount' => 118,
+            'status' => 'issued',
+            // `ck_invoice_issued`: fuera de borrador hay que decir CUANDO se
+            // emitio. Sin fecha de emision un comprobante no existe ante la
+            // administracion, aunque tenga numero.
+            'issued_at' => now(),
+            // `ck_invoice_gravado_con_tasa`: una factura gravada y emitida
+            // lleva la tasa CONGELADA. `DEC-251`: preguntarla otra vez dentro
+            // de tres años obliga a confiar en que nadie toco la vigencia, y la
+            // copia no confia en nadie.
+            'tax_rate_snapshot' => 18,
+            'issuer_legal_name_snapshot' => 'Emisora de prueba S.A.C.',
+            'issuer_tax_id_snapshot' => '20603203896',
+            'issuer_address_snapshot' => 'Av. de prueba 123, Lima',
+            'receiver_legal_name_snapshot' => 'Cliente de prueba S.A.C.',
+            'receiver_tax_id_snapshot' => '20123456789',
+            'receiver_address_snapshot' => 'Av. del cliente 456, Lima',
+            'created_at' => now(), 'updated_at' => now(),
+        ], $cambios);
+
+        // Solo lo que el esquema de HOY tiene. El pais congelado es el que
+        // enciende `tg_invoice_tipo_ins`, asi que se pone de verdad.
+        foreach ([
+            'issuer_country_snapshot' => 'PE',
+            'receiver_country_snapshot' => 'PE',
+        ] as $columna => $valor) {
+            if (Schema::hasColumn('invoices', $columna) && !array_key_exists($columna, $cambios)) {
+                $datos[$columna] = $valor;
+            }
+        }
+
+        // **Nace borrador aunque vaya a acabar emitida.** `tg_iline_solo_borrador`
+        // no deja anadir lineas a una factura que ya salio --anadirlas cambiaria
+        // lo que dice el documento sin tocar el documento-- asi que el fixture
+        // no puede fabricar el estado final de un tirazo: tiene que recorrer el
+        // camino que recorre la aplicacion. Escribir el estado final directo era
+        // justo la clase de atajo que produce un estado que el sistema no sabe
+        // producir (`T-116`).
+        $facturaId = (int) DB::table('invoices')->insertGetId(array_merge($datos, [
+            'status' => 'draft',
+            'series' => null,
+            'number' => null,
+            'document_number_id' => null,
+            'issued_at' => null,
+        ]));
+
+        DB::table('invoice_lines')->insert([
+            'invoice_id' => $facturaId,
+            'line_number' => 1,
+            'description' => 'Servicio de campaña',
+            'quantity' => 1,
+            'unit_price' => $datos['subtotal_amount'],
+            'line_subtotal' => $datos['subtotal_amount'],
+            'tax_rate' => 18,
+            'line_tax' => $datos['tax_amount'],
+            'line_total' => $datos['total_amount'],
+        ]);
+
+        if ($esBorrador) {
+            return $facturaId;
+        }
+
+        // La emision de verdad: `tg_invoice_emision` comprueba aqui que la
+        // factura tiene lineas y que las lineas SUMAN lo que dice la cabecera.
+        // Que este fixture pase por ese disparador es la mitad de su valor.
+        DB::table('invoices')->where('id', $facturaId)->update([
+            'status' => $datos['status'],
+            'series' => $datos['series'],
+            'number' => $datos['number'],
+            'document_number_id' => $datos['document_number_id'],
+            'issued_at' => $datos['issued_at'],
+            'updated_at' => now(),
+        ]);
+
+        // Y ahora si: el numero pasa a usado y dice A QUE documento fue. Sin
+        // esto, `document_numbers` no podria cruzarse con el libro, que es para
+        // lo que existe (`DEC-230`).
+        DB::table('document_numbers')->where('id', $numeroId)->update([
+            'status' => 'used',
+            'used_at' => now(),
+            'entity_type' => 'invoice',
+            'entity_id' => $facturaId,
+            'updated_at' => now(),
+        ]);
+
+        return $facturaId;
+    }
+
+    /**
+     * Un cobro contra una factura.
+     *
+     * @param array<string, mixed> $cambios
+     */
+    protected function cobroDe(int $facturaId, float $importe, array $cambios = []): int
+    {
+        $factura = DB::table('invoices')->where('id', $facturaId)->first();
+
+        return (int) DB::table('payments')->insertGetId(array_merge([
+            'uuid' => (string) Str::uuid(),
+            'invoice_id' => $facturaId,
+            'amount' => $importe,
+            // La moneda del cobro es la de SU factura: un cobro en otra moneda
+            // es una conversion, y eso no lo decide un fixture.
+            'currency_code' => (string) ($factura->currency_code ?? 'PEN'),
+            'method' => 'transfer',
+            'received_on' => now()->toDateString(),
+            'created_at' => now(),
+        ], $cambios));
+    }
+
+    /**
+     * Una publicación de un entregable, en el estado que se pida (`D-14`).
+     *
+     * Escribe la fila directamente en vez de recorrer entregar → aprobar →
+     * reportar → verificar, que es lo que hace `PermanenciaTest`: para probar el
+     * ciclo de vida hay que recorrerlo, pero para CONTAR publicaciones por fecha
+     * el camino largo sólo añade minutos y acoplamiento.
+     *
+     * Las reglas que el esquema exige y que se olvidan siempre, resueltas aquí:
+     *
+     * - `ck_pub_published_no_futuro`: `published_at` no puede ser posterior a
+     *   `created_at`. Para fabricar una publicación vieja hay que retrasar las
+     *   **dos**.
+     * - `ck_pub_verified`: verificada exige verificador Y fecha.
+     * - `ck_pub_removed`: caída exige cuándo, **quién lo firma** y un motivo de
+     *   al menos cinco caracteres.
+     * - `ck_pub_fulfilled`: cumplida exige `fulfilled_at` y `permanence_until`.
+     * - `ck_pub_permanence`: `permanence_until` sólo existe fuera de `reported`.
+     * - `uq_pub_fingerprint`: única entre las vivas, así que la huella varía en
+     *   cada llamada. `viva_gate` es una columna **generada**: no se escribe.
+     * - `tg_pub_version_aprobada`: **sólo se publica lo aprobado, y la versión
+     *   aprobada**. La publicación apunta a una versión concreta y esa versión
+     *   tiene que ser la que el entregable tiene aprobada, así que el ayudante
+     *   fabrica la cadena entera --versión, aprobación, puntero-- en el orden
+     *   real. Y el orden importa: `tg_dv_entregable_abierto` no deja crear una
+     *   versión de un entregable YA aprobado, así que primero la versión y
+     *   después la aprobación, nunca al revés.
+     *
+     * @param array<string, mixed> $cambios
+     */
+    protected function publicacionDe(int $entregableId, array $cambios = []): int
+    {
+        $estado = (string) ($cambios['status'] ?? 'verified');
+        $cuando = $cambios['published_at'] ?? now()->subDays(3);
+        $verificador = $cambios['verified_by_user_id']
+            ?? (int) $this->usuarioCon('content_reviewer')->id;
+
+        $fila = [
+            'uuid' => (string) Str::uuid(),
+            'deliverable_id' => $entregableId,
+            'deliverable_version_id' => $this->versionAprobadaDe($entregableId),
+            'platform_id' => (int) DB::table('platforms')->orderBy('id')->value('id'),
+            'url' => 'https://instagram.com/p/'.mb_substr((string) Str::uuid(), 0, 11),
+            'url_fingerprint' => hash('sha256', (string) Str::uuid()),
+            'published_at' => $cuando,
+            'status' => $estado,
+            // `created_at` NO puede ser anterior a `published_at`.
+            'created_at' => $cuando,
+            'updated_at' => now(),
+        ];
+
+        if (in_array($estado, ['verified', 'removed', 'fulfilled'], true)) {
+            $fila['verified_at'] = $cambios['verified_at'] ?? $cuando;
+            $fila['verified_by_user_id'] = $verificador;
+            $fila['permanence_until'] = $cambios['permanence_until']
+                ?? CarbonImmutable::parse((string) $cuando)->addDays(30)->toDateString();
+        }
+
+        if ($estado === 'removed') {
+            $fila['removed_at'] = $cambios['removed_at'] ?? now();
+            $fila['removed_by_user_id'] = $verificador;
+            $fila['removed_reason'] = $cambios['removed_reason'] ?? 'El post ya no está en la cuenta';
+        }
+
+        if ($estado === 'fulfilled') {
+            $fila['fulfilled_at'] = $cambios['fulfilled_at'] ?? now();
+        }
+
+        return (int) DB::table('publications')->insertGetId(array_merge($fila, $cambios));
+    }
+
+    /**
+     * La versión aprobada de un entregable, fabricándola si hace falta.
+     *
+     * `tg_pub_version_aprobada` exige que el entregable esté aprobado Y que su
+     * puntero señale a la versión que se publica. `ck_del_approved_version`
+     * exige que aprobación y puntero vayan juntos, `ck_del_approved` y
+     * `ck_del_submitted` que haya entrega antes que aprobación, y
+     * `ck_del_aprobador` que se diga **quién** aprobó. Las cinco reglas dicen lo
+     * mismo desde cinco sitios: **no se publica lo que nadie aprobó**, y
+     * «nadie» incluye a un aprobador sin nombre.
+     */
+    private function versionAprobadaDe(int $entregableId): int
+    {
+        $entregable = DB::table('deliverables')->where('id', $entregableId)->first();
+
+        if ($entregable === null) {
+            throw new \RuntimeException("No existe el entregable {$entregableId}.");
+        }
+
+        if ($entregable->approved_version_id !== null) {
+            return (int) $entregable->approved_version_id;
+        }
+
+        // La version PRIMERO: con el entregable ya aprobado,
+        // `tg_dv_entregable_abierto` la rechazaria.
+        $versionId = (int) DB::table('deliverable_versions')->insertGetId([
+            'uuid' => (string) Str::uuid(),
+            'deliverable_id' => $entregableId,
+            'version_number' => 1 + (int) DB::table('deliverable_versions')
+                ->where('deliverable_id', $entregableId)->max('version_number'),
+            // `ck_dv_content` pide archivo o enlace, y `ck_dv_url_https` que sea
+            // https: un entregable sin nada que mirar no es un entregable.
+            'external_url' => 'https://entregas.example/'.mb_substr((string) Str::uuid(), 0, 8),
+            'submitted_at' => $entregable->submitted_at ?? now(),
+        ]);
+
+        DB::table('deliverables')->where('id', $entregableId)->update([
+            'status' => 'approved',
+            // `ck_del_submitted`: aprobado exige CUANDO se entrego.
+            'submitted_at' => $entregable->submitted_at ?? now(),
+            'approved_at' => now(),
+            // `ck_del_aprobador`: y QUIEN lo aprobo. Un entregable aprobado por
+            // nadie es el que no se puede defender cuando el cliente pregunta.
+            'approved_by_user_id' => (int) $this->usuarioCon('content_reviewer')->id,
+            'approved_version_id' => $versionId,
+            'updated_at' => now(),
+        ]);
+
+        return $versionId;
     }
 
     // ------------------------------------------------------------------ apoyo

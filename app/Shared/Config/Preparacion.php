@@ -76,6 +76,36 @@ final class Preparacion
 
     public const CATALOGOS = 'Catálogos';
 
+    /**
+     * Cómo se comporta la plataforma en el día a día (D-11).
+     *
+     * Aquí van los criterios con los que el equipo mira su propio trabajo: los
+     * umbrales del semáforo del panel, y lo que venga detrás de la misma
+     * familia. No es identidad, no es fiscal, no es una conexión y no es un
+     * catálogo, y hasta `D-11` eso bastaba para dejarlo en «Otros» --que es
+     * justo lo que `NavegacionTest` no consiente: estar en «Otros» es no haber
+     * decidido dónde va, y la decisión era que faltaba el grupo, no que sobrara
+     * la prueba (`DEC-348`).
+     */
+    public const OPERACION = 'Operación';
+
+    /**
+     * Contra qué se está corriendo (D-11).
+     *
+     * No se configura nada: se mira. Motor, juego de caracteres, modo estricto,
+     * reglas anotadas. Va al final porque es lo que se abre el día que algo va
+     * mal, no el día que se pone en marcha la instalación.
+     */
+    public const MANTENIMIENTO = 'Mantenimiento';
+
+    /**
+     * El cajón de sastre.
+     *
+     * Sigue existiendo por una sola razón: `area()` manda aquí a un grupo que no
+     * existe, y un área invisible por una errata sería peor que una mal
+     * colocada. Pero **ningún área debería declararse en él a propósito**, y hay
+     * una prueba que lo vigila.
+     */
     public const OTROS = 'Otros';
 
     /** En qué orden salen los grupos. Lo que se toca el primer día, arriba. */
@@ -84,6 +114,8 @@ final class Preparacion
         self::FISCAL => 20,
         self::CONEXIONES => 30,
         self::CATALOGOS => 40,
+        self::OPERACION => 50,
+        self::MANTENIMIENTO => 60,
         self::OTROS => 90,
     ];
 

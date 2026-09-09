@@ -225,11 +225,24 @@ final class ConfiguracionTest extends TestCase
             // roja sola, que es exactamente para lo que existe.
             // Y decima: `L-2b` anade «Paginas» --la politica de privacidad, los
             // terminos y las que se quieran--. Vuelve a ponerse roja sola.
+            //
+            // Undecima y duodecima, las DOS a la vez y ahi esta la leccion:
+            // `D-1` anadio «Sistema» y `D-6` «Semaforo de campanas», y esta
+            // prueba llevaba roja desde la primera **sin que nadie lo viera**,
+            // porque durante seis iteraciones solo se corrieron suites
+            // filtradas (`--filter=ResumenTest|AlertasTest|…`). Un cable trampa
+            // que nadie ejecuta no avisa de nada: el filtro es comodo para
+            // iterar y **no sustituye a la bateria antes de cerrar** (`DEC-345`).
             ['Catálogos', 'Correo', 'Creadores', 'Entidades legales', 'Impuestos',
                 // «Páginas» va DESPUES de «Portada pública»: la lista se ordena
                 // por bytes y la «á» pesa mas que cualquier letra sin tilde.
-                'Integraciones', 'Marca', 'Política de precios', 'Portada pública', 'Páginas',
-                'Sitio público', 'Tipos de cambio', 'Términos'],
+                // «Moneda de consolidación» entre «Marca» y «Política»: «Ma» <
+                // «Mo» < «Po».
+                'Integraciones', 'Marca', 'Moneda de consolidación',
+                'Política de precios', 'Portada pública', 'Páginas',
+                // Y «Semáforo» antes que «Sistema» --«Se» < «Si»--, «Sistema»
+                // antes que «Sitio» --«Sis» < «Sit»--, por el mismo orden de bytes.
+                'Semáforo de campañas', 'Sistema', 'Sitio público', 'Tipos de cambio', 'Términos'],
             Preparacion::areasRegistradas(),
         );
     }

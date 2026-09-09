@@ -164,7 +164,9 @@ final class NavegacionTest extends TestCase
 
         $conocidos = [
             Preparacion::IDENTIDAD, Preparacion::FISCAL,
-            Preparacion::CONEXIONES, Preparacion::CATALOGOS, Preparacion::OTROS,
+            Preparacion::CONEXIONES, Preparacion::CATALOGOS,
+            Preparacion::OPERACION, Preparacion::MANTENIMIENTO,
+            Preparacion::OTROS,
         ];
 
         foreach ($revision as $area) {
@@ -188,7 +190,8 @@ final class NavegacionTest extends TestCase
 
         $this->assertSame(
             [Preparacion::IDENTIDAD, Preparacion::FISCAL,
-                Preparacion::CONEXIONES, Preparacion::CATALOGOS],
+                Preparacion::CONEXIONES, Preparacion::CATALOGOS,
+                Preparacion::OPERACION, Preparacion::MANTENIMIENTO],
             array_column($grupos, 'grupo'),
         );
     }

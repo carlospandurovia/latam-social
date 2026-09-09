@@ -254,6 +254,17 @@ def variables_que_usa_la_plantilla(ruta):
     for m in re.finditer(r"\bfn\s*\((.*?)\)|\bfunction\s*\((.*?)\)", texto):
         for v in re.findall(r"\$([A-Za-z_]\w*)", (m.group(1) or '') + (m.group(2) or '')):
             definidas.add(v)
+    # @for ($i = count($kpis); $i < 8; $i++) -- la variable de control la
+    # declara el propio bucle. Sin esto `$i` parecia una variable que el
+    # controlador no pasa: la misma clase de acusacion falsa que la de los
+    # `foreach` dentro de un `@php`, y el mismo motivo para arreglarla. Un
+    # verificador que acusa en falso se acaba ignorando (`DEC-301`).
+    #
+    # `@for\s*\(` no pisa a `@foreach`: detras de `@for` viene `each`, no un
+    # parentesis.
+    for m in re.finditer(r"@for\s*\((.*?);", texto, re.S):
+        for v in re.findall(r"\$([A-Za-z_]\w*)\s*=", m.group(1)):
+            definidas.add(v)
     # @foreach sobre pares: `as $k => $v` ya cubierto arriba
 
     usadas = {}

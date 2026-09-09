@@ -2,6 +2,77 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 
+## [Fase 10 · El panel como centro de control] — 2026-09-09
+
+Catorce iteraciones (`D-1` … `D-14`) que convierten una pantalla con tres
+contadores en el sitio donde se mira la operación. La regla que las gobierna a
+todas es la misma: **cada bloque enseña lo que puede medir y dice con palabras
+lo que no**, y ningún número sale sin que se pueda explicar de dónde viene.
+
+### Añadido
+
+- **Armazón del panel**: selector de periodo, cuatro filtros —país, sociedad,
+  cliente, campaña— y un contrato de datos común. Los desplegables sólo ofrecen
+  lo que existe.
+- **«Requiere atención»**: lo pendiente HOY, sin recortar por periodo. Una alerta
+  recortada a «últimos 30 días» esconde justo lo que más urge (`DEC-311`).
+- **Indicadores de operación, comercial y red de creadores**, cada uno diciendo
+  si mide **flujo** o **existencias** en su tooltip (`DEC-313`).
+- **Estado de campañas y embudo operativo**. El embudo **no calcula porcentajes
+  entre peldaños**: cada uno cuenta su propia unidad, y dividir publicaciones
+  entre campañas daría un número con pinta de tasa y ningún significado
+  (`DEC-317`).
+- **Tabla de seguimiento con semáforo** y sus tres umbrales **configurables desde
+  el admin** (`tracking_thresholds`, `DEC-319`). Cada fila lleva el motivo
+  escrito: un semáforo sin motivo es un adorno.
+- **Bloque financiero** por moneda —facturado, cobrado, por cobrar y pagado a
+  creadores— detrás de `finance.view`, con las sumas probadas (`T-115`).
+- **Moneda de consolidación configurable** (`consolidation_settings`,
+  `DEC-350`). Nace sembrada con `PEN` **sin confirmar**: el panel consolida
+  desde el primer minuto y la configuración avisa en ámbar hasta que alguien lo
+  confirme. La instalación que facture en México cambia un desplegable.
+- **Dos lados de tasa, no uno** (`DEC-351`): lo que entra al tipo de compra y lo
+  que sale al de venta. Con un solo lado el total sale plausible y equivocado
+  siempre en una de las dos direcciones.
+- **Margen del periodo** detrás de `campaign.view_margin` —que no tiene quien
+  lleva campañas—, con las tres cifras convertidas por separado (`DEC-354`).
+- **Publicaciones y permanencia** (`DEC-356`): registradas, verificadas, caídas,
+  y el cumplimiento medido sobre **ventanas cerradas**.
+- **Actividad reciente** detrás de `audit.view`, sin el detalle de los cambios:
+  ese contenido tiene su pantalla, su permiso y su redacción (`DEC-347`).
+- **Configuración → Sistema**: motor, juego de caracteres, modo estricto y
+  reglas anotadas, fuera del panel de negocio.
+
+### Cambiado
+
+- Los grupos de configuración dejan de tener un cajón de sastre: **«Otros» era
+  la casilla de no haber decidido**, y ahora existen «Operación» y
+  «Mantenimiento» (`DEC-348`).
+- El bloque financiero pasa de «no hay total consolidado» a **tenerlo**, sin
+  perder el desglose por moneda: el total va encima, no en lugar de.
+
+### Arreglado
+
+- 🔴 **Un total consolidado no sale nunca de menos en silencio** (`DEC-352`). Si
+  una moneda no tiene tasa, su importe no se suma, el total se marca parcial y
+  se dice cuánto quedó fuera, en qué moneda y por qué.
+- Ningún indicador **inventa un cero**: sin datos hay un guion. «No hay
+  importes» y «hay cero soles» no son lo mismo.
+- Ningún porcentaje sale cuando el numerador y el denominador hablan de
+  conjuntos distintos: el del margen se niega tres veces diciendo cuál
+  (`DEC-355`), y el de permanencia no existe sin ventanas cerradas.
+- Los bloques con permiso **no se consultan** cuando falta el permiso, no sólo
+  no se pintan: un `@can` sobre datos ya traídos es una fuga esperando a que
+  alguien borre el `@can`.
+
+### Pendiente
+
+- **Rendimiento de campañas** —alcance, impresiones, interacciones— sigue
+  diferido: no hay fuente, y necesita las APIs de cada red con el consentimiento
+  del creador. Lo que sí se podía medir entró en `D-14`.
+- El esquema de referencia de `tools/sql/` no tiene las tablas nuevas y nueve
+  verificadores leen de ahí (`T-119`).
+
 ## [9.17h · La fuente de tipos de cambio deja de tener caja fuerte propia] — 2026-09-01
 
 La última de las tres que el negocio pidió mover a la base. Con ella, **ningún

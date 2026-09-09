@@ -143,6 +143,35 @@
       @hasSection('subtitulo')
         <span class="ml-3 text-sm text-slate-500">@yield('subtitulo')</span>
       @endif
+
+      {{-- D-1: en que maquina estas, sin ocupar el panel. Antes esto era una
+           franja ambar del ancho de la pantalla en TODAS las pantallas del
+           backoffice, y una franja que sale siempre deja de leerse. Aqui esta
+           igual de presente y no le quita sitio a lo que importa.
+
+           La franja ROJA no se toca y sigue mas abajo: «la barrera de entorno
+           esta abierta» significa que esta instalacion puede mandar cosas de
+           verdad a servicios de produccion, y eso tiene que interrumpir. --}}
+      @if (! empty($entornoEtiqueta))
+        @can('config.view')
+          <a href="{{ route('sistema.index') }}"
+             class="ml-auto inline-flex items-center gap-1.5 rounded-full border border-amber-300
+                    bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-800 transition
+                    hover:bg-amber-100
+                    focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2"
+             title="Esta instalación no es la de producción. Nada sale a servicios reales.">
+            <span class="inline-block h-1.5 w-1.5 rounded-full bg-amber-500"></span>
+            Entorno {{ $entornoEtiqueta }}
+          </a>
+        @else
+          <span class="ml-auto inline-flex items-center gap-1.5 rounded-full border border-amber-300
+                       bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-800"
+                title="Esta instalación no es la de producción. Nada sale a servicios reales.">
+            <span class="inline-block h-1.5 w-1.5 rounded-full bg-amber-500"></span>
+            Entorno {{ $entornoEtiqueta }}
+          </span>
+        @endcan
+      @endif
     </header>
 
     {{-- 9.19: mientras un creador no acepte los términos vigentes, la franja
@@ -200,16 +229,14 @@
       {{-- 9.22a: en que maquina se esta. Va DESPUES del aviso de esquema
            porque «falta migrar» rompe pantallas y esto no, y antes de todo lo
            demas porque cambia el significado de cualquier boton de la pagina. --}}
-      @if (! empty($avisoInstalacion))
-        <div class="mb-6 rounded-lg border px-4 py-3 text-sm
-          {{ $avisoInstalacion->nivel === 'rojo'
-             ? 'border-rose-300 bg-rose-50 text-rose-900'
-             : 'border-amber-300 bg-amber-50 text-amber-900' }}">
-          <p class="font-semibold">
-            {{ $avisoInstalacion->nivel === 'rojo'
-               ? 'La barrera de entorno está abierta'
-               : 'Ésta no es la instalación de producción' }}
-          </p>
+      {{-- D-1: solo la ROJA. «Esta no es produccion» pasa a ser la etiqueta del
+           encabezado: es permanente, y lo permanente no puede ocupar una franja.
+           Esto otro no es permanente ni normal --alguien abrio a mano la barrera
+           que impide mandar comprobantes de verdad desde una maquina que no es
+           produccion-- y tiene que verse antes que nada. --}}
+      @if (! empty($avisoInstalacion) && $avisoInstalacion->nivel === 'rojo')
+        <div class="mb-6 rounded-lg border border-rose-300 bg-rose-50 px-4 py-3 text-sm text-rose-900">
+          <p class="font-semibold">La barrera de entorno está abierta</p>
           <p class="mt-1">{{ $avisoInstalacion->texto }}</p>
         </div>
       @endif

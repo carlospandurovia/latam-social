@@ -30,15 +30,18 @@ use App\Modules\Core\Http\Controllers\ImpuestosController;
 use App\Modules\Core\Http\Controllers\IntegracionesController;
 use App\Modules\Core\Http\Controllers\LandingController;
 use App\Modules\Core\Http\Controllers\MarcaController;
+use App\Modules\Core\Http\Controllers\MonedaController;
 use App\Modules\Core\Http\Controllers\PaginasController;
 use App\Modules\Core\Http\Controllers\PanelController;
 use App\Modules\Core\Http\Controllers\PoliticaController;
 use App\Modules\Core\Http\Controllers\PortadaController;
 use App\Modules\Core\Http\Controllers\RastreoController;
 use App\Modules\Core\Http\Controllers\SeriesController;
+use App\Modules\Core\Http\Controllers\SistemaController;
 use App\Modules\Core\Http\Controllers\SitioController;
 use App\Modules\Core\Http\Controllers\TerminosController;
 use App\Modules\Core\Http\Controllers\TiposDeCambioController;
+use App\Modules\Core\Http\Controllers\UmbralesController;
 use App\Modules\Creator\Http\Controllers\ActivacionController;
 use App\Modules\Creator\Http\Controllers\CreadoresController;
 use App\Modules\Creator\Http\Controllers\MediosPagoController;
@@ -844,6 +847,18 @@ Route::middleware('auth')->prefix('backoffice')->group(function (): void {
         ->middleware('permiso:config.view')
         ->name('configuracion');
 
+    // D-1 -- Informacion del sistema. Aqui vive todo lo que el panel ensenaba y
+    // no era una pregunta operativa: el motor, como estan impuestas las reglas,
+    // el tamano del esquema y que sociedad factura en cada pais.
+    //
+    // Mismo permiso que la configuracion y no uno propio: quien puede ver que
+    // falta por configurar puede ver contra que esta corriendo. Un permiso mas
+    // para una pantalla de solo lectura seria una casilla mas que administrar
+    // sin nada que proteger que no proteja ya `config.view`.
+    Route::get('/sistema', SistemaController::class)
+        ->middleware('permiso:config.view')
+        ->name('sistema.index');
+
     // 9.19 -- Los terminos, desde el lado del creador. SIN `permiso:`, y es
     // deliberado: es la pantalla a la que lleva el muro, y la unica que puede
     // abrir quien ya no puede abrir nada mas. Ponerle un permiso dejaria sin
@@ -1145,6 +1160,29 @@ Route::middleware('auth')->prefix('backoffice')->group(function (): void {
     Route::post('/politica', [PoliticaController::class, 'store'])
         ->middleware('permiso:pricing.manage')
         ->name('politica.store');
+
+    // D-6 -- Los umbrales del semaforo del panel. Detras de `campaign.manage`
+    // y no de `config.view`: cuando una campana va mal lo decide quien lleva
+    // campanas, no quien configura la instalacion. Y son configuracion y no
+    // constantes porque `DEC-190` no admite otra lectura.
+    Route::get('/umbrales', [UmbralesController::class, 'index'])
+        ->middleware('permiso:campaign.manage')
+        ->name('umbrales.index');
+
+    Route::put('/umbrales', [UmbralesController::class, 'update'])
+        ->middleware('permiso:campaign.manage')
+        ->name('umbrales.update');
+
+    // D-12 -- La moneda en la que el panel presenta los totales. Mismo permiso
+    // que los tipos de cambio --`fx.manage`, que tienen `admin` y `finance`--
+    // porque quien decide de donde sale la tasa decide en que moneda se suma.
+    Route::get('/moneda', [MonedaController::class, 'index'])
+        ->middleware('permiso:fx.manage')
+        ->name('moneda.index');
+
+    Route::put('/moneda', [MonedaController::class, 'update'])
+        ->middleware('permiso:fx.manage')
+        ->name('moneda.update');
 
     // 9.17 -- La identidad de la plataforma. Permiso PROPIO y no
     // `legal_entity.manage`: quien da de alta sociedades no tiene por que poder

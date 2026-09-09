@@ -260,20 +260,33 @@ final class BarreraDeEntornoTest extends TestCase
         $respuesta->assertDontSee('Mandar a la administración', false);
     }
 
-    /** Y la franja de la instalación sale en todas las pantallas del panel. */
-    public function test_la_franja_dice_en_que_maquina_se_esta(): void
+    /**
+     * En qué máquina se está sale en todas las pantallas del panel.
+     *
+     * `D-1` cambió la FORMA y no el fondo: era una franja del ancho de la
+     * pantalla y ahora es una etiqueta en el encabezado. Sigue estando en todas,
+     * que es lo que esta prueba cuida; ocupar media pantalla con algo permanente
+     * era lo que había que quitar.
+     */
+    public function test_el_encabezado_dice_en_que_maquina_se_esta(): void
     {
         config(['instalacion.entorno' => 'staging']);
 
         $this->actingAs($this->usuarioCon('admin'))
             ->get(route('facturas.index'))
             ->assertOk()
-            ->assertSee('Ésta no es la instalación de producción', false)
-            ->assertSee('Preproducción', false);
+            ->assertSee('Entorno Preproducción', false);
     }
 
-    /** En producción no hay franja: un aviso que se ve siempre deja de leerse. */
-    public function test_en_produccion_no_hay_franja(): void
+    /**
+     * En producción no hay etiqueta: un aviso que se ve siempre deja de leerse.
+     *
+     * La afirmación es sobre **la etiqueta que hoy existe**, no sobre el texto
+     * de la franja vieja. Buscar el texto viejo pasaría en verde por el motivo
+     * equivocado —ya no está en ninguna parte— y dejaría de comprobar nada el
+     * día en que alguien devuelva la etiqueta a producción (`DEC-300`).
+     */
+    public function test_en_produccion_no_hay_etiqueta_de_entorno(): void
     {
         config(['instalacion.entorno' => 'production']);
 
@@ -282,7 +295,7 @@ final class BarreraDeEntornoTest extends TestCase
         $this->actingAs($this->usuarioCon('admin'))
             ->get(route('facturas.index'))
             ->assertOk()
-            ->assertDontSee('Ésta no es la instalación de producción', false);
+            ->assertDontSee('Entorno Producción', false);
     }
 
     /** La anulación abierta pone la franja en ROJO: la barrera está levantada. */

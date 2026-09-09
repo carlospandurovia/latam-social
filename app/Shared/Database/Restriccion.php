@@ -42,6 +42,23 @@ final class Restriccion
     /** Cache por proceso de la sonda del motor. */
     private static ?bool $motorAplicaCheck = null;
 
+    /**
+     * Si `schema_constraints` ya existe. **Solo se recuerda el `true`.**
+     *
+     * `hayRegistro()` preguntaba a `information_schema` **una vez por cada
+     * regla**, y hay unas 370 en el esquema: 370 consultas al catalogo en cada
+     * `migrate` completo, todas con la misma respuesta. En un motor local no se
+     * nota; contra un servidor compartido --donde `information_schema` es
+     * grande y lento-- es la mitad del tiempo de una migracion.
+     *
+     * El `false` NO se recuerda a proposito: la tabla la crea la primera
+     * migracion del esquema, asi que hay un rato al principio en que la
+     * respuesta correcta es «todavia no» y guardarla dejaria SIN REGISTRAR
+     * todas las reglas de esa misma corrida. Una tabla que existe no deja de
+     * existir a mitad de una migracion; una que no existe, aparece.
+     */
+    private static bool $hayRegistro = false;
+
     /** Para las pruebas: fuerza un mecanismo concreto. */
     private static ?string $mecanismoForzado = null;
 
@@ -289,11 +306,30 @@ final class Restriccion
         return self::motorAplicaCheck() ? self::MECANISMO_CHECK : self::MECANISMO_TRIGGER;
     }
 
+    /**
+     * Olvida lo memorizado: el mecanismo del motor y si existe el registro.
+     *
+     * La llaman las pruebas en cada `setUp`. El motivo es concreto: `hayRegistro()`
+     * recuerda que `schema_constraints` existe, y `RefreshDatabase` empieza por un
+     * `migrate:fresh` que **suelta todas las tablas**. Hoy eso ocurre una sola vez
+     * por proceso y el orden sale bien por casualidad; manana alguien escribe una
+     * prueba que rehace el esquema y las reglas de esa corrida dejarian de
+     * registrarse **sin dar ningun error** --se veria como un `schema_constraints`
+     * a medias tres semanas despues--. Un `olvidar()` en `setUp` cuesta nada y
+     * quita la casualidad de en medio.
+     */
+    public static function olvidar(): void
+    {
+        self::$motorAplicaCheck = null;
+        self::$hayRegistro = false;
+    }
+
     /** Solo para pruebas: obliga a un mecanismo. Pasar null restaura la deteccion. */
     public static function forzarMecanismo(?string $mecanismo): void
     {
         self::$mecanismoForzado = $mecanismo;
         self::$motorAplicaCheck = null;
+        self::$hayRegistro = false;
     }
 
     /**
@@ -378,6 +414,10 @@ final class Restriccion
 
     private static function hayRegistro(): bool
     {
-        return DB::getSchemaBuilder()->hasTable('schema_constraints');
+        if (self::$hayRegistro) {
+            return true;
+        }
+
+        return self::$hayRegistro = DB::getSchemaBuilder()->hasTable('schema_constraints');
     }
 }
