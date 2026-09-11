@@ -162,9 +162,43 @@ final class CertificadosTest extends TestCase
     public function test_la_contrasena_equivocada_se_dice_con_palabras(): void
     {
         $this->expectException(RuntimeException::class);
-        $this->expectExceptionMessageMatches('/contrasena.*no es correcta/i');
+        $this->expectExceptionMessageMatches('/contrase.a.*no es correcta/iu');
 
         Certificados::cargar($this->sociedadId, 'production', $this->pfx(), 'otra', $this->autorId);
+    }
+
+    /**
+     * **Sin escribir ninguna contraseña, el mensaje NO puede ser «no es
+     * correcta»**: quien no tecleó nada lee eso como que la tecleó mal.
+     *
+     * OpenSSL da el mismo `mac verify failure` en los dos casos, así que la
+     * diferencia no la puede poner él: la pone haber preguntado si se escribió
+     * algo. Salió de producción, cargando un `.pfx` de prueba de SUNAT.
+     */
+    public function test_sin_contrasena_el_mensaje_dice_que_el_archivo_pide_una(): void
+    {
+        try {
+            Certificados::cargar($this->sociedadId, 'production', $this->pfx(), null, $this->autorId);
+            $this->fail('Un .pfx con contraseña no debería abrirse sin ella.');
+        } catch (RuntimeException $e) {
+            $this->assertStringContainsString('SÍ pide contraseña', $e->getMessage());
+            $this->assertStringNotContainsString('no es correcta', $e->getMessage());
+        }
+    }
+
+    /**
+     * Y un `.pfx` exportado **sin** contraseña se abre dejando el campo vacío.
+     *
+     * Es la premisa del mensaje de arriba: si esto fallara, «el archivo pide
+     * una» sería mentira la mitad de las veces.
+     */
+    public function test_un_pfx_sin_contrasena_se_carga_con_el_campo_vacio(): void
+    {
+        Certificados::cargar(
+            $this->sociedadId, 'production', $this->pfx(clave: ''), null, $this->autorId,
+        );
+
+        self::assertNotNull(Certificados::vigente($this->sociedadId));
     }
 
     /**

@@ -82,6 +82,9 @@
                    class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2">
           </label>
 
+          {{-- Deshabilitado = el navegador NO manda este campo. La direccion de
+               una pagina del sistema la repone el controlador antes de validar;
+               si algun dia se quita el @disabled, quitar tambien aquello. --}}
           <label class="block text-sm text-slate-600">Dirección
             <input name="slug" maxlength="60" required value="{{ old('slug', $pagina->slug) }}"
                    @disabled($pagina->is_system)

@@ -7,6 +7,7 @@ namespace Tests\Feature;
 use App\Modules\Core\Services\Marca;
 use App\Modules\Core\Services\Sistema;
 use App\Shared\Auth\Permisos;
+use App\Shared\Database\Vigencia;
 use Database\Seeders\CimientosSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -166,7 +167,12 @@ final class SistemaTest extends TestCase
      */
     public function test_una_limitacion_asumida_del_motor_no_genera_aviso(): void
     {
-        DB::table('legal_entity_countries')->update(['valid_to' => now()->subDay()->toDateString()]);
+        DB::table('legal_entity_countries')->update([
+            // Cerrar la cobertura AYER es aritmetica de vigencias, tambien en una
+            // fixtura: `valid_to` es inclusivo y el error de un dia aqui haria que
+            // la prueba midiera otra cosa que la que dice medir.
+            'valid_to' => Vigencia::cerrarElDiaAntesDe(now()->toDateString()),
+        ]);
 
         $avisos = Sistema::avisos();
 
@@ -181,7 +187,12 @@ final class SistemaTest extends TestCase
 
     public function test_sin_cobertura_de_paises_avisa_porque_no_se_podria_facturar(): void
     {
-        DB::table('legal_entity_countries')->update(['valid_to' => now()->subDay()->toDateString()]);
+        DB::table('legal_entity_countries')->update([
+            // Cerrar la cobertura AYER es aritmetica de vigencias, tambien en una
+            // fixtura: `valid_to` es inclusivo y el error de un dia aqui haria que
+            // la prueba midiera otra cosa que la que dice medir.
+            'valid_to' => Vigencia::cerrarElDiaAntesDe(now()->toDateString()),
+        ]);
 
         $textos = implode(' ', array_map(static fn ($a): string => $a->texto, Sistema::avisos()));
 

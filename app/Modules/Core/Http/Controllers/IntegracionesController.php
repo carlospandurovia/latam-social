@@ -137,6 +137,30 @@ final class IntegracionesController
                 ->mapWithKeys(fn (object $c): array => [
                     (int) $c->id => Integraciones::estado((int) $c->id),
                 ])->all(),
+            // `null` = se puede borrar; una frase = por que no. Se calcula aqui
+            // y no en la plantilla: «esta conexion se puede borrar» es una
+            // afirmacion sobre el sistema, no una decision de maquetacion.
+            'borrables' => $conexiones->mapWithKeys(fn (object $c): array => [
+                (int) $c->id => Integraciones::porQueNoSeBorra((string) $c->uuid),
+            ])->all(),
+            // `L-3b`: que credenciales ofrece el formulario de CADA conexion.
+            // `declaradas` en false significa que ese proveedor no ha dicho lo
+            // que pide: se ofrece el catalogo entero y la pantalla lo avisa en
+            // ambar. No bloquea (`DEC-190`).
+            'clasesPorConexion' => $conexiones->mapWithKeys(fn (object $c): array => [
+                (int) $c->id => [
+                    'clases' => Integraciones::clasesAdmitidas((int) $c->integration_provider_id),
+                    'declaradas' => Integraciones::clasesDe((int) $c->integration_provider_id) !== [],
+                ],
+            ])->all(),
+            // Que le falta a cada una, con la etiqueta de verdad. Se cuenta
+            // aqui: una plantilla que le pregunta a un servicio es logica de
+            // negocio en la vista.
+            'faltanPorConexion' => $conexiones->mapWithKeys(fn (object $c): array => [
+                (int) $c->id => Integraciones::clasesQueFaltan(
+                    (int) $c->id, (int) $c->integration_provider_id,
+                ),
+            ])->all(),
 
             // Con que se firma.
             'certificados' => $certificados,
@@ -199,17 +223,43 @@ final class IntegracionesController
         return redirect()->route('integraciones.index')->with('exito', 'Conexión actualizada.');
     }
 
+    /**
+     * Borra una conexión que nunca se usó (`L-3a`).
+     *
+     * El servicio decide si se puede; aquí sólo se traduce el «no» a un aviso en
+     * pantalla. Nunca a un `1451` del motor, que es lo que salía antes de que
+     * este botón existiera —o mejor dicho, lo que habría salido: no existía
+     * ninguna forma de intentarlo (`T-131`)—.
+     */
+    public function borrar(string $uuid): RedirectResponse
+    {
+        try {
+            Integraciones::borrarConexion($uuid, (int) Auth::id());
+        } catch (RuntimeException $e) {
+            return back()->with('aviso', $e->getMessage());
+        }
+
+        return redirect()->route('integraciones.index')->with('exito', 'Conexión borrada.');
+    }
+
     /** Guarda un secreto: revoca el anterior y crea la versión siguiente. */
     public function credencial(Request $peticion, string $uuid): RedirectResponse
     {
+        // `L-3b`: la conexion PRIMERO, porque lo que se admite depende de lo
+        // que su proveedor declare. Validar contra el catalogo entero dejaba
+        // guardar la clave SOL como «Clave de API» --y con eso, una conexion
+        // que parecia configurada y no lo estaba (`T-132`)--.
+        $conexion = Integraciones::porUuid($uuid);
+        $admitidas = Integraciones::clasesAdmitidas((int) $conexion->integration_provider_id);
+
         /** @var array<string, mixed> $datos */
         $datos = $peticion->validate([
-            'kind' => ['required', 'string', 'in:'.implode(',', array_keys(Integraciones::CLASES))],
+            'kind' => ['required', 'string', 'in:'.implode(',', array_keys($admitidas))],
             'secreto' => ['required', 'string', 'min:4', 'max:500'],
             'motivo' => ['nullable', 'string', 'max:255'],
+        ], [
+            'kind.in' => 'Ese proveedor no usa esa clase de credencial.',
         ]);
-
-        $conexion = Integraciones::porUuid($uuid);
 
         try {
             Integraciones::guardarSecreto(

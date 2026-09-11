@@ -118,7 +118,10 @@ el usuario de migraciones no puede crear disparadores, no es que falten unas
 cuantas validaciones: es que la mitad del esquema no se puede instalar.
 
 **a) Crear la base y los dos usuarios.** En cPanel: *MySQL® Databases*. Ojo: el
-panel prefija todo con tu usuario (`cpuser_latamsocial`, `cpuser_app`).
+panel prefija todo con tu usuario. **En ESTA instalación** los nombres reales
+son `cpanduro_latamsocial2` (base), `cpanduro_lsapp` (aplicación) y
+`cpanduro_lsmig` (migraciones) --§0.4--; los `cpuser_*` de más abajo son el
+ejemplo genérico de cPanel, no lo que hay que teclear aquí.
 
 - Base: `latamsocial`, cotejamiento **`utf8mb4_unicode_ci`**.
 - Usuario **de aplicación** (`app`): marcar sólo `SELECT, INSERT, UPDATE, DELETE`.
@@ -138,8 +141,8 @@ Si el panel deja abrir una consola SQL o hay cliente `mysql`, es exactamente lo
 que dice `.env.example`:
 
 ```sql
-GRANT SELECT, INSERT, UPDATE, DELETE, EXECUTE ON `cpuser_latamsocial`.* TO 'cpuser_app'@'localhost';
-GRANT ALL PRIVILEGES              ON `cpuser_latamsocial`.* TO 'cpuser_mig'@'localhost';
+GRANT SELECT, INSERT, UPDATE, DELETE, EXECUTE ON `cpanduro_latamsocial2`.* TO 'cpanduro_lsapp'@'localhost';
+GRANT ALL PRIVILEGES              ON `cpanduro_latamsocial2`.* TO 'cpanduro_lsmig'@'localhost';
 FLUSH PRIVILEGES;
 ```
 
@@ -276,6 +279,13 @@ Comprobación, cuando el sitio ya responda:
 `https://latamsocial.com/.env` y `https://latamsocial.com/storage/logs/laravel.log`
 tienen que dar **404**. Si alguno descarga algo, para y arregla la raíz.
 
+> **La ruta del proyecto es `/home3/cpanduro/latamsocial`, y `~` es
+> `/home3/cpanduro`.** Este documento decía `~/apps/latamsocial` en cinco
+> sitios --incluidas las DOS líneas de cron-- y ese directorio no existe: es un
+> resto de un borrador anterior al reconocimiento del §0.4. Corregido el
+> 2026-09-09 (`T-124`). Si copias una línea de aquí y el `cd` falla, es que
+> quedó alguna: dilo en vez de arreglarla a ojo.
+
 ### 0.5 Dependencias de PHP
 
 `vendor/` está en `.gitignore`, así que no viene con el clon.
@@ -283,7 +293,7 @@ tienen que dar **404**. Si alguno descarga algo, para y arregla la raíz.
 **Opción A — Composer en el servidor** (si `proc_open` no está capado):
 
 ```bash
-cd ~/apps/latamsocial
+cd /home3/cpanduro/latamsocial
 curl -sS https://getcomposer.org/installer | /opt/cpanel/ea-php83/root/usr/bin/php
 /opt/cpanel/ea-php83/root/usr/bin/php -d memory_limit=-1 composer.phar install \
     --no-dev --optimize-autoloader --no-interaction
@@ -356,8 +366,8 @@ APP_TIMEZONE=UTC
 DB_CONNECTION=mysql
 DB_HOST=127.0.0.1
 DB_PORT=3306
-DB_DATABASE=cpuser_latamsocial
-DB_USERNAME=cpuser_app
+DB_DATABASE=cpanduro_latamsocial2
+DB_USERNAME=cpanduro_lsapp
 DB_PASSWORD=...
 
 # Hosting compartido: no hay Redis
@@ -416,10 +426,13 @@ cachear la configuración (con `config:cache` puesto, Laravel deja de leer el
 `.env` y estas variables de línea no llegan):
 
 ```bash
-cd ~/apps/latamsocial
+cd /home3/cpanduro/latamsocial
 PHP=/opt/cpanel/ea-php83/root/usr/bin/php
 
-DB_USERNAME=cpuser_mig DB_PASSWORD='...' $PHP artisan migrate --force
+# La clave NO se teclea en la linea: quedaria en `~/.bash_history` y en
+# cualquier captura de pantalla (`T-126`). `read -s` no la enseña.
+read -s -p 'Clave de cpanduro_lsmig: ' MIGPASS; echo
+DB_USERNAME=cpanduro_lsmig DB_PASSWORD="$MIGPASS" $PHP artisan migrate --force
 ```
 
 Esto es lo que instala los ~140 disparadores del paso 0.3. Si aquí sale un
@@ -454,7 +467,7 @@ Después, las semillas —cimientos del sitio, usuario administrador, plantillas
 correo y términos base—:
 
 ```bash
-DB_USERNAME=cpuser_mig DB_PASSWORD='...' $PHP artisan db:seed --force
+DB_USERNAME=cpanduro_lsmig DB_PASSWORD="$MIGPASS" $PHP artisan db:seed --force
 ```
 
 El administrador sale de `ADMIN_EMAIL` / `ADMIN_PASSWORD`. Si dejas
@@ -479,8 +492,33 @@ $PHP artisan view:cache
 **Nunca `chmod 777`.** En un servidor compartido eso significa «escribible por
 cualquier otra cuenta de esta máquina».
 
+> ### ⚠️ Tocar el `.env` NO cambia nada hasta volver a cachear
+>
+> Con `config:cache` puesto, Laravel deja de leer el `.env`: sirve
+> `bootstrap/cache/config.php`, que es una foto del momento en que se cacheó.
+> Editar el `.env` por SFTP y recargar la página **no hace absolutamente nada**,
+> y no da ningún error: la pantalla sigue diciendo lo de antes, y parece que el
+> cambio «no se guardó».
+>
+> Pasó de verdad con `APP_ENV`: se cambió a `production` y el sistema siguió
+> diciendo «Entorno Desarrollo», desviando el correo al registro y negándose a
+> hablar con SUNAT --que es `DEC-029` haciendo su trabajo sobre un dato viejo--.
+>
+> **Después de CUALQUIER cambio en el `.env`:**
+>
+> ```bash
+> cd /home3/cpanduro/latamsocial
+> PHP=/opt/cpanel/ea-php83/root/usr/bin/php
+> $PHP artisan config:clear && $PHP artisan config:cache
+> $PHP artisan about --only=environment     # comprobar que dice lo que debe
+> ```
+>
+> `about` es la comprobación, no la fe: enseña el entorno EN EFECTO, el modo de
+> depuración y si la configuración está cacheada.
+
 Si `symlink` está deshabilitado, `storage:link` falla. Alternativa: crear el
-enlace desde SSH (`ln -s ~/apps/latamsocial/storage/app/public ~/apps/latamsocial/public/storage`),
+enlace desde SSH (`ln -s /home3/cpanduro/latamsocial/storage/app/public
+/home3/cpanduro/latamsocial/public/storage`),
 que es la misma operación sin pasar por PHP.
 
 ### 0.10 HTTPS, y por qué el orden importa
@@ -525,8 +563,8 @@ hay que quitárselo (paso 0.3a).
 Del §2 de este documento, con **la ruta completa del PHP 8.3**:
 
 ```cron
-* * * * * cd /home/cpuser/apps/latamsocial && /opt/cpanel/ea-php83/root/usr/bin/php artisan queue:work --stop-when-empty --max-time=55 >> storage/logs/queue.log 2>&1
-* * * * * cd /home/cpuser/apps/latamsocial && /opt/cpanel/ea-php83/root/usr/bin/php artisan schedule:run >> storage/logs/planificador.log 2>&1
+* * * * * cd /home3/cpanduro/latamsocial && /opt/cpanel/ea-php83/root/usr/bin/php artisan queue:work --stop-when-empty --max-time=55 >> storage/logs/queue.log 2>&1
+* * * * * cd /home3/cpanduro/latamsocial && /opt/cpanel/ea-php83/root/usr/bin/php artisan schedule:run >> storage/logs/planificador.log 2>&1
 ```
 
 La primera manda los correos. La segunda dispara cuatro trabajos programados
@@ -695,30 +733,57 @@ bloques comentados con su motivo. Los que no pueden quedar vacíos:
 
 ### 3.2 En cada despliegue
 
+> **Los dos usuarios de base de datos de ESTA instalación** (medidos el
+> 2026-09-09, `T-126`): `cpanduro_lsapp` es el de la aplicación --el del `.env`,
+> sin `CREATE`-- y `cpanduro_lsmig` el de migraciones, con `ALL PRIVILEGES`
+> sobre `cpanduro_latamsocial2`. Este documento decía `cpuser_app` / `cpuser_mig`
+> en todas partes, que son los nombres de ejemplo del `.env.example` y no
+> existen aquí. Que `migrate` falle con `1142 CREATE command denied to user
+> 'cpanduro_lsapp'` **no es una avería: es la separación funcionando**
+> (`DEC-085`), y significa que se lanzó con el usuario equivocado.
+
+> **En ESTE servidor no hay `composer` ni `npm` en el PATH** (jailshell de
+> cPanel). Las dos líneas genéricas que estaban aquí --`composer install` y
+> `npm ci && npm run build`-- fallan con `command not found`, y el §0.5 y el
+> §0.6 ya lo decían desde el primer despliegue: Composer se corre como `.phar`
+> con el binario de PHP 8.3, y los assets se compilan en Windows y se suben.
+> Corregido el 2026-09-09 (`T-125`), después de estrellarse contra ello en un
+> despliegue de verdad.
+
 ```bash
+cd /home3/cpanduro/latamsocial
+PHP=/opt/cpanel/ea-php83/root/usr/bin/php
+
 # 1. Código
 git pull
 
-# 2. Dependencias, sin las de desarrollo
-composer install --no-dev --optimize-autoloader
+# 2. Dependencias — SÓLO si `composer.lock` cambió en ese pull.
+#    No hay `composer` en el PATH: se usa el .phar (§0.5). Si no está, se baja:
+#    curl -sS https://getcomposer.org/installer | $PHP
+$PHP -d memory_limit=-1 composer.phar install --no-dev --optimize-autoloader --no-interaction
 
-# 3. Assets — si se compilan fuera, subir `public/build/` AHORA (§0.6)
-npm ci && npm run build
+# 3. Assets — se compilan en Windows (§0.6) y se sube `public/build/` por SFTP.
+#    `git pull` NO los trae: `public/build/` está en .gitignore.
+#    Sólo hace falta si cambió una vista, el CSS o el JS.
 
-# 4. Migraciones, CON EL USUARIO DE MIGRACIONES y ANTES de cachear
-php artisan config:clear
-DB_USERNAME=latam_mig DB_PASSWORD=... php artisan migrate --force
+# 4. Migraciones, CON EL USUARIO DE MIGRACIONES y ANTES de cachear.
+#    La clave se PIDE, no se teclea en la linea: una contrasena en la linea de
+#    comandos queda en `~/.bash_history` y en la pantalla de quien mire (T-126).
+$PHP artisan config:clear
+read -s -p "Clave de cpanduro_lsmig: " MIGPASS; echo
+DB_USERNAME=cpanduro_lsmig DB_PASSWORD="$MIGPASS" $PHP artisan migrate --force
+unset MIGPASS
 
 # 4b. Lo que la migración dejó: ¿registro y motor dicen lo mismo?
-php tools/servidor/verificar-registro.php
+$PHP tools/servidor/verificar-registro.php
 
 # 5. Cachés
-php artisan config:cache
-php artisan route:cache
-php artisan view:cache
+$PHP artisan config:cache
+$PHP artisan route:cache
+$PHP artisan view:cache
 
 # 6. Reiniciar los workers para que cojan el código nuevo
-php artisan queue:restart
+$PHP artisan queue:restart
 ```
 
 **El paso 4b tampoco es opcional, y hasta hoy no estaba aquí.** `§0.8` lo manda

@@ -892,6 +892,14 @@ Route::middleware('auth')->prefix('backoffice')->group(function (): void {
         ->whereUuid('uuid')
         ->name('integraciones.credencial');
 
+    // L-3a -- Borrar una conexion que nunca se uso. El servicio comprueba que
+    // no tenga credenciales, ni llamadas, ni quien la apunte; el esquema lo
+    // vuelve a comprobar con `fk_icred_conn RESTRICT`.
+    Route::delete('/integraciones/{uuid}', [IntegracionesController::class, 'borrar'])
+        ->middleware('permiso:integration.manage')
+        ->whereUuid('uuid')
+        ->name('integraciones.borrar');
+
     // 9.12 -- Series y correlativos. `legal_entity.manage` y no un permiso
     // nuevo: una serie pertenece a la sociedad que emite (`BR-LE-008`), asi que
     // quien administra sociedades administra sus series. Un permiso mas para lo

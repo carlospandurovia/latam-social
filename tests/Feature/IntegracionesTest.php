@@ -65,6 +65,207 @@ final class IntegracionesTest extends TestCase
         $this->conexionId = (int) Integraciones::porUuid($this->uuid)->id;
     }
 
+    // --------------------------------------------------- corregir y retirar (L-3a)
+
+    /**
+     * **La del defecto reportado.** Una conexión se puede corregir desde la
+     * pantalla.
+     *
+     * La ruta `PUT` existía desde el primer día y ninguna vista apuntaba a
+     * ella (`T-131`): la conexión de producción se llamaba «SUNAT PRD» siendo
+     * de PRUEBAS, y el nombre es lo único que se lee de un vistazo.
+     */
+    public function test_una_conexion_se_corrige_desde_la_pantalla(): void
+    {
+        $this->actingAs($this->usuarioCon('admin'))
+            ->put(route('integraciones.update', $this->uuid), [
+                'integration_provider_id' => (int) DB::table('integration_providers')
+                    ->where('code', 'sunat')->value('id'),
+                'legal_entity_id' => $this->sociedadId,
+                'name' => 'SUNAT pruebas (beta)',
+                'environment' => 'sandbox',
+                'username' => 'MODDATOS',
+                'status' => 'disabled',
+            ])
+            ->assertSessionHasNoErrors()
+            ->assertRedirect(route('integraciones.index'));
+
+        $conexion = Integraciones::porUuid($this->uuid);
+
+        self::assertSame('SUNAT pruebas (beta)', (string) $conexion->name);
+        // Y «desactivar» es el mismo formulario: no hace falta un segundo boton
+        // para lo que ya es un campo.
+        self::assertSame('disabled', (string) $conexion->status);
+    }
+
+    /** El formulario de corregir llega con lo que YA hay elegido. */
+    public function test_el_formulario_de_corregir_trae_los_valores_de_ahora(): void
+    {
+        $this->actingAs($this->usuarioCon('admin'))
+            ->get(route('integraciones.index'))
+            ->assertOk()
+            ->assertSee('Corregir o retirar esta conexión', false)
+            ->assertSee('MODDATOS');
+    }
+
+    /** Una conexión que nunca hizo nada se borra. */
+    public function test_una_conexion_que_nunca_se_uso_se_borra(): void
+    {
+        self::assertNull(Integraciones::porQueNoSeBorra($this->uuid));
+
+        $this->actingAs($this->usuarioCon('admin'))
+            ->delete(route('integraciones.borrar', $this->uuid))
+            ->assertRedirect(route('integraciones.index'));
+
+        self::assertSame(0, DB::table('integration_connections')
+            ->where('uuid', $this->uuid)->count());
+
+        // Y queda escrito QUE se borró y cuál era: después no hay de dónde
+        // sacar el nombre.
+        $fila = DB::table('audit_logs')->where('action', 'integration.connection_deleted')->first();
+        self::assertNotNull($fila);
+        self::assertStringContainsString('SUNAT de prueba', (string) json_encode($fila, JSON_THROW_ON_ERROR));
+    }
+
+    /**
+     * Una que guardó una credencial **no** se borra, y lo dice con palabras.
+     *
+     * El esquema ya lo impedía --`fk_icred_conn` es `RESTRICT`-- pero con un
+     * `1451` del motor. Los dos cerrojos siguen puestos: éste comprueba el de
+     * arriba, el que explica.
+     */
+    public function test_una_conexion_con_credenciales_no_se_borra_y_dice_por_que(): void
+    {
+        Integraciones::guardarSecreto($this->conexionId, 'password', 'clave-de-prueba',
+            (int) $this->usuarioCon('admin')->id);
+
+        $motivo = Integraciones::porQueNoSeBorra($this->uuid);
+
+        self::assertNotNull($motivo);
+        self::assertStringContainsString('Desactivada', $motivo);
+
+        $this->actingAs($this->usuarioCon('admin'))
+            ->delete(route('integraciones.borrar', $this->uuid))
+            ->assertSessionHas('aviso');
+
+        self::assertSame(1, DB::table('integration_connections')
+            ->where('uuid', $this->uuid)->count());
+    }
+
+    /** Y una revocada tampoco cuenta como «nunca se usó»: la historia se queda. */
+    public function test_una_credencial_revocada_sigue_impidiendo_el_borrado(): void
+    {
+        Integraciones::guardarSecreto($this->conexionId, 'password', 'clave-de-prueba',
+            (int) $this->usuarioCon('admin')->id);
+        Integraciones::revocarSecreto($this->conexionId, 'password', 'Prueba.');
+
+        self::assertNotNull(Integraciones::porQueNoSeBorra($this->uuid));
+    }
+
+    /** Retirar conexiones necesita el mismo permiso que ponerlas. */
+    public function test_borrar_una_conexion_exige_permiso(): void
+    {
+        $this->actingAs($this->usuarioCon('finance'))
+            ->delete(route('integraciones.borrar', $this->uuid))
+            ->assertForbidden();
+
+        self::assertSame(1, DB::table('integration_connections')
+            ->where('uuid', $this->uuid)->count());
+    }
+
+    // ------------------------------------ cada proveedor pide lo suyo (L-3b)
+
+    /** SUNAT declara UNA clase, y es la que `Comprobantes` pide por su nombre. */
+    public function test_sunat_declara_la_clave_sol_y_solo_esa(): void
+    {
+        $proveedorId = (int) DB::table('integration_providers')->where('code', 'sunat')->value('id');
+
+        $admitidas = Integraciones::clasesAdmitidas($proveedorId);
+
+        self::assertSame(['password'], array_keys($admitidas));
+        self::assertStringContainsString('SOL', $admitidas['password']);
+    }
+
+    /**
+     * **La que cierra `T-132`.** Guardar la clase equivocada ya no se acepta.
+     *
+     * Antes se aceptaba, y además **apagaba el aviso rojo**: la conexión quedaba
+     * pareciendo configurada y la emisión se estrellaba al primer comprobante.
+     */
+    public function test_una_clase_que_el_proveedor_no_usa_se_rechaza(): void
+    {
+        $this->actingAs($this->usuarioCon('admin'))
+            ->post(route('integraciones.credencial', $this->uuid), [
+                'kind' => 'api_key', 'secreto' => 'clave-que-no-toca',
+            ])
+            ->assertSessionHasErrors('kind');
+
+        self::assertSame(0, DB::table('integration_credentials')
+            ->where('integration_connection_id', $this->conexionId)->count());
+    }
+
+    /** Y la que sí usa entra, y apaga el aviso. */
+    public function test_la_clase_que_el_proveedor_usa_entra_y_apaga_el_aviso(): void
+    {
+        self::assertNotSame([], Integraciones::clasesQueFaltan(
+            $this->conexionId, (int) Integraciones::porUuid($this->uuid)->integration_provider_id,
+        ));
+
+        $this->actingAs($this->usuarioCon('admin'))
+            ->post(route('integraciones.credencial', $this->uuid), [
+                'kind' => 'password', 'secreto' => 'clave-sol-de-prueba',
+            ])
+            ->assertSessionHasNoErrors();
+
+        self::assertSame([], Integraciones::clasesQueFaltan(
+            $this->conexionId, (int) Integraciones::porUuid($this->uuid)->integration_provider_id,
+        ));
+    }
+
+    /**
+     * El aviso dice CUÁL falta, no «sin credencial».
+     *
+     * «Falta: Clave SOL del usuario secundario» se arregla. «Sin credencial» se
+     * relee tres veces y se deja para mañana.
+     */
+    public function test_el_aviso_nombra_la_credencial_que_falta(): void
+    {
+        $texto = implode(' ', array_map(
+            static fn (object $a): string => $a->texto, Integraciones::avisos(),
+        ));
+
+        self::assertStringContainsString('Clave SOL del usuario secundario', $texto);
+    }
+
+    /** Un proveedor SIN declarar no bloquea: se ofrece todo y se avisa (`DEC-190`). */
+    public function test_un_proveedor_sin_declarar_ofrece_el_catalogo_entero(): void
+    {
+        $proveedorId = (int) DB::table('integration_providers')->where('code', 'sunat')->value('id');
+        DB::table('integration_provider_credentials')
+            ->where('integration_provider_id', $proveedorId)->delete();
+
+        self::assertSame(
+            array_keys(Integraciones::CLASES),
+            array_keys(Integraciones::clasesAdmitidas($proveedorId)),
+        );
+
+        // Y guardar sigue siendo posible: nadie se queda sin poder configurar.
+        $this->actingAs($this->usuarioCon('admin'))
+            ->post(route('integraciones.credencial', $this->uuid), [
+                'kind' => 'api_key', 'secreto' => 'clave-cualquiera',
+            ])
+            ->assertSessionHasNoErrors();
+    }
+
+    /** La pantalla enseña la etiqueta de verdad, no «Contraseña» a secas. */
+    public function test_la_pantalla_ensena_la_etiqueta_declarada(): void
+    {
+        $this->actingAs($this->usuarioCon('admin'))
+            ->get(route('integraciones.index'))
+            ->assertOk()
+            ->assertSee('Clave SOL del usuario secundario', false);
+    }
+
     // ---------------------------------------------- el secreto no vuelve a salir
 
     /** **La que más importa.** `estado()` no devuelve el secreto, sólo su cola. */
@@ -321,13 +522,41 @@ final class IntegracionesTest extends TestCase
             ->assertSee('la primera llamada de verdad saldrá sin clave');
     }
 
-    /** Y puesta la credencial, ese aviso desaparece. */
+    /**
+     * Y puesta **la que el proveedor pide**, ese aviso desaparece.
+     *
+     * Esta prueba guardaba una `api_key` y afirmaba que el aviso se apagaba.
+     * O sea que **tenía escrito el defecto de `T-132` como si fuera lo
+     * correcto**: cualquier credencial callaba el rojo, incluida la que SUNAT
+     * no usa. Pasaba en verde y por eso el agujero sobrevivió tantas
+     * iteraciones. Ahora guarda la clave SOL, que es lo que `Comprobantes` lee.
+     */
     public function test_puesta_la_credencial_el_aviso_desaparece(): void
+    {
+        $admin = $this->usuarioCon('admin');
+        Integraciones::guardarSecreto($this->conexionId, 'password', 'clave-sol-1234', (int) $admin->id);
+
+        $this->actingAs($admin)->get(route('configuracion'))
+            ->assertDontSee('la primera llamada de verdad saldrá sin clave');
+    }
+
+    /**
+     * **La otra mitad, y la que de verdad guarda el agujero.** Una credencial
+     * de la clase EQUIVOCADA no apaga nada.
+     *
+     * Es el escenario caro: la conexión queda con una credencial guardada, la
+     * pantalla parece configurada, y el fallo aparece en el primer comprobante
+     * de verdad. Se entra por el servicio y no por el formulario a propósito:
+     * el formulario ya no la ofrece, así que probar por ahí no demostraría que
+     * el AVISO mira la clase.
+     */
+    public function test_una_credencial_de_otra_clase_no_apaga_el_aviso(): void
     {
         $admin = $this->usuarioCon('admin');
         Integraciones::guardarSecreto($this->conexionId, 'api_key', 'clave-1234', (int) $admin->id);
 
         $this->actingAs($admin)->get(route('configuracion'))
-            ->assertDontSee('la primera llamada de verdad saldrá sin clave');
+            ->assertSee('la primera llamada de verdad saldrá sin clave')
+            ->assertSee('Clave SOL del usuario secundario', false);
     }
 }

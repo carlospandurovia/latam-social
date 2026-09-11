@@ -2,6 +2,64 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 
+## [L-3b · Cada proveedor pide lo suyo] — 2026-09-09
+
+### Añadido
+
+- **`integration_provider_credentials`**: cada proveedor declara qué
+  credenciales necesita, con su etiqueta de verdad, si es obligatoria y en qué
+  orden (`DEC-359`). Sembrado: SUNAT → *Clave SOL del usuario secundario*,
+  SMTP → *Contraseña de la cuenta de correo*, Decolecta → *Clave de API*.
+- El formulario ofrece **sólo lo que ese proveedor declara**. Con una sola
+  clase deja de ser un desplegable y pasa a ser un campo con su nombre.
+
+### Corregido
+
+- **El aviso de «sin credencial» mira la CLASE, no la existencia** (`T-132`).
+  Guardar la clave SOL como «Clave de API» apagaba el aviso y dejaba la conexión
+  pareciendo configurada; el fallo aparecía en el primer comprobante real. Ahora
+  además dice **cuál** falta, por su nombre.
+- La validación del servidor comprueba lo mismo: quitar el desplegable con el
+  inspector ya no cuela una clase que el proveedor no usa.
+
+## [L-3a · Corregir y retirar una conexión] — 2026-09-09
+
+### Añadido
+
+- **Corregir una conexión de integración** desde su propia tarjeta: proveedor,
+  nombre, entorno, estado, sociedad, URL y usuario (`T-131`). La ruta `PUT`
+  existía desde el primer día y **ninguna vista apuntaba a ella**.
+- **Desactivar y reactivar** con el mismo formulario: el estado ya era un campo.
+- **Borrar una conexión que nunca se usó** (`DEC-358`). Sin credenciales —vivas
+  o revocadas—, sin llamadas hechas y sin nadie que la apunte. Todo lo demás
+  se desactiva, y la pantalla dice **por qué** en vez de dejar salir un `1451`
+  del motor.
+
+### Corregido
+
+- **El certificado que no abre ya no acusa a la contraseña de quien no escribió
+  ninguna** (`T-133`). OpenSSL da el mismo `mac verify failure` en los dos
+  casos; ahora el mensaje distingue si se escribió algo, y cuando no, dice que
+  el archivo **sí** pide contraseña. Corregidos también los acentos y eñes que
+  faltaban en esos mensajes.
+
+## [Corrección · El formulario de las páginas legales] — 2026-09-09
+
+### Corregido
+
+- **Guardar el título de una página del sistema ya no responde «Falta slug.»**
+  (`T-127`). El campo de la dirección se pinta deshabilitado —una página del
+  sistema no cambia de dirección: su enlace vive en correos y contratos que ya
+  salieron— y un campo deshabilitado **no lo manda el navegador**, así que la
+  validación lo echaba en falta y el bloque de título, buscadores, orden y «sale
+  en el pie» estaba **muerto** en *Términos y condiciones* y en *Política de
+  privacidad*. Ahora el servidor **repone** la dirección guardada antes de
+  validar: no la pide al formulario y no se fía de la que llegue si alguien
+  quita el `disabled` con el inspector.
+- Tres pruebas nuevas que mandan **la carga real del formulario**, no una
+  cómoda: la anterior escribía el `slug` a mano y por eso estuvo verde encima de
+  una pantalla rota (`T-128`).
+
 ## [Fase 10 · El panel como centro de control] — 2026-09-09
 
 Catorce iteraciones (`D-1` … `D-14`) que convierten una pantalla con tres

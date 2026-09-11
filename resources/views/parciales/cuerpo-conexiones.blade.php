@@ -80,16 +80,52 @@
             </p>
           @endforelse
 
+          {{-- Y si TIENE credenciales pero no la que hace falta, tambien se
+               dice: la lista de arriba enseña lo que hay, no lo que falta.
+               La cuenta la hace el controlador: una plantilla que pregunta a un
+               servicio es logica de negocio en la vista. --}}
+          @php($faltan = $faltanPorConexion[$c->id] ?? [])
+
+          @if ($faltan !== [] && ($credenciales[$c->id] ?? []) !== [])
+            <p class="mt-2 text-xs {{ $c->status === 'active' ? 'text-rose-700' : 'text-amber-700' }}">
+              Falta la que este proveedor necesita: <strong>{{ implode(', ', $faltan) }}</strong>.
+            </p>
+          @endif
+
+          {{-- L-3b: se ofrece SOLO lo que el proveedor declara. Con una sola
+               clase deja de ser un desplegable: es un campo con su nombre de
+               verdad --«Clave SOL del usuario secundario» dice lo que hay que
+               pegar ahi; «Contraseña» no--. Sin declaracion, el catalogo entero
+               y un ambar, porque un proveedor recien añadido tiene que poder
+               recibir su clave hoy (`DEC-190`). --}}
+          @php($oferta = $clasesPorConexion[$c->id] ?? ['clases' => $clases, 'declaradas' => false])
+
+          @unless ($oferta['declaradas'])
+            <p class="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              Este proveedor todavía no declara qué credenciales necesita, así que se ofrecen todas
+              las que existen. Elegir la que no es deja la conexión pareciendo configurada.
+            </p>
+          @endunless
+
           <form method="POST" action="{{ route('integraciones.credencial', $c->uuid) }}"
                 class="mt-3 flex flex-wrap items-end gap-2">
             @csrf
             <div>
-              <label class="mb-1 block text-[11px] text-slate-500">Clase</label>
-              <select name="kind" class="rounded-lg border border-slate-300 px-2 py-1.5 text-sm">
-                @foreach ($clases as $codigo => $texto)
-                  <option value="{{ $codigo }}">{{ $texto }}</option>
-                @endforeach
-              </select>
+              @if (count($oferta['clases']) === 1)
+                @php($unica = array_key_first($oferta['clases']))
+                <input type="hidden" name="kind" value="{{ $unica }}">
+                <label class="mb-1 block text-[11px] text-slate-500">Clase</label>
+                <p class="rounded-lg bg-slate-50 px-2 py-1.5 text-sm text-slate-700">
+                  {{ $oferta['clases'][$unica] }}
+                </p>
+              @else
+                <label class="mb-1 block text-[11px] text-slate-500">Clase</label>
+                <select name="kind" class="rounded-lg border border-slate-300 px-2 py-1.5 text-sm">
+                  @foreach ($oferta['clases'] as $codigo => $texto)
+                    <option value="{{ $codigo }}">{{ $texto }}</option>
+                  @endforeach
+                </select>
+              @endif
             </div>
             <div class="min-w-[12rem] flex-1">
               <label class="mb-1 block text-[11px] text-slate-500">Valor nuevo</label>
@@ -103,6 +139,114 @@
             </button>
           </form>
         </div>
+
+        {{-- L-3a: corregir y retirar. Hasta hoy una conexion se creaba y ya no
+             se podia tocar --ni el nombre--, y la ruta de actualizar existia
+             sin que ninguna vista apuntara a ella (`T-131`). Va en un
+             `<details>` cerrado: lo normal es mirar la conexion, no editarla. --}}
+        <details class="border-t border-slate-100 px-4 py-3">
+          <summary class="cursor-pointer text-xs font-medium text-slate-600 hover:text-slate-900">
+            Corregir o retirar esta conexión
+          </summary>
+
+          <form method="POST" action="{{ route('integraciones.update', $c->uuid) }}"
+                class="mt-3 space-y-3">
+            @csrf
+            @method('PUT')
+
+            <div class="grid gap-3 sm:grid-cols-2">
+              <label class="block text-xs text-slate-500">Proveedor
+                <select name="integration_provider_id" required
+                        class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                  @foreach ($proveedores as $p)
+                    <option value="{{ $p->id }}"
+                      @selected((int) $c->integration_provider_id === (int) $p->id)>{{ $p->name }}</option>
+                  @endforeach
+                </select>
+              </label>
+
+              <label class="block text-xs text-slate-500">Nombre
+                <input name="name" required maxlength="120" value="{{ $c->name }}"
+                       class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+              </label>
+
+              <label class="block text-xs text-slate-500">Entorno
+                <select name="environment"
+                        class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                  @foreach ($entornos as $codigo => $texto)
+                    <option value="{{ $codigo }}"
+                      @selected($c->environment === $codigo)>{{ $texto }}</option>
+                  @endforeach
+                </select>
+              </label>
+
+              <label class="block text-xs text-slate-500">Estado
+                <select name="status"
+                        class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                  @foreach ($estados as $codigo => $texto)
+                    <option value="{{ $codigo }}" @selected($c->status === $codigo)>{{ $texto }}</option>
+                  @endforeach
+                </select>
+              </label>
+            </div>
+
+            <label class="block text-xs text-slate-500">Sociedad
+              <select name="legal_entity_id"
+                      class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                <option value="">Toda la plataforma</option>
+                @foreach ($sociedades as $s)
+                  <option value="{{ $s->id }}"
+                    @selected((int) $c->legal_entity_id === (int) $s->id)>{{ $s->code }} — {{ $s->legal_name }}</option>
+                @endforeach
+              </select>
+            </label>
+
+            <label class="block text-xs text-slate-500">
+              URL <span class="text-slate-400">— vacío = la del proveedor</span>
+              <input name="base_url" maxlength="255" value="{{ $c->base_url }}"
+                     class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+            </label>
+
+            <label class="block text-xs text-slate-500">
+              Usuario <span class="text-slate-400">— el secundario de SUNAT y equivalentes</span>
+              <input name="username" maxlength="120" value="{{ $c->username }}"
+                     class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+            </label>
+
+            <p class="text-xs text-slate-400">
+              La contraseña no se toca desde aquí: se carga arriba y no vuelve a salir.
+            </p>
+
+            <button class="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50">
+              Guardar cambios
+            </button>
+          </form>
+
+          {{-- Borrar de verdad SOLO lo que nunca hizo nada. Lo demas se
+               desactiva arriba, en Estado: una credencial cuenta quien la puso
+               y cuando, y eso no se tira. --}}
+          <div class="mt-4 border-t border-slate-100 pt-3">
+            @if (($borrables[$c->id] ?? 'sin comprobar') === null)
+              <form method="POST" action="{{ route('integraciones.borrar', $c->uuid) }}">
+                @csrf
+                @method('DELETE')
+                <p class="mb-2 text-xs text-slate-500">
+                  Esta conexión no ha guardado ninguna credencial ni ha hecho ninguna llamada,
+                  así que se puede borrar sin perder ninguna respuesta.
+                </p>
+                <button class="rounded-lg border border-rose-300 px-3 py-1.5 text-xs text-rose-700
+                               hover:bg-rose-50">
+                  Borrar esta conexión
+                </button>
+              </form>
+            @else
+              <p class="text-xs text-slate-500">
+                <span class="font-medium text-slate-700">No se puede borrar.</span>
+                {{ $borrables[$c->id] }}
+              </p>
+            @endif
+          </div>
+        </details>
       </div>
     @empty
       <p class="rounded-lg border border-dashed border-slate-300 px-4 py-6 text-center text-sm text-slate-500">

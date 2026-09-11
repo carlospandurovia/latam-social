@@ -401,6 +401,80 @@ final class PaginasDelSitioTest extends TestCase
             ->assertSee('Cómo se va a ver', false);
     }
 
+    /**
+     * **El formulario de una página del sistema se guarda tal y como lo manda
+     * el navegador**: sin la dirección.
+     *
+     * El campo se pinta deshabilitado, y un campo deshabilitado no viaja. La
+     * prueba de antes mandaba `slug` a mano, así que pasaba en verde mientras
+     * la pantalla estaba rota: guardar el título de los términos respondía
+     * «Falta slug.» y no guardaba nada. Se prueba el envío REAL, no uno cómodo.
+     */
+    public function test_una_pagina_del_sistema_se_guarda_sin_mandar_su_direccion(): void
+    {
+        $uuid = (string) DB::table('content_pages')->where('slug', 'terminos-y-condiciones')->value('uuid');
+
+        $this->actingAs($this->usuarioCon('admin'))
+            ->post(route('paginas.guardar', ['uuid' => $uuid]), [
+                'title' => 'Términos del servicio',
+                'meta_description' => 'Las condiciones de uso.',
+                'sort_order' => 20,
+                'show_in_footer' => '1',
+            ])
+            ->assertSessionHasNoErrors()
+            ->assertRedirect(route('paginas.editar', ['uuid' => $uuid]));
+
+        $pagina = DB::table('content_pages')->where('uuid', $uuid)->first();
+
+        self::assertSame('Términos del servicio', (string) $pagina->title);
+        self::assertSame('Las condiciones de uso.', (string) $pagina->meta_description);
+        self::assertSame(20, (int) $pagina->sort_order);
+        // Y la dirección sigue siendo la suya: no se perdió por no venir.
+        self::assertSame('terminos-y-condiciones', (string) $pagina->slug);
+    }
+
+    /**
+     * Y si alguien la manda cambiada --quitando el `disabled` con el
+     * inspector--, tampoco cambia. El servidor no se fía de lo que llega.
+     */
+    public function test_la_direccion_de_una_pagina_del_sistema_no_se_cambia_a_mano(): void
+    {
+        $uuid = (string) DB::table('content_pages')->where('slug', 'terminos-y-condiciones')->value('uuid');
+
+        $this->actingAs($this->usuarioCon('admin'))
+            ->post(route('paginas.guardar', ['uuid' => $uuid]), [
+                'title' => 'Términos y condiciones',
+                'slug' => 'otra-direccion',
+            ])
+            ->assertSessionHasNoErrors();
+
+        self::assertSame('terminos-y-condiciones',
+            (string) DB::table('content_pages')->where('uuid', $uuid)->value('slug'));
+        self::assertSame(0, DB::table('content_pages')->where('slug', 'otra-direccion')->count());
+    }
+
+    /** Una página normal SÍ cambia de dirección, y sigue exigiéndola. */
+    public function test_una_pagina_normal_cambia_de_direccion_y_la_exige(): void
+    {
+        $this->actingAs($this->usuarioCon('admin'))
+            ->post(route('paginas.guardar'), ['title' => 'Sobre nosotros', 'slug' => 'sobre-nosotros'])
+            ->assertRedirect();
+
+        $uuid = (string) DB::table('content_pages')->where('slug', 'sobre-nosotros')->value('uuid');
+
+        $this->actingAs($this->usuarioCon('admin'))
+            ->post(route('paginas.guardar', ['uuid' => $uuid]), ['title' => 'Quiénes somos'])
+            ->assertSessionHasErrors('slug');
+
+        $this->actingAs($this->usuarioCon('admin'))
+            ->post(route('paginas.guardar', ['uuid' => $uuid]),
+                ['title' => 'Quiénes somos', 'slug' => 'quienes-somos'])
+            ->assertSessionHasNoErrors();
+
+        self::assertSame('quienes-somos',
+            (string) DB::table('content_pages')->where('uuid', $uuid)->value('slug'));
+    }
+
     // ------------------------------------------------------ utilería
 
     private function publicar(string $slug): string

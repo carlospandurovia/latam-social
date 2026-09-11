@@ -604,6 +604,44 @@ final class CimientosSeeder extends Seeder
                 $p + ['is_active' => true, 'updated_at' => $ahora, 'created_at' => $ahora]);
         }
 
+        // `L-3b`: y QUE credenciales pide cada uno.
+        //
+        // Va aqui y no solo en la migracion por lo que enseño `T-120`: las
+        // migraciones corren ANTES que este sembrador, asi que una migracion
+        // que busca `integration_providers` en una base limpia no encuentra
+        // nada y se salta el sembrado en silencio --que es justo lo que paso:
+        // en produccion los proveedores ya existian y quedo bien; en la base de
+        // pruebas quedo vacia, y tres pruebas dijeron la verdad--.
+        //
+        // La migracion mantiene su intento --idempotente-- para las bases que
+        // YA estan sembradas y no van a volver a pasar por aqui. Los dos
+        // caminos escriben lo mismo y ninguno pisa al otro.
+        //
+        // La etiqueta importa tanto como la clase: «Clave SOL del usuario
+        // secundario» dice que hay que pegar ahi; «Contraseña» no.
+        $credencialesDeProveedor = [
+            ['sunat', 'password', 'Clave SOL del usuario secundario',
+                'La del usuario SECUNDARIO de SOL, no la del RUC.'],
+            ['smtp', 'password', 'Contraseña de la cuenta de correo',
+                'En Gmail, una contraseña de aplicación: la normal no sirve.'],
+            ['decolecta', 'api_key', 'Clave de API', null],
+        ];
+
+        foreach ($credencialesDeProveedor as [$codigo, $clase, $etiqueta, $ayuda]) {
+            $proveedorId = DB::table('integration_providers')->where('code', $codigo)->value('id');
+
+            if ($proveedorId === null) {
+                continue;
+            }
+
+            self::sembrarSiFalta(
+                'integration_provider_credentials',
+                ['integration_provider_id' => $proveedorId, 'kind' => $clase],
+                ['label' => $etiqueta, 'help' => $ayuda, 'is_required' => true,
+                    'sort_order' => 10, 'updated_at' => $ahora, 'created_at' => $ahora],
+            );
+        }
+
         // 9.17e: y DONDE vive cada proveedor, por entorno.
         //
         // Los extremos de SUNAT son fijos y publicos: no son un dato de esta

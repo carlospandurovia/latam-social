@@ -145,6 +145,11 @@ final class Integraciones
             })
             ->orderBy('ip.purpose')->orderBy('ip.name')->orderBy('ic.environment')
             ->get(['ic.id', 'ic.uuid', 'ic.name', 'ic.environment', 'ic.base_url',
+                // `L-3a`: las dos foraneas viajan porque el formulario de
+                // CORREGIR tiene que venir con lo que hay ya elegido. Sin
+                // ellas, editar una conexion la mandaria siempre al primer
+                // proveedor de la lista y a «toda la plataforma».
+                'ic.integration_provider_id', 'ic.legal_entity_id',
                 'ic.username', 'ic.status', 'ic.last_verified_at', 'ic.last_success_at',
                 'ic.last_error_at', 'ic.last_error_message',
                 'ip.code as proveedor', 'ip.name as proveedor_nombre', 'ip.purpose',
@@ -379,6 +384,193 @@ final class Integraciones
         return $uuid;
     }
 
+    /**
+     * Lo que este proveedor declara que necesita (`L-3b`).
+     *
+     * Devuelve `[]` cuando no ha declarado nada, y **eso no es un error**: es
+     * una instalación que añadió un proveedor y todavía no dijo qué pide. El
+     * formulario vuelve entonces al catálogo completo y lo dice en ámbar
+     * (`DEC-190`: aviso con prioridad, nunca un stopper).
+     *
+     * @return list<\stdClass>
+     */
+    public static function clasesDe(int $proveedorId): array
+    {
+        if (!Schema::hasTable('integration_provider_credentials')) {
+            return [];
+        }
+
+        return DB::table('integration_provider_credentials')
+            ->where('integration_provider_id', $proveedorId)
+            ->orderBy('sort_order')->orderBy('kind')
+            ->get(['kind', 'label', 'help', 'is_required'])
+            ->all();
+    }
+
+    /**
+     * Las clases que este proveedor admite, en `[codigo => etiqueta]`.
+     *
+     * Sin declaración, el catálogo entero: quien acaba de añadir un proveedor
+     * tiene que poder cargarle su clave hoy.
+     *
+     * @return array<string, string>
+     */
+    public static function clasesAdmitidas(int $proveedorId): array
+    {
+        $declaradas = self::clasesDe($proveedorId);
+
+        if ($declaradas === []) {
+            return self::CLASES;
+        }
+
+        $mapa = [];
+
+        foreach ($declaradas as $declarada) {
+            $mapa[(string) $declarada->kind] = (string) $declarada->label;
+        }
+
+        return $mapa;
+    }
+
+    /**
+     * Las clases OBLIGATORIAS que a esta conexión le faltan.
+     *
+     * ### Por qué esto existe
+     *
+     * El aviso de «sin credencial» comprobaba que existiera **alguna** viva, sin
+     * mirar la clase. Guardar la clave SOL como «Clave de API» apagaba el aviso
+     * y dejaba la conexión pareciendo configurada: el mismo modo de fallo que
+     * ese aviso dice combatir, entrando por la puerta de al lado (`T-132`).
+     *
+     * @return list<string> Las etiquetas, no los códigos: esto se enseña.
+     */
+    public static function clasesQueFaltan(int $conexionId, int $proveedorId): array
+    {
+        $obligatorias = array_filter(
+            self::clasesDe($proveedorId),
+            static fn (\stdClass $c): bool => (bool) $c->is_required,
+        );
+
+        if ($obligatorias === []) {
+            // Sin declaracion no se puede decir que falta, asi que se conserva
+            // la pregunta vieja: .hay alguna credencial viva?
+            return DB::table('integration_credentials')
+                ->where('integration_connection_id', $conexionId)
+                ->whereNull('revoked_at')->exists()
+                ? []
+                : ['una credencial'];
+        }
+
+        $vivas = DB::table('integration_credentials')
+            ->where('integration_connection_id', $conexionId)
+            ->whereNull('revoked_at')->pluck('kind')->all();
+
+        $faltan = [];
+
+        foreach ($obligatorias as $obligatoria) {
+            if (!in_array((string) $obligatoria->kind, $vivas, true)) {
+                $faltan[] = (string) $obligatoria->label;
+            }
+        }
+
+        return $faltan;
+    }
+
+    /**
+     * Por qué esta conexión **no** se puede borrar, o `null` si sí.
+     *
+     * ### El esquema ya había decidido esto
+     *
+     * `fk_icred_conn` es `RESTRICT` y no `CASCADE`, con su motivo escrito en la
+     * migración: *«en este proyecto nada se borra en cascada. Una credencial
+     * cuenta que se configuró y cuándo; borrar la conexión no puede llevarse esa
+     * respuesta por delante»*. O sea que el motor **ya** rechaza el borrado con
+     * un `1451`. Esto no añade la regla: la dice **antes y con palabras**, que
+     * es la diferencia entre una pantalla que explica y una que revienta.
+     *
+     * Los dos cerrojos son a propósito: si algún día se mira sólo uno, el otro
+     * sigue ahí.
+     *
+     * ### Por qué «desactivar» no es un consuelo
+     *
+     * Una conexión que llegó a guardar una credencial o a hacer una llamada es
+     * **historia de la instalación**, no basura. `status = disabled` la saca de
+     * uso sin perder quién la puso, cuándo, y qué contestó el servicio. Sólo se
+     * borra de verdad la que nunca hizo nada: ahí no hay respuesta que perder.
+     */
+    public static function porQueNoSeBorra(string $uuid): ?string
+    {
+        $conexion = self::porUuid($uuid);
+        $id = (int) $conexion->id;
+
+        $credenciales = (int) DB::table('integration_credentials')
+            ->where('integration_connection_id', $id)->count();
+
+        if ($credenciales > 0) {
+            return sprintf(
+                'Esa conexión ya guardó %d %s —viva o revocada— y eso no se borra: una credencial '
+                .'cuenta quién la puso y cuándo, y esa respuesta se pierde con ella. '
+                .'Póngala en «Desactivada»: deja de usarse y se queda entera.',
+                $credenciales, $credenciales === 1 ? 'credencial' : 'credenciales',
+            );
+        }
+
+        if ($conexion->last_success_at !== null || $conexion->last_error_at !== null) {
+            return 'Esa conexión ya habló con el servicio, así que su historial de llamadas es '
+                .'parte de lo que pasó en esta instalación. Póngala en «Desactivada» en vez de borrarla.';
+        }
+
+        foreach ([
+            ['mail_accounts', 'la cuenta de correo'],
+            ['fx_sources', 'la fuente de tipos de cambio'],
+        ] as [$tabla, $quien]) {
+            if (Schema::hasTable($tabla) && DB::table($tabla)
+                ->where('integration_connection_id', $id)->exists()) {
+                return sprintf(
+                    'Esa conexión la usa %s. Cámbiela allí primero; si se borra aquí, esa pantalla '
+                    .'se queda apuntando a nada.',
+                    $quien,
+                );
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Borra una conexión que nunca se usó.
+     *
+     * Se anota en la bitácora **dentro de la misma transacción** y antes de
+     * borrar: después no queda de dónde sacar el nombre, y una línea de bitácora
+     * escrita fuera de la transacción miente si el borrado falla.
+     */
+    public static function borrarConexion(string $uuid, int $usuarioId): void
+    {
+        if (($motivo = self::porQueNoSeBorra($uuid)) !== null) {
+            throw new RuntimeException($motivo);
+        }
+
+        $conexion = self::porUuid($uuid);
+
+        DB::transaction(function () use ($conexion): void {
+            Bitacora::registrar(
+                accion: 'integration.connection_deleted',
+                tipoEntidad: 'integration_connection',
+                idEntidad: (int) $conexion->id,
+                cambios: ['conexion' => [
+                    'antes' => sprintf(
+                        '%s (%s)',
+                        (string) $conexion->name,
+                        self::ENTORNOS[$conexion->environment] ?? (string) $conexion->environment,
+                    ),
+                    'despues' => null,
+                ]],
+            );
+
+            DB::table('integration_connections')->where('id', $conexion->id)->delete();
+        });
+    }
+
     // --------------------------------------------------------------- avisos
 
     /** @return list<Aviso> */
@@ -390,22 +582,39 @@ final class Integraciones
 
         $avisos = [];
 
-        // Una conexion ACTIVA sin credencial es la que mas duele: parece
-        // configurada, y la primera llamada de verdad sale sin clave.
-        $sinCredencial = DB::table('integration_connections as ic')
-            ->join('integration_providers as ip', 'ip.id', '=', 'ic.integration_provider_id')
-            ->where('ic.status', 'active')
-            ->whereNotExists(fn ($q) => $q->select(DB::raw(1))
-                ->from('integration_credentials as c')
-                ->whereColumn('c.integration_connection_id', 'ic.id')
-                ->whereNull('c.revoked_at'))
-            ->pluck('ic.name');
+        // Una conexion ACTIVA sin la credencial que NECESITA es la que mas
+        // duele: parece configurada, y la primera llamada de verdad sale sin
+        // clave.
+        //
+        // `L-3b`: se mira la CLASE, no la existencia. Antes bastaba con que
+        // hubiera alguna credencial viva, asi que guardar la clave SOL como
+        // «Clave de API» apagaba este aviso sin arreglar nada (`T-132`). Y se
+        // dice CUAL falta, con su nombre de verdad: «falta: Clave SOL del
+        // usuario secundario» se arregla; «sin credencial» se relee.
+        //
+        // Un bucle y no una consulta: son unas pocas conexiones --las de una
+        // instalacion, no las de un mercado-- y la pregunta depende de lo que
+        // cada proveedor declara.
+        $faltantes = [];
 
-        if ($sinCredencial->isNotEmpty()) {
+        foreach (DB::table('integration_connections')->where('status', 'active')
+            ->get(['id', 'name', 'integration_provider_id']) as $conexion) {
+            $faltan = self::clasesQueFaltan(
+                (int) $conexion->id, (int) $conexion->integration_provider_id,
+            );
+
+            if ($faltan !== []) {
+                $faltantes[] = sprintf(
+                    '%s (falta: %s)', (string) $conexion->name, implode(', ', $faltan),
+                );
+            }
+        }
+
+        if ($faltantes !== []) {
             $avisos[] = Aviso::rojo(sprintf(
-                'Sin credencial: %s. La conexión está activa, así que parece configurada, y la '
-                .'primera llamada de verdad saldrá sin clave.',
-                $sinCredencial->implode(', '),
+                'Sin la credencial que necesita: %s. La conexión está activa, así que parece '
+                .'configurada, y la primera llamada de verdad saldrá sin clave.',
+                implode('; ', $faltantes),
             ));
         }
 

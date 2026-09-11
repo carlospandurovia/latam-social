@@ -65,10 +65,15 @@
         "lint": "vendor/bin/pint --test",
         "fix": "vendor/bin/pint",
         "stan": "vendor/bin/phpstan analyse --no-progress",
+        "vigencias": "@php tools/verificar-vigencias.php",
+        "nombres": "python tools/verificar-nombres-sql.py",
         "quality": [
+            "Composer\\Config::disableProcessTimeout",
             "@lint",
             "@stan",
             "@arch",
+            "@vigencias",
+            "@nombres",
             "@php artisan test"
         ]
     },

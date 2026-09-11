@@ -352,7 +352,7 @@ final class Certificados
         $partes = [];
 
         if (!openssl_pkcs12_read($contenido, $partes, (string) $clave)) {
-            throw new RuntimeException(self::porQueNoAbre());
+            throw new RuntimeException(self::porQueNoAbre(trim((string) $clave) !== ''));
         }
 
         $pem = (string) ($partes['cert'] ?? '').(string) ($partes['pkey'] ?? '');
@@ -374,8 +374,22 @@ final class Certificados
      * Por qué OpenSSL no pudo abrirlo, en palabras que sirvan para algo.
      *
      * El caso importante es el primero, y es el normal con SUNAT.
+     *
+     * ### Por qué hace falta saber si se escribió una contraseña
+     *
+     * `mac verify failure` significa lo mismo en los dos casos —la clave con la
+     * que se intentó abrir no es la del archivo— pero **no se le dice lo mismo a
+     * quien escribió una que a quien no escribió ninguna**. A quien dejó el
+     * campo vacío, «la contraseña no es correcta» le suena a que la tecleó mal,
+     * y lo que le pasa es lo contrario: ese archivo SÍ pide una.
+     *
+     * Medido antes de escribirlo: un `.p12` exportado con contraseña vacía se
+     * abre con `''` sin ninguna queja, y uno con contraseña da exactamente
+     * `error:11800071:PKCS12 routines::mac verify failure`. Así que un fallo de
+     * MAC con el campo vacío **no es** «el archivo no tiene contraseña y aun así
+     * falla»: es «el archivo tiene una y no se puso».
      */
-    private static function porQueNoAbre(): string
+    private static function porQueNoAbre(bool $huboClave): string
     {
         $errores = '';
 
@@ -385,13 +399,20 @@ final class Certificados
 
         if (str_contains($errores, 'unsupported') || str_contains($errores, 'RC2')) {
             return 'Ese certificado usa el cifrado antiguo que OpenSSL 3 ya no abre '
-                .'--es lo normal en los que emite SUNAT--. Conviertalo una vez con: '
+                .'—es lo normal en los que emite SUNAT—. Conviértalo una vez con: '
                 .'openssl pkcs12 -legacy -in suyo.pfx -nodes -out convertido.pem '
                 .'y suba el .pem que sale.';
         }
 
         if (str_contains($errores, 'mac verify failure') || str_contains($errores, 'invalid password')) {
-            return 'La contrasena del certificado no es correcta.';
+            return $huboClave
+                ? 'La contraseña del certificado no es correcta.'
+                : 'Ese archivo SÍ pide contraseña: se dejó el campo vacío y no abre. '
+                    .'Pídasela a quien le entregó el certificado —en los de prueba de SUNAT '
+                    .'suele venir en el mismo correo o manual—. Si está seguro de que no tiene '
+                    .'ninguna, conviértalo una vez con: '
+                    .'openssl pkcs12 -legacy -in suyo.pfx -nodes -passin pass: -out convertido.pem '
+                    .'y suba el .pem que sale.';
         }
 
         return 'No se pudo abrir el certificado. OpenSSL dijo: '.trim($errores);

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Core\Services;
 
+use App\Shared\Database\Vigencia;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
 
@@ -135,10 +136,18 @@ final class FiltrosDeResumen
         // al primer intento: siete días elegidos, ocho de comparación.
         $dias = (int) $this->desde->startOfDay()->diffInDays($this->hasta->startOfDay());
 
+        // `Vigencia::cerrarElDiaAntesDe()` y no `subDay()` a mano, aunque aqui
+        // no haya ninguna columna `valid_*`: **es el mismo concepto** --cerrar
+        // un intervalo la vispera del siguiente-- y el error de un dia se paga
+        // igual de caro en un panel que en una cobertura. La puerta de
+        // vigencias lo pedia desde `D-1` y llevaba tres dias en rojo sin que
+        // nadie la corriera (`T-137`).
         return new self(
             periodo: $this->periodo,
             desde: $this->desde->subDays($dias + 1)->startOfDay(),
-            hasta: $this->desde->subDay()->endOfDay(),
+            hasta: CarbonImmutable::parse(
+                Vigencia::cerrarElDiaAntesDe($this->desde->toDateString()),
+            )->endOfDay(),
             paisId: $this->paisId,
             sociedadId: $this->sociedadId,
             clienteId: $this->clienteId,

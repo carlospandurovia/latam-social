@@ -87,6 +87,19 @@ final class PaginasController
 
     public function guardar(Request $peticion, ?string $uuid = null): RedirectResponse
     {
+        // Una pagina del sistema tiene su direccion FIJA, y su campo se pinta
+        // deshabilitado: un campo deshabilitado NO lo manda el navegador. Sin
+        // esto, guardar el titulo de los terminos respondia «Falta slug.» y no
+        // guardaba nada --el formulario entero quedaba muerto--.
+        //
+        // La direccion buena la pone el servidor: ni se la exige al formulario
+        // --que no la manda-- ni se fia de la que llegue --que pudo cambiarse a
+        // mano--. `Paginas::guardar()` la vuelve a descartar despues; son dos
+        // cerrojos a proposito.
+        if ($uuid !== null && Paginas::esDelSistema($uuid)) {
+            $peticion->merge(['slug' => (string) Paginas::porUuid($uuid)->slug]);
+        }
+
         /** @var array<string, mixed> $datos */
         $datos = $peticion->validate([
             'title' => ['required', 'string', 'min:3', 'max:160'],
