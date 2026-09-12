@@ -47,3 +47,22 @@ yarn-error.log
 # Rutas del contenedor de trabajo, nunca del proyecto
 /stage
 /.entrega
+
+# Material criptografico. NUNCA en el repositorio, ni de pruebas (`T-140`):
+# un `.pfx` es una clave privada, y lo que entra al historial de git no sale
+# sin reescribirlo. Salio de verdad -- `git add -A` arrastro el certificado de
+# pruebas desde la carpeta donde la app de Claude deja los archivos que manda.
+*.pfx
+*.p12
+*.pem
+*.key
+*.jks
+*.keystore
+
+# Donde la app de Claude deja los archivos que entrega. Es una bandeja de
+# entrada, no parte del proyecto.
+/Claude outputs
+
+# Empaquetado manual de assets para subir por SFTP. `public/build/` SI se
+# versiona (`DEC-303`); el zip que se hace para subirlo, no.
+/public/build.zip
